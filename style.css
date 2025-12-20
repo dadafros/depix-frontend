@@ -1,75 +1,97 @@
+* {
+  box-sizing: border-box;
+}
+
 html, body {
   margin: 0;
-  height: 100%;
-  background: #071b1f;
-  color: #eaf6f6;
-  font-family: system-ui, sans-serif;
 }
 
 body {
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  min-height: 100dvh; /* evita bug de vh no mobile */
+  font-family: system-ui, sans-serif;
+  background: radial-gradient(circle at top, #0f3d3e, #071b1f);
+  color: #eaf6f6;
 }
 
-.container {
-  background: #0f3d3e;
-  padding: 24px;
-  border-radius: 16px;
+.page {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card {
+  background: rgba(15, 61, 62, 0.95);
+  padding: 28px;
+  border-radius: 18px;
   width: 100%;
-  max-width: 400px;
+  max-width: 420px;
   text-align: center;
 }
 
 input, button {
   width: 100%;
-  padding: 12px;
-  margin-bottom: 10px;
-  border-radius: 8px;
+  padding: 14px;
+  margin-bottom: 12px;
+  border-radius: 10px;
   border: none;
+  font-size: 16px;
 }
 
 button {
-  background: #38b2ac;
+  background: linear-gradient(135deg, #4fd1c5, #38b2ac);
   color: #003333;
-  font-weight: bold;
+  font-weight: 600;
+}
+
+.secondary {
+  background: transparent;
+  border: 1px solid #4fd1c5;
+  color: #4fd1c5;
 }
 
 .hidden {
   display: none;
 }
 
-/* Botão flutuante */
-.install-fab {
+.mensagem {
+  min-height: 20px;
+  color: #ff6b6b;
+}
+
+/* Botão instalar */
+.install-btn {
   position: fixed;
   right: 16px;
   bottom: 16px;
+  padding: 12px 16px;
+  border-radius: 999px;
+  font-size: 14px;
   background: #38b2ac;
   color: #003333;
-  border-radius: 999px;
-  padding: 12px 16px;
-  border: none;
+  width: auto;
+  max-width: none;
 }
+
 
 /* Modal */
 .modal {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.7);
+  background: rgba(0,0,0,0.65);
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.modal-content {
-  background: #0f3d3e;
-  padding: 20px;
-  border-radius: 12px;
-  width: 90%;
-  max-width: 300px;
 }
 
 .modal.hidden {
   display: none !important;
 }
 
+.modal-box {
+  background: #0f3d3e;
+  padding: 24px;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 320px;
+}
