@@ -3,11 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <title>DePix – Gerar QR Code PIX</title>
+
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- PWA / Icons -->
-  <link rel="icon" href="icon-192.png">
-  <link rel="apple-touch-icon" href="icon-192.png">
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#38b2ac" />
+
+  <!-- Ícones -->
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
 
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -17,16 +22,17 @@
 
     <h1>Gerar QR Code PIX</h1>
 
-    <!-- MENSAGEM DE ERRO / INFO (SEMPRE VISÍVEL) -->
+    <!-- MENSAGEM (erro / info) – SEMPRE VISÍVEL -->
     <div id="mensagem" class="mensagem"></div>
 
-    <!-- FORM -->
-    <form id="form">
+    <!-- FORMULÁRIO -->
+    <form id="form" novalidate>
       <input
         id="valor"
         type="text"
         placeholder="R$ 0,00"
         autocomplete="off"
+        inputmode="numeric"
       />
 
       <input
@@ -34,6 +40,7 @@
         type="text"
         placeholder="Endereço Liquid"
         autocomplete="off"
+        spellcheck="false"
       />
 
       <button type="button" id="btnGerar">
@@ -44,7 +51,7 @@
     <!-- LOADING -->
     <div id="loading" class="hidden">
       <div class="spinner"></div>
-      <p>Gerando QR Code...</p>
+      <p>Gerando QR Code…</p>
     </div>
 
     <!-- RESULTADO -->
@@ -53,11 +60,25 @@
 
       <p id="qrId" class="qr-id"></p>
 
-      <button id="btnCopy">PIX copia e cola</button>
-      <button id="btnReset" class="secondary">Novo pagamento</button>
+      <button id="btnCopy">
+        PIX copia e cola
+      </button>
+
+      <button id="btnReset" class="secondary">
+        Novo pagamento
+      </button>
     </div>
 
   </div>
+
+  <!-- Registro do Service Worker -->
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./service-worker.js");
+      });
+    }
+  </script>
 
   <script src="script.js"></script>
 </body>
