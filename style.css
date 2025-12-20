@@ -1,66 +1,71 @@
 :root {
-  --bg: #F6FAFA;
-  --card: #FFFFFF;
-  --text: #2E4B5B;
-
   --primary: #4ECAC2;
   --primary-dark: #2FA7A0;
   --secondary: #2E4B5B;
 
-  --border: #DCEEEE;
+  --bg-dark: #0F1F26;
+  --card: #162A33;
+  --text: #E6F2F2;
+  --border: #24424F;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0F1F26;
-    --card: #162A33;
-    --text: #E6F2F2;
-
-    --border: #24424F;
-  }
-}
-
+/* RESET */
 * {
   box-sizing: border-box;
 }
 
-body {
+html, body {
+  height: 100%;
   margin: 0;
+}
+
+/* 🔹 Gradiente FIXO (não repete, não reinicia) */
+body {
   font-family: "Inter", Arial, sans-serif;
-  background: radial-gradient(
-    circle at top,
-    #ffffff 0%,
-    var(--bg) 60%
-  );
   color: var(--text);
+  background-color: var(--bg-dark);
+}
+
+.page {
+  min-height: 100vh;
+  background:
+    radial-gradient(
+      ellipse at top,
+      rgba(78, 202, 194, 0.18) 0%,
+      rgba(15, 31, 38, 0.9) 45%,
+      #0F1F26 75%
+    );
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 16px;
 }
 
 .container {
+  width: 100%;
   max-width: 420px;
-  margin: 48px auto;
   background: var(--card);
   padding: 28px;
-  border-radius: 16px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
-  text-align: center;
+  border-radius: 18px;
   border: 1px solid var(--border);
+  box-shadow: 0 30px 60px rgba(0,0,0,0.35);
+  text-align: center;
 }
 
 h1 {
   margin-bottom: 28px;
   font-weight: 600;
-  letter-spacing: 0.3px;
 }
 
 input {
   width: 100%;
-  padding: 15px 16px;
+  padding: 15px;
   margin-bottom: 16px;
   border-radius: 12px;
   border: 1px solid var(--border);
-  font-size: 16px;
   background: transparent;
   color: var(--text);
+  font-size: 16px;
 }
 
 input::placeholder {
@@ -76,47 +81,34 @@ input:focus {
 button {
   width: 100%;
   padding: 15px;
-  font-size: 16px;
-  border: none;
   border-radius: 12px;
-  cursor: pointer;
+  border: none;
+  font-size: 16px;
   font-weight: 600;
-  transition: all 0.2s ease;
+  cursor: pointer;
 }
 
-button:not(.copy-btn):not(.reset-btn) {
-  background: linear-gradient(
-    135deg,
-    var(--primary),
-    var(--primary-dark)
-  );
-  color: #ffffff;
+#btnGerar {
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  color: #fff;
 }
 
-button:hover {
-  transform: translateY(-1px);
-  opacity: 0.95;
+#btnGerar:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .copy-btn {
-  background: transparent;
-  color: var(--secondary);
-  border: 1px solid var(--secondary);
   margin-top: 12px;
-}
-
-.copy-btn:hover {
-  background: rgba(46, 75, 91, 0.08);
+  background: transparent;
+  border: 1px solid var(--secondary);
+  color: var(--secondary);
 }
 
 .reset-btn {
+  margin-top: 18px;
   background: transparent;
   color: #8BAFB2;
-  margin-top: 18px;
-}
-
-.reset-btn:hover {
-  color: var(--secondary);
 }
 
 .hidden {
@@ -132,9 +124,9 @@ button:hover {
 .id {
   font-size: 14px;
   cursor: pointer;
-  margin-bottom: 14px;
   opacity: 0.85;
   word-break: break-all;
+  margin-bottom: 14px;
 }
 
 .id:hover {
@@ -142,18 +134,11 @@ button:hover {
 }
 
 .message {
-  color: var(--primary-dark);
   margin-top: 10px;
-  font-size: 14px;
+  color: var(--primary-dark);
 }
 
 /* Loading */
-
-.loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
 
 .spinner {
   width: 42px;
@@ -162,11 +147,9 @@ button:hover {
   border-top: 4px solid var(--primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
-  margin-bottom: 14px;
+  margin: 0 auto 14px;
 }
 
 @keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  to { transform: rotate(360deg); }
 }

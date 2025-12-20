@@ -2,36 +2,49 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <title>DePix</title>
+  <title>Depix • Gerar QR Code PIX</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
+  <!-- PWA -->
   <link rel="manifest" href="manifest.json" />
-  <meta name="theme-color" content="#00b894" />
+  <meta name="theme-color" content="#4ECAC2" />
+
+  <!-- Favicon (usa o ícone do PWA) -->
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
 
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
-<div class="container">
-  <h1>Gerar QR Code PIX</h1>
+<div class="page">
+  <div class="container">
+    <h1>Gerar QR Code PIX</h1>
 
-  <div id="form">
-    <input id="valor" placeholder="Valor (R$)" />
-    <input id="endereco" placeholder="Endereço Liquid Network" />
-    <button onclick="gerarQrCode()">Gerar QR Code</button>
-  </div>
+    <div id="form">
+      <input id="valor" placeholder="Valor (R$)" />
+      <input id="endereco" placeholder="Endereço Liquid Network" />
+      <button id="btnGerar">Gerar QR Code</button>
+    </div>
 
-  <div id="loading" class="hidden">
-    <div class="spinner"></div>
-    <p>Gerando QR Code...</p>
-  </div>
+    <div id="loading" class="hidden">
+      <div class="spinner"></div>
+      <p>Gerando QR Code...</p>
+    </div>
 
-  <div id="resultado" class="hidden">
-    <img id="qrImage" />
-    <div id="qrId" class="id"></div>
-    <button class="copy-btn" onclick="copiarPix()">Pix copia e cola</button>
-    <div id="mensagem" class="message"></div>
-    <button class="reset-btn" onclick="resetar()">Gerar novo</button>
+    <div id="resultado" class="hidden">
+      <img id="qrImage" alt="QR Code PIX" />
+      <div id="qrId" class="id"></div>
+
+      <button class="copy-btn" id="btnCopy">
+        Pix copia e cola
+      </button>
+
+      <div id="mensagem" class="message"></div>
+
+      <button class="reset-btn" id="btnReset">
+        Gerar novo
+      </button>
+    </div>
   </div>
 </div>
 
