@@ -1,6 +1,7 @@
-const CACHE_NAME = "depix-pwa-v2";
-const FILES = [
-  "./",
+const CACHE_NAME = "depix-static-v1";
+
+// ⚠️ SOMENTE arquivos estáticos seguros
+const STATIC_FILES = [
   "./index.html",
   "./style.css",
   "./script.js",
@@ -11,24 +12,41 @@ const FILES = [
 
 self.addEventListener("install", event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(FILES))
+    caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_FILES))
   );
+  self.skipWaiting();
 });
 
 self.addEventListener("activate", event => {
   event.waitUntil(
     caches.keys().then(keys =>
       Promise.all(
-        keys.map(k => k !== CACHE_NAME && caches.delete(k))
+        keys.map(key => key !== CACHE_NAME && caches.delete(key))
       )
     )
   );
+  self.clients.claim();
 });
 
 self.addEventListener("fetch", event => {
-  if (event.request.method !== "GET") return;
+  const req = event.request;
 
+  // ❌ Nunca interferir com POST (pagamento)
+  if (req.method !== "GET") return;
+
+  // ❌ Nunca cachear chamadas externas / API
+  if (
+    req.url.startsWith("https://depix-backend.vercel.app") ||
+    req.url.includes("/api/")
+  ) {
+    return;
+  }
+
+  // ✅ Cache-first apenas para arquivos estáticos
   event.respondWith(
-    caches.match(event.request).then(r => r || fetch(event.request))
+    caches.match(req).then(cached => {
+      if (cached) return cached;
+      return fetch(req);
+    })
   );
 });
