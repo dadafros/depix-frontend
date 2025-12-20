@@ -115,3 +115,55 @@ btnCopy.onclick = () => {
 
 /* ===== Reset ===== */
 btnReset.onclick = () => location.reload();
+
+/* ===== PWA Install ===== */
+
+const btnInstall = document.getElementById("btnInstall");
+const modal = document.getElementById("installModal");
+const closeModal = document.getElementById("closeModal");
+
+let deferredPrompt = null;
+
+// Detecta Android / Desktop
+window.addEventListener("beforeinstallprompt", e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  btnInstall.classList.remove("hidden");
+});
+
+// Clique no botão instalar
+btnInstall?.addEventListener("click", async () => {
+  // Android / Desktop
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    btnInstall.classList.add("hidden");
+    return;
+  }
+
+  // iOS → mostrar modal
+  if (isIOS()) {
+    modal.classList.remove("hidden");
+  }
+});
+
+// Fechar modal
+closeModal?.addEventListener("click", () => {
+  modal.classList.add("hidden");
+});
+
+// Detecta se já está instalado
+window.addEventListener("appinstalled", () => {
+  btnInstall.classList.add("hidden");
+});
+
+// iOS detect
+function isIOS() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent);
+}
+
+// Se já estiver rodando como app, esconde botão
+if (window.matchMedia("(display-mode: standalone)").matches) {
+  btnInstall.classList.add("hidden");
+}
