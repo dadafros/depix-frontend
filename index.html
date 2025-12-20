@@ -16,11 +16,38 @@
 
   <link rel="stylesheet" href="style.css" />
 </head>
+  
+<!-- MODAL INSTALAÇÃO iOS -->
+<div id="installModal" class="modal hidden">
+  <div class="modal-content">
+    <h2>Instalar aplicativo</h2>
+
+    <p>No iPhone, siga os passos:</p>
+    <ol>
+      <li>
+        Toque no botão <strong>Compartilhar</strong> (⬆️)
+      </li>
+      <li>
+        Toque em <strong>Mais</strong> (⋯)
+      </li>
+      <li>
+        Selecione <strong>Adicionar à Tela de Início</strong>
+      </li>
+    </ol>
+
+    <button id="closeModal">Entendi</button>
+  </div>
+</div>
+
 <body>
 
   <div class="container">
 
     <h1>Gerar QR Code PIX</h1>
+
+    <button id="btnInstall" class="secondary hidden">
+      Instalar aplicativo
+    </button>
 
     <!-- MENSAGEM (erro / info) – SEMPRE VISÍVEL -->
     <div id="mensagem" class="mensagem"></div>
