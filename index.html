@@ -2,57 +2,63 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <title>Depix • Gerar QR Code PIX</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DePix – Gerar QR Code PIX</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- PWA -->
-  <link rel="manifest" href="manifest.json" />
-  <meta name="theme-color" content="#4ECAC2" />
-
-  <!-- Favicon (usa o ícone do PWA) -->
-  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+  <!-- PWA / Icons -->
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
 
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
-<div class="page">
   <div class="container">
+
     <h1>Gerar QR Code PIX</h1>
 
-    <div id="form">
-      <input id="valor" placeholder="Valor (R$)" />
-      <input id="endereco" placeholder="Endereço Liquid Network" />
-      <button id="btnGerar">Gerar QR Code</button>
-    </div>
+    <!-- MENSAGEM DE ERRO / INFO (SEMPRE VISÍVEL) -->
+    <div id="mensagem" class="mensagem"></div>
 
+    <!-- FORM -->
+    <form id="form">
+      <input
+        id="valor"
+        type="text"
+        placeholder="R$ 0,00"
+        autocomplete="off"
+      />
+
+      <input
+        id="endereco"
+        type="text"
+        placeholder="Endereço Liquid"
+        autocomplete="off"
+      />
+
+      <button type="button" id="btnGerar">
+        Gerar QR Code
+      </button>
+    </form>
+
+    <!-- LOADING -->
     <div id="loading" class="hidden">
       <div class="spinner"></div>
       <p>Gerando QR Code...</p>
     </div>
 
+    <!-- RESULTADO -->
     <div id="resultado" class="hidden">
       <img id="qrImage" alt="QR Code PIX" />
-      <div id="qrId" class="id"></div>
 
-      <button class="copy-btn" id="btnCopy">
-        Pix copia e cola
-      </button>
+      <p id="qrId" class="qr-id"></p>
 
-      <div id="mensagem" class="message"></div>
-
-      <button class="reset-btn" id="btnReset">
-        Gerar novo
-      </button>
+      <button id="btnCopy">PIX copia e cola</button>
+      <button id="btnReset" class="secondary">Novo pagamento</button>
     </div>
-  </div>
-</div>
 
-<script src="script.js"></script>
-<script>
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("service-worker.js");
-  }
-</script>
+  </div>
+
+  <script src="script.js"></script>
 </body>
 </html>
