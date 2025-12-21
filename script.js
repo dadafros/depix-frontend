@@ -98,9 +98,24 @@ btnGerar.onclick = async () => {
 /* ======================
    COPIAR / RESET
 ====================== */
+const toast = document.getElementById("toast");
+
+function showToast(text) {
+  toast.innerText = text;
+  toast.classList.remove("hidden");
+  toast.classList.add("show");
+
+  setTimeout(() => {
+    toast.classList.remove("show");
+    setTimeout(() => {
+      toast.classList.add("hidden");
+    }, 300);
+  }, 2000);
+}
+
 btnCopy.onclick = () => {
   navigator.clipboard.writeText(qrCopyPaste);
-  mensagem.innerText = "Código copiado";
+  showToast("Código copiado. Cole no app do seu banco.");
 };
 
 btnReset.onclick = () => location.reload();
