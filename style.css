@@ -95,3 +95,21 @@ button {
   width: 90%;
   max-width: 320px;
 }
+
+/* Container do resultado */
+#resultado {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* QR Code responsivo */
+#qrImage {
+  width: 100%;
+  max-width: min(280px, 80vw); /* mobile-first */
+  height: auto;
+  aspect-ratio: 1 / 1;
+  margin: 16px 0;
+  object-fit: contain;
+}
+
