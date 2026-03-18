@@ -5,7 +5,7 @@
   <title>DePix</title>
 
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.eulen.app https://depix.eulen.app; connect-src https://depix-backend.vercel.app; style-src 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.eulen.app https://depix.eulen.app https://api.qrserver.com; connect-src https://depix-backend.vercel.app; style-src 'self'" />
   <meta name="theme-color" content="#0f3d3e" />
 
   <link rel="manifest" href="manifest.json" />
@@ -18,23 +18,94 @@
 
 <main class="page">
   <div class="card">
-    <h1>Gerar QR Code PIX</h1>
 
-    <div id="mensagem" class="mensagem"></div>
-
-    <input id="valor" placeholder="R$ 0,00" inputmode="numeric" />
-    <input id="endereco" placeholder="Endereço Liquid" />
-
-    <button id="btnGerar">Gerar QR Code</button>
-
-    <div id="loading" class="hidden">Gerando QR Code…</div>
-
-    <div id="resultado" class="resultado hidden">
-      <img id="qrImage" />
-      <p id="qrId"></p>
-      <button id="btnCopy">PIX copia e cola</button>
-      <button id="btnReset" class="secondary">Novo pagamento</button>
+    <!-- ===== SWITCH MODO ===== -->
+    <div class="mode-switch">
+      <label class="switch-label" id="switchLabel">
+        <span id="switchText">Sacar Depix</span>
+        <span class="switch-track" id="switchTrack">
+          <span class="switch-thumb"></span>
+        </span>
+      </label>
     </div>
+
+    <!-- ===== TELA: NOVO PAGAMENTO (depósito/QR PIX) ===== -->
+    <div id="telaDeposito">
+      <h1>Gerar QR Code PIX</h1>
+
+      <div id="mensagem" class="mensagem"></div>
+
+      <input id="valor" placeholder="R$ 0,00" inputmode="numeric" />
+      <input id="endereco" placeholder="Endereço Liquid" />
+
+      <button id="btnGerar">Gerar QR Code</button>
+
+      <div id="loading" class="hidden">Gerando QR Code…</div>
+
+      <div id="resultado" class="resultado hidden">
+        <img id="qrImage" />
+        <p id="qrId"></p>
+        <button id="btnCopy">PIX copia e cola</button>
+        <button id="btnReset" class="secondary">Novo pagamento</button>
+      </div>
+    </div>
+
+    <!-- ===== TELA: SAQUE ===== -->
+    <div id="telaSaque" class="hidden">
+      <h1>Sacar Depix</h1>
+
+      <div id="mensagemSaque" class="mensagem"></div>
+
+      <div id="formSaque">
+        <input id="valorSaque" placeholder="R$ 0,00" inputmode="numeric" />
+        <input id="pixKey" placeholder="Sua chave PIX (CPF, e-mail, celular ou aleatória)" />
+
+        <div class="valor-mode-switch">
+          <label class="switch-label small-switch">
+            <span class="switch-track" id="valorModeTrack">
+              <span class="switch-thumb"></span>
+            </span>
+          </label>
+          <span id="valorModeText" class="valor-mode-text">Valor em Depix (você envia)</span>
+        </div>
+        <p class="hint">
+          <strong>Depix:</strong> valor que você envia na Liquid.<br>
+          <strong>PIX:</strong> valor que chega na sua conta bancária (já descontadas as taxas).
+        </p>
+
+        <button id="btnSacar">Gerar saque</button>
+      </div>
+
+      <div id="loadingSaque" class="hidden">Processando saque…</div>
+
+      <div id="resultadoSaque" class="resultado hidden">
+        <p class="resultado-titulo">Saque criado com sucesso!</p>
+
+        <div class="resultado-valores">
+          <div class="resultado-item">
+            <span class="resultado-label">Você envia (Depix)</span>
+            <span id="saqueDepositAmount" class="resultado-value"></span>
+          </div>
+          <div class="resultado-item">
+            <span class="resultado-label">Você recebe (PIX)</span>
+            <span id="saquePayoutAmount" class="resultado-value"></span>
+          </div>
+        </div>
+
+        <p class="resultado-sublabel">Endereço Liquid para envio:</p>
+        <div class="address-box">
+          <span id="saqueAddress" class="address-text"></span>
+        </div>
+        <button id="btnCopyAddress">Copiar endereço</button>
+
+        <img id="saqueQr" class="hidden" />
+
+        <p class="resultado-sublabel qr-hint">Escaneie o QR Code acima no app da SideSwap para enviar os Depix.</p>
+
+        <button id="btnNovoSaque" class="secondary">Novo saque</button>
+      </div>
+    </div>
+
   </div>
 </main>
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = "depix-static-v1";
+const CACHE_NAME = "depix-static-v2";
 
 // ⚠️ SOMENTE arquivos estáticos seguros
 const STATIC_FILES = [
@@ -37,6 +37,7 @@ self.addEventListener("fetch", event => {
   // ❌ Nunca cachear chamadas externas / API
   if (
     req.url.startsWith("https://depix-backend.vercel.app") ||
+    req.url.startsWith("https://api.qrserver.com") ||
     req.url.includes("/api/")
   ) {
     return;
