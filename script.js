@@ -1,5 +1,5 @@
 /* ======================
-   ELEMENTOS
+   ELEMENTOS — Depósito
 ====================== */
 const valorInput = document.getElementById("valor");
 const enderecoInput = document.getElementById("endereco");
@@ -13,16 +13,48 @@ const mensagem = document.getElementById("mensagem");
 const qrImage = document.getElementById("qrImage");
 const qrId = document.getElementById("qrId");
 
+/* ======================
+   ELEMENTOS — Saque
+====================== */
+const valorSaqueInput = document.getElementById("valorSaque");
+const pixKeyInput = document.getElementById("pixKey");
+const btnSacar = document.getElementById("btnSacar");
+const btnCopyAddress = document.getElementById("btnCopyAddress");
+const btnNovoSaque = document.getElementById("btnNovoSaque");
+
+const loadingSaque = document.getElementById("loadingSaque");
+const resultadoSaque = document.getElementById("resultadoSaque");
+const formSaque = document.getElementById("formSaque");
+const mensagemSaque = document.getElementById("mensagemSaque");
+const saqueDepositAmount = document.getElementById("saqueDepositAmount");
+const saquePayoutAmount = document.getElementById("saquePayoutAmount");
+const saqueAddress = document.getElementById("saqueAddress");
+const saqueQr = document.getElementById("saqueQr");
+
+/* ======================
+   ELEMENTOS — Switches
+====================== */
+const switchTrack = document.getElementById("switchTrack");
+const switchText = document.getElementById("switchText");
+const telaDeposito = document.getElementById("telaDeposito");
+const telaSaque = document.getElementById("telaSaque");
+
+const valorModeTrack = document.getElementById("valorModeTrack");
+const valorModeText = document.getElementById("valorModeText");
+
 /* PWA */
 const installBtn = document.getElementById("installBtn");
 const modal = document.getElementById("installModal");
 const closeModal = document.getElementById("closeModal");
 
 const MIN_VALOR_CENTS = 500;      // R$ 5,00
-const MAX_VALOR_CENTS = 300000;  // R$ 3.000,00
+const MAX_VALOR_CENTS = 300000;   // R$ 3.000,00
 
 let qrCopyPaste = "";
 let deferredPrompt = null;
+let modoSaque = false;           // false = depósito, true = saque
+let valorModeIsPix = false;      // false = depositAmount (Depix), true = payoutAmount (PIX)
+let saqueDepositAddress = "";    // endereço completo para cópia
 
 /* ======================
    DEVICE ID (rate limit)
@@ -36,7 +68,7 @@ function getDeviceId() {
   return id;
 }
 
-const ALLOWED_QR_HOSTS = ["depix.eulen.app", "eulen.app"];
+const ALLOWED_QR_HOSTS = ["depix.eulen.app", "eulen.app", "api.qrserver.com"];
 
 function isAllowedImageUrl(url) {
   if (typeof url !== "string") return false;
@@ -62,7 +94,6 @@ function isAppInstalled() {
   );
 }
 
-/* Esconder botão se já estiver instalado */
 if (isAppInstalled()) {
   installBtn.style.display = "none";
 }
@@ -71,18 +102,61 @@ if (isAppInstalled()) {
 const savedEndereco = localStorage.getItem("depix-endereco");
 if (savedEndereco) enderecoInput.value = savedEndereco;
 
+/* Restaurar chave PIX salva */
+const savedPixKey = localStorage.getItem("depix-pixkey");
+if (savedPixKey) pixKeyInput.value = savedPixKey;
+
+/* ======================
+   SWITCH — Depósito / Saque
+====================== */
+switchTrack.onclick = () => {
+  modoSaque = !modoSaque;
+
+  if (modoSaque) {
+    switchTrack.classList.add("active");
+    switchText.innerText = "Novo pagamento";
+    telaDeposito.classList.add("hidden");
+    telaSaque.classList.remove("hidden");
+  } else {
+    switchTrack.classList.remove("active");
+    switchText.innerText = "Sacar Depix";
+    telaSaque.classList.add("hidden");
+    telaDeposito.classList.remove("hidden");
+  }
+};
+
+/* ======================
+   SWITCH — Modo de valor (Depix / PIX)
+====================== */
+valorModeTrack.onclick = () => {
+  valorModeIsPix = !valorModeIsPix;
+
+  if (valorModeIsPix) {
+    valorModeTrack.classList.add("active");
+    valorModeText.innerText = "Valor em PIX (você recebe)";
+  } else {
+    valorModeTrack.classList.remove("active");
+    valorModeText.innerText = "Valor em Depix (você envia)";
+  }
+};
+
 /* ======================
    FORMATAÇÃO R$
 ====================== */
-valorInput.addEventListener("input", () => {
-  let v = valorInput.value.replace(/\D/g, "");
-  if (!v) {
-    valorInput.value = "";
-    return;
-  }
-  v = (v / 100).toFixed(2).replace(".", ",");
-  valorInput.value = "R$ " + v;
-});
+function formatCurrencyInput(input) {
+  input.addEventListener("input", () => {
+    let v = input.value.replace(/\D/g, "");
+    if (!v) {
+      input.value = "";
+      return;
+    }
+    v = (v / 100).toFixed(2).replace(".", ",");
+    input.value = "R$ " + v;
+  });
+}
+
+formatCurrencyInput(valorInput);
+formatCurrencyInput(valorSaqueInput);
 
 function isValorValidoEmCentavos(cents) {
   if (cents < MIN_VALOR_CENTS) {
@@ -100,8 +174,17 @@ const toCents = v =>
     * 100
   );
 
+function formatBRL(cents) {
+  return "R$ " + (cents / 100).toFixed(2).replace(".", ",");
+}
+
+function shortenAddress(addr) {
+  if (!addr || addr.length <= 16) return addr;
+  return addr.slice(0, 8) + "…" + addr.slice(-8);
+}
+
 /* ======================
-   GERAR QR CODE
+   GERAR QR CODE (Depósito)
 ====================== */
 btnGerar.onclick = async () => {
   mensagem.innerText = "";
@@ -160,6 +243,80 @@ btnGerar.onclick = async () => {
 };
 
 /* ======================
+   GERAR SAQUE
+====================== */
+btnSacar.onclick = async () => {
+  mensagemSaque.innerText = "";
+
+  if (!valorSaqueInput.value || !pixKeyInput.value.trim()) {
+    mensagemSaque.innerText = "Preencha todos os campos";
+    return;
+  }
+
+  const valorCents = toCents(valorSaqueInput.value);
+
+  const erroValor = isValorValidoEmCentavos(valorCents);
+  if (erroValor) {
+    mensagemSaque.innerText = erroValor;
+    return;
+  }
+
+  // Salvar chave PIX para conveniência
+  localStorage.setItem("depix-pixkey", pixKeyInput.value.trim());
+
+  btnSacar.disabled = true;
+  loadingSaque.classList.remove("hidden");
+
+  try {
+    const body = {
+      pixKey: pixKeyInput.value.trim()
+    };
+
+    if (valorModeIsPix) {
+      body.payoutAmountInCents = valorCents;
+    } else {
+      body.depositAmountInCents = valorCents;
+    }
+
+    const res = await fetch("https://depix-backend.vercel.app/api/withdraw", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Device-Id": getDeviceId()
+      },
+      body: JSON.stringify(body)
+    });
+
+    const data = await res.json();
+
+    if (data?.response?.errorMessage) {
+      throw new Error(data.response.errorMessage);
+    }
+
+    const r = data.response;
+
+    saqueDepositAmount.innerText = formatBRL(r.depositAmountInCents);
+    saquePayoutAmount.innerText = formatBRL(r.payoutAmountInCents);
+    saqueDepositAddress = r.depositAddress;
+    saqueAddress.innerText = shortenAddress(r.depositAddress);
+
+    // Gerar QR code do endereço Liquid para a SideSwap ler
+    const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=" + encodeURIComponent(r.depositAddress);
+    saqueQr.src = qrUrl;
+    saqueQr.classList.remove("hidden");
+
+    formSaque.classList.add("hidden");
+    resultadoSaque.classList.remove("hidden");
+
+  } catch (e) {
+    mensagemSaque.innerText = e.message || "Erro ao processar saque";
+  } finally {
+    loadingSaque.classList.add("hidden");
+    btnSacar.disabled = false;
+  }
+};
+
+/* ======================
    COPIAR / RESET
 ====================== */
 const toast = document.getElementById("toast");
@@ -192,6 +349,26 @@ btnReset.onclick = () => {
 };
 
 /* ======================
+   COPIAR ENDEREÇO / NOVO SAQUE
+====================== */
+btnCopyAddress.onclick = async () => {
+  try {
+    await navigator.clipboard.writeText(saqueDepositAddress);
+    showToast("Endereço copiado.");
+  } catch {
+    showToast("Não foi possível copiar. Copie manualmente.");
+  }
+};
+
+btnNovoSaque.onclick = () => {
+  resultadoSaque.classList.add("hidden");
+  formSaque.classList.remove("hidden");
+  saqueQr.classList.add("hidden");
+  valorSaqueInput.value = "";
+  mensagemSaque.innerText = "";
+};
+
+/* ======================
    PWA INSTALL
 ====================== */
 window.addEventListener("beforeinstallprompt", e => {
@@ -199,28 +376,21 @@ window.addEventListener("beforeinstallprompt", e => {
   deferredPrompt = e;
 });
 
-/* Clique no botão instalar */
 installBtn.onclick = async () => {
-  // Tentativa de instalação automática
   if (deferredPrompt) {
     deferredPrompt.prompt();
     await deferredPrompt.userChoice;
     deferredPrompt = null;
-
-    installBtn.style.display = "none"; // esconde após instalar
+    installBtn.style.display = "none";
     return;
   }
-
-  // Fallback (Safari / iOS)
   modal.classList.remove("hidden");
 };
 
-/* Evento disparado quando instala fora do botão */
 window.addEventListener("appinstalled", () => {
   installBtn.style.display = "none";
 });
 
-/* Fechar modal */
 closeModal.onclick = () => {
   modal.classList.add("hidden");
 };
