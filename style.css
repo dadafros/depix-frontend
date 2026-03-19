@@ -27,6 +27,15 @@ body {
   padding: 16px;
 }
 
+.page:not(.hidden) {
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .card {
   background: rgba(15, 61, 62, 0.95);
   padding: 28px;
@@ -79,7 +88,7 @@ input {
 }
 
 input::placeholder {
-  color: rgba(234, 246, 246, 0.4);
+  color: rgba(234, 246, 246, 0.55);
 }
 
 input:focus {
@@ -91,35 +100,12 @@ input[type="date"] {
   color-scheme: dark;
 }
 
-textarea {
-  width: 100%;
-  padding: 14px;
-  margin-bottom: 12px;
-  border-radius: 10px;
-  border: none;
-  font-size: 16px;
-  background: rgba(255, 255, 255, 0.1);
-  color: #eaf6f6;
-  font-family: system-ui, sans-serif;
-  resize: vertical;
-  min-height: 100px;
-}
-
-textarea::placeholder {
-  color: rgba(234, 246, 246, 0.4);
-}
-
-textarea:focus {
-  outline: 2px solid #4fd1c5;
-  outline-offset: -2px;
-}
-
 button {
   background: linear-gradient(135deg, #4fd1c5, #38b2ac);
   color: #003333;
   font-weight: 600;
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: opacity 0.15s, background 0.2s;
 }
 
 button:active {
@@ -129,6 +115,21 @@ button:active {
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+button:focus-visible {
+  outline: 2px solid #4fd1c5;
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  button:hover:not(:disabled) {
+    opacity: 0.9;
+    filter: brightness(1.05);
+  }
+  .secondary:hover:not(:disabled) {
+    background: rgba(79, 209, 197, 0.1);
+  }
 }
 
 .secondary {
@@ -147,8 +148,54 @@ button:disabled {
   font-size: 14px;
 }
 
+.mensagem:not(:empty) {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(255, 107, 107, 0.1);
+  border-left: 3px solid #ff6b6b;
+  text-align: left;
+  line-height: 1.4;
+}
+
 .mensagem.success {
   color: #68d391;
+}
+
+.mensagem.success:not(:empty) {
+  background: rgba(104, 211, 145, 0.1);
+  border-left-color: #68d391;
+}
+
+/* ===== Spinner ===== */
+.spinner {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(79, 209, 197, 0.3);
+  border-top-color: #4fd1c5;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: middle;
+  margin-right: 8px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+#loading, #loadingSaque {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  font-size: 15px;
+  color: #b0d8d4;
+}
+
+/* ===== Copy success ===== */
+.copy-success {
+  background: #68d391 !important;
+  color: #003333 !important;
 }
 
 /* ===== Links ===== */
@@ -193,12 +240,17 @@ button:disabled {
 
 .icon-btn {
   width: auto;
+  min-width: 44px;
+  min-height: 44px;
   background: transparent;
   color: #eaf6f6;
   font-size: 22px;
   padding: 8px 12px;
   margin-bottom: 0;
   border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .icon-btn:active {
@@ -313,11 +365,15 @@ button:disabled {
 }
 
 .hint {
-  font-size: 12px;
-  opacity: 0.6;
+  font-size: 13px;
+  opacity: 0.85;
   margin: 0 0 14px;
   line-height: 1.5;
   text-align: left;
+  background: rgba(79, 209, 197, 0.08);
+  padding: 10px 12px;
+  border-radius: 8px;
+  border-left: 3px solid rgba(79, 209, 197, 0.4);
 }
 
 /* ===== Resultado Saque ===== */
@@ -379,8 +435,8 @@ button:disabled {
 }
 
 .qr-hint {
-  font-size: 12px;
-  opacity: 0.5;
+  font-size: 13px;
+  opacity: 0.85;
   margin-top: 10px;
 }
 
@@ -392,6 +448,13 @@ button:disabled {
   margin: 12px 0 0;
   object-fit: contain;
   border-radius: 8px;
+}
+
+/* ===== Resultado (depósito) separator ===== */
+.resultado:not(.hidden) {
+  padding-top: 16px;
+  margin-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /* ===== Menu overlay ===== */
@@ -407,6 +470,8 @@ button:disabled {
   position: absolute;
   inset: 0;
   background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
 }
 
 .menu-panel {
@@ -443,10 +508,11 @@ button:disabled {
 .menu-item {
   background: rgba(255, 255, 255, 0.06);
   text-align: left;
-  padding: 12px 16px;
+  padding: 14px 16px;
   font-size: 15px;
   color: #eaf6f6;
   margin-bottom: 6px;
+  min-height: 48px;
 }
 
 .menu-item:active {
@@ -531,8 +597,8 @@ button:disabled {
 }
 
 .addr-list-item .addr-text {
-  font-family: monospace;
-  font-size: 13px;
+  font-family: system-ui, sans-serif;
+  font-size: 14px;
   color: #b0d8d4;
   flex: 1;
   white-space: nowrap;
@@ -544,10 +610,15 @@ button:disabled {
   color: #ff6b6b;
   background: transparent;
   width: auto;
-  padding: 4px 8px;
-  font-size: 16px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px 12px;
+  font-size: 18px;
   margin: 0;
   border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* ===== QR Result (depósito) ===== */
@@ -564,54 +635,6 @@ button:disabled {
   aspect-ratio: 1 / 1;
   margin: 16px 0;
   object-fit: contain;
-}
-
-/* ===== FAQ accordion ===== */
-.faq-list {
-  text-align: left;
-}
-
-.faq-item {
-  margin-bottom: 8px;
-}
-
-.faq-question {
-  background: rgba(255, 255, 255, 0.06);
-  text-align: left;
-  padding: 12px 40px 12px 16px;
-  font-size: 15px;
-  color: #eaf6f6;
-  position: relative;
-}
-
-.faq-question::after {
-  content: "▾";
-  position: absolute;
-  right: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 14px;
-  opacity: 0.5;
-  transition: transform 0.2s ease;
-}
-
-.faq-item.open .faq-question::after {
-  transform: translateY(-50%) rotate(180deg);
-}
-
-.faq-question:active {
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.faq-answer {
-  padding: 8px 16px 12px;
-  font-size: 14px;
-  color: #b0d8d4;
-  line-height: 1.6;
-}
-
-.faq-answer p {
-  margin: 0;
 }
 
 /* ===== Install button ===== */
@@ -636,14 +659,17 @@ button:disabled {
   transform: translateX(-50%);
   background: rgba(20, 20, 20, 0.95);
   color: #fff;
-  padding: 12px 16px;
-  border-radius: 999px;
+  padding: 12px 20px;
+  border-radius: 12px;
   font-size: 14px;
   z-index: 3000;
   opacity: 0;
   transition: opacity 0.25s ease;
   pointer-events: none;
-  white-space: nowrap;
+  max-width: 90vw;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.4;
 }
 
 .toast.show {

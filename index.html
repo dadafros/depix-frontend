@@ -29,12 +29,55 @@
     <input id="login-usuario" placeholder="Seu nome de usuário" autocomplete="username" />
 
     <label for="login-senha">Senha</label>
-    <input id="login-senha" type="password" placeholder="Sua senha" autocomplete="current-password" />
+    <input id="login-senha" type="password" placeholder="Sua senha" autocomplete="off" />
 
     <button id="btn-login">Entrar</button>
 
     <p class="link-text">
+      <a href="#forgot-password" class="link">Esqueceu sua senha?</a>
+    </p>
+
+    <p class="link-text">
       Não tem conta? <a href="#register" class="link">Cadastre-se</a>
+    </p>
+  </div>
+</section>
+
+<!-- ===== ESQUECI MINHA SENHA ===== -->
+<section data-view="forgot-password" class="page hidden">
+  <div class="card">
+    <h1>Recuperar senha</h1>
+    <div id="forgot-msg" class="mensagem"></div>
+    <p class="info-text">Informe seu usuário ou email para receber um código de recuperação.</p>
+    <label for="forgot-identificador">Usuário ou email</label>
+    <input id="forgot-identificador" placeholder="Seu usuário ou email" autocomplete="username" />
+    <button id="btn-forgot">Enviar código</button>
+    <p class="link-text">
+      <a href="#login" class="link">Voltar para login</a>
+    </p>
+  </div>
+</section>
+
+<!-- ===== REDEFINIR SENHA ===== -->
+<section data-view="reset-password" class="page hidden">
+  <div class="card">
+    <h1>Redefinir senha</h1>
+    <div id="reset-msg" class="mensagem"></div>
+    <p class="info-text" id="reset-info">
+      Enviamos um código de 6 dígitos para seu email. Verifique sua caixa de entrada e spam.
+    </p>
+    <label for="reset-code">Código de verificação</label>
+    <input id="reset-code" inputmode="numeric" maxlength="6" placeholder="000000" class="code-input" autocomplete="one-time-code" />
+    <label for="reset-nova-senha">Nova senha</label>
+    <input id="reset-nova-senha" type="password" placeholder="Mínimo 8 caracteres" autocomplete="new-password" />
+    <label for="reset-confirmar-senha">Confirmar nova senha</label>
+    <input id="reset-confirmar-senha" type="password" placeholder="Repita a nova senha" autocomplete="new-password" />
+    <button id="btn-reset-password">Redefinir senha</button>
+    <p class="link-text">
+      Não recebeu? <a href="#" id="btn-resend-reset" class="link">Reenviar código</a>
+    </p>
+    <p class="link-text">
+      <a href="#login" class="link">Voltar para login</a>
     </p>
   </div>
 </section>
@@ -107,8 +150,14 @@
     <div class="empty-state">
       <div class="empty-icon">📋</div>
       <h2>Bem-vindo ao DePix!</h2>
-      <p class="info-text">Para começar a receber pagamentos, cadastre o endereço da sua carteira Liquid.</p>
-      <button id="btn-add-first-address">Cadastrar endereço da minha carteira</button>
+      <p class="info-text">Para começar a receber pagamentos, você precisa informar o endereço da sua carteira digital. É como um "número de conta" que você copia do app SideSwap.</p>
+      <div class="hint">
+        <strong>Como funciona:</strong><br>
+        1. Baixe o app SideSwap no seu celular<br>
+        2. Crie sua carteira digital (leva 1 minuto)<br>
+        3. Copie o endereço da carteira e cole aqui
+      </div>
+      <button id="btn-add-first-address">Começar configuração</button>
     </div>
   </div>
 </section>
@@ -124,7 +173,7 @@
     <!-- ===== SWITCH MODO ===== -->
     <div class="mode-switch">
       <label class="switch-label" id="switchLabel">
-        <span id="switchText">Sacar Depix</span>
+        <span id="switchText">Transferir para conta</span>
         <span class="switch-track" id="switchTrack">
           <span class="switch-thumb"></span>
         </span>
@@ -133,16 +182,16 @@
 
     <!-- ===== TELA: DEPÓSITO (QR PIX) ===== -->
     <div id="telaDeposito">
-      <h1>Gerar QR Code PIX</h1>
+      <h1>Receber pagamento</h1>
 
       <div id="mensagem" class="mensagem"></div>
 
       <label for="valor">Valor do pagamento</label>
       <input id="valor" placeholder="R$ 0,00" inputmode="numeric" />
 
-      <button id="btnGerar">Gerar QR Code</button>
+      <button id="btnGerar">Gerar código de pagamento</button>
 
-      <div id="loading" class="hidden">Gerando QR Code…</div>
+      <div id="loading" class="hidden"><span class="spinner"></span> Gerando código de pagamento…</div>
 
       <div id="resultado" class="resultado hidden">
         <img id="qrImage" alt="QR Code PIX" />
@@ -154,7 +203,7 @@
 
     <!-- ===== TELA: SAQUE ===== -->
     <div id="telaSaque" class="hidden">
-      <h1>Sacar Depix</h1>
+      <h1>Transferir para sua conta</h1>
 
       <div id="mensagemSaque" class="mensagem"></div>
 
@@ -171,33 +220,33 @@
               <span class="switch-thumb"></span>
             </span>
           </label>
-          <span id="valorModeText" class="valor-mode-text">Valor em Depix (você envia)</span>
+          <span id="valorModeText" class="valor-mode-text">Valor que você envia</span>
         </div>
         <p class="hint">
-          <strong>Depix:</strong> valor que você envia na Liquid.<br>
-          <strong>PIX:</strong> valor que chega na sua conta bancária (já descontadas as taxas).
+          <strong>Você envia:</strong> total que sai da sua carteira digital.<br>
+          <strong>Você recebe:</strong> valor que chega na sua conta bancária (já descontadas as taxas).
         </p>
 
-        <button id="btnSacar">Gerar saque</button>
+        <button id="btnSacar">Solicitar transferência</button>
       </div>
 
-      <div id="loadingSaque" class="hidden">Processando saque…</div>
+      <div id="loadingSaque" class="hidden"><span class="spinner"></span> Processando transferência…</div>
 
       <div id="resultadoSaque" class="resultado hidden">
-        <p class="resultado-titulo">Saque criado com sucesso!</p>
+        <p class="resultado-titulo">Transferência criada!</p>
 
         <div class="resultado-valores">
           <div class="resultado-item">
-            <span class="resultado-label">Você envia (Depix)</span>
+            <span class="resultado-label">Você envia</span>
             <span id="saqueDepositAmount" class="resultado-value"></span>
           </div>
           <div class="resultado-item">
-            <span class="resultado-label">Você recebe (PIX)</span>
+            <span class="resultado-label">Você recebe na conta</span>
             <span id="saquePayoutAmount" class="resultado-value"></span>
           </div>
         </div>
 
-        <p class="resultado-sublabel">Endereço Liquid para envio:</p>
+        <p class="resultado-sublabel">Endereço para envio (copie ou escaneie):</p>
         <div class="address-box">
           <span id="saqueAddress" class="address-text"></span>
         </div>
@@ -205,9 +254,9 @@
 
         <img id="saqueQr" class="hidden" alt="QR Code endereço Liquid" />
 
-        <p class="resultado-sublabel qr-hint">Escaneie o QR Code acima no app da SideSwap para enviar os Depix.</p>
+        <p class="resultado-sublabel qr-hint">Abra o app SideSwap e escaneie o QR Code acima para completar a transferência.</p>
 
-        <button id="btnNovoSaque" class="secondary">Novo saque</button>
+        <button id="btnNovoSaque" class="secondary">Nova transferência</button>
       </div>
     </div>
 
@@ -223,21 +272,15 @@
     </div>
 
     <div class="menu-section">
-      <h3>Endereços</h3>
-      <button id="menu-select-addr" class="menu-item">Selecionar endereço</button>
-      <button id="menu-add-addr" class="menu-item">Adicionar endereço</button>
+      <h3>Carteiras</h3>
+      <button id="menu-select-addr" class="menu-item">Trocar carteira</button>
+      <button id="menu-add-addr" class="menu-item">Adicionar carteira</button>
     </div>
 
     <div class="menu-section">
       <h3>Relatórios</h3>
       <button id="menu-report-depositos" class="menu-item">Depósitos</button>
       <button id="menu-report-saques" class="menu-item">Saques</button>
-    </div>
-
-    <div class="menu-section">
-      <h3>Ajuda</h3>
-      <button id="menu-faq" class="menu-item">Perguntas frequentes</button>
-      <button id="menu-contact" class="menu-item">Ajuda / Contato</button>
     </div>
 
     <div class="menu-section menu-footer">
@@ -249,7 +292,7 @@
 <!-- ===== SELECIONAR ENDEREÇO (modal) ===== -->
 <div id="select-addr-modal" class="modal hidden">
   <div class="modal-box">
-    <h2>Selecionar endereço</h2>
+    <h2>Trocar carteira</h2>
     <div id="addr-list"></div>
     <div id="select-addr-msg" class="mensagem"></div>
     <button id="close-select-addr" class="secondary">Fechar</button>
@@ -259,10 +302,10 @@
 <!-- ===== ADICIONAR ENDEREÇO (modal) ===== -->
 <div id="add-addr-modal" class="modal hidden">
   <div class="modal-box">
-    <h2>Adicionar endereço</h2>
-    <p class="info-text">Cole abaixo o endereço Liquid da sua carteira.</p>
+    <h2>Adicionar carteira</h2>
+    <p class="info-text">Cole abaixo o endereço da sua carteira digital. Você encontra esse endereço no app SideSwap, na opção "Receber".</p>
     <div id="add-addr-msg" class="mensagem"></div>
-    <input id="new-addr-input" placeholder="Endereço Liquid" />
+    <input id="new-addr-input" placeholder="Cole o endereço aqui" />
     <button id="btn-save-addr">Salvar</button>
     <button id="close-add-addr" class="secondary">Cancelar</button>
   </div>
@@ -272,7 +315,7 @@
 <div id="password-modal" class="modal hidden">
   <div class="modal-box">
     <h2>Confirmar alteração</h2>
-    <p class="info-text">Para alterar o endereço selecionado, confirme sua senha.</p>
+    <p class="info-text">Para trocar a carteira selecionada, confirme sua senha.</p>
     <div id="password-modal-msg" class="mensagem"></div>
     <input id="password-confirm-input" type="password" placeholder="Sua senha" autocomplete="current-password" />
     <button id="btn-confirm-password">Confirmar</button>
@@ -299,97 +342,6 @@
     </p>
   </div>
 </section>
-
-<!-- ===== FAQ ===== -->
-<section data-view="faq" class="page hidden">
-  <div class="card">
-    <h1>Perguntas Frequentes</h1>
-
-    <div class="faq-list">
-      <div class="faq-item">
-        <button class="faq-question">O que é o DePix?</button>
-        <div class="faq-answer hidden">
-          <p>O DePix é uma plataforma que conecta o PIX à rede Liquid. Você pode receber pagamentos via PIX e converter para Depix (L-BTC) na rede Liquid, ou sacar seus Depix recebendo via PIX na sua conta bancária.</p>
-        </div>
-      </div>
-
-      <div class="faq-item">
-        <button class="faq-question">Como funciona um depósito?</button>
-        <div class="faq-answer hidden">
-          <p>Você escolhe o valor, geramos um QR Code PIX. Ao pagar pelo app do seu banco, os Depix correspondentes são enviados automaticamente para o endereço Liquid da sua carteira.</p>
-        </div>
-      </div>
-
-      <div class="faq-item">
-        <button class="faq-question">Como funciona um saque?</button>
-        <div class="faq-answer hidden">
-          <p>Você informa o valor e sua chave PIX. O DePix gera um endereço Liquid para você enviar seus Depix. Após a confirmação na rede Liquid, o valor em reais é enviado via PIX para sua conta.</p>
-        </div>
-      </div>
-
-      <div class="faq-item">
-        <button class="faq-question">O que é um endereço Liquid?</button>
-        <div class="faq-answer hidden">
-          <p>É o endereço da sua carteira na rede Liquid (Bitcoin sidechain). Você precisa de uma carteira compatível, como a SideSwap, para gerar seu endereço e receber/enviar Depix.</p>
-        </div>
-      </div>
-
-      <div class="faq-item">
-        <button class="faq-question">Como adicionar ou alterar meu endereço?</button>
-        <div class="faq-answer hidden">
-          <p>No menu, acesse "Endereços" e clique em "Adicionar endereço". Para alterar o endereço ativo, selecione outro na lista — será necessário confirmar sua senha por segurança.</p>
-        </div>
-      </div>
-
-      <div class="faq-item">
-        <button class="faq-question">Quanto tempo leva para processar?</button>
-        <div class="faq-answer hidden">
-          <p>Depósitos: geralmente alguns minutos após o pagamento PIX ser confirmado. Saques: até 30 minutos após o envio dos Depix na rede Liquid.</p>
-        </div>
-      </div>
-
-      <div class="faq-item">
-        <button class="faq-question">Quais são as taxas?</button>
-        <div class="faq-answer hidden">
-          <p>As taxas são exibidas no momento do saque, antes de você confirmar. Depósitos via PIX não possuem taxa adicional.</p>
-        </div>
-      </div>
-
-      <div class="faq-item">
-        <button class="faq-question">O DePix é seguro?</button>
-        <div class="faq-answer hidden">
-          <p>Sim. Utilizamos autenticação com JWT, confirmação por senha para operações sensíveis, comunicação exclusivamente via HTTPS e não armazenamos dados bancários.</p>
-        </div>
-      </div>
-
-      <div class="faq-item">
-        <button class="faq-question">Como reportar um problema?</button>
-        <div class="faq-answer hidden">
-          <p>No menu, acesse "Ajuda / Contato" e envie uma mensagem descrevendo o problema. Nossa equipe responderá por email.</p>
-        </div>
-      </div>
-    </div>
-
-    <p class="link-text">
-      <a href="#home" class="link">← Voltar</a>
-    </p>
-  </div>
-</section>
-
-<!-- ===== CONTATO (modal) ===== -->
-<div id="contact-modal" class="modal hidden">
-  <div class="modal-box">
-    <h2>Ajuda / Contato</h2>
-    <p class="info-text">Descreva seu problema ou dúvida e responderemos por email.</p>
-    <div id="contact-msg" class="mensagem"></div>
-    <label for="contact-subject">Assunto</label>
-    <input id="contact-subject" placeholder="Resumo do problema ou dúvida" />
-    <label for="contact-message">Mensagem</label>
-    <textarea id="contact-message" placeholder="Descreva em detalhes..." rows="5"></textarea>
-    <button id="btn-send-contact">Enviar</button>
-    <button id="close-contact-modal" class="secondary">Cancelar</button>
-  </div>
-</div>
 
 <!-- Botão instalar -->
 <button id="installBtn" class="install-btn">

@@ -10,7 +10,6 @@ import {
 } from "./addresses.js";
 import { ALLOWED_QR_HOSTS, isAllowedImageUrl, toCents, formatBRL } from "./utils.js";
 import { showToast, setMsg, goToAppropriateScreen as _goToAppropriateScreen } from "./script-helpers.js";
-import { validateLiquidAddress, validatePhone } from "./validation.js";
 
 // ===== Constants =====
 const MIN_VALOR_CENTS = 500;
@@ -93,12 +92,13 @@ document.getElementById("btn-login")?.addEventListener("click", async () => {
   document.getElementById("login-verify-action")?.classList.add("hidden");
 
   if (!usuario || !senha) {
-    setMsg("login-msg", "Preencha todos os campos");
+    setMsg("login-msg", "Preencha seu usuário e senha para entrar");
     return;
   }
 
   const btn = document.getElementById("btn-login");
   btn.disabled = true;
+  btn.innerText = "Entrando…";
 
   try {
     const res = await apiFetch("/api/auth/login", {
@@ -122,9 +122,10 @@ document.getElementById("btn-login")?.addEventListener("click", async () => {
     setAuth(data.token, data.refreshToken, data.user);
     goToAppropriateScreen();
   } catch (e) {
-    setMsg("login-msg", e.message || "Erro de conexão");
+    setMsg("login-msg", e.message || "Sem conexão. Verifique sua internet e tente novamente.");
   } finally {
     btn.disabled = false;
+    btn.innerText = "Entrar";
   }
 });
 
@@ -151,14 +152,9 @@ document.getElementById("btn-register")?.addEventListener("click", async () => {
     return;
   }
 
-  const phoneResult = validatePhone(whatsapp);
-  if (!phoneResult.valid) {
-    setMsg("register-msg", phoneResult.error);
-    return;
-  }
-
   const btn = document.getElementById("btn-register");
   btn.disabled = true;
+  btn.innerText = "Criando conta…";
 
   try {
     const res = await apiFetch("/api/auth/register", {
@@ -179,9 +175,10 @@ document.getElementById("btn-register")?.addEventListener("click", async () => {
     }
     navigate("#verify");
   } catch (e) {
-    setMsg("register-msg", e.message || "Erro de conexão");
+    setMsg("register-msg", e.message || "Sem conexão. Verifique sua internet e tente novamente.");
   } finally {
     btn.disabled = false;
+    btn.innerText = "Criar conta";
   }
 });
 
@@ -232,6 +229,7 @@ document.getElementById("btn-verify")?.addEventListener("click", async () => {
 
   const btn = document.getElementById("btn-verify");
   btn.disabled = true;
+  btn.innerText = "Verificando…";
 
   try {
     const res = await apiFetch("/api/auth/verify", {
@@ -248,9 +246,10 @@ document.getElementById("btn-verify")?.addEventListener("click", async () => {
     setMsg("verify-msg", "Email verificado! Redirecionando para login...", true);
     setTimeout(() => navigate("#login"), 1500);
   } catch (e) {
-    setMsg("verify-msg", e.message || "Erro de conexão");
+    setMsg("verify-msg", e.message || "Sem conexão. Verifique sua internet e tente novamente.");
   } finally {
     btn.disabled = false;
+    btn.innerText = "Verificar";
   }
 });
 
@@ -318,6 +317,123 @@ document.getElementById("btn-resend-login")?.addEventListener("click", async (e)
 });
 
 // =========================================
+// FORGOT PASSWORD
+// =========================================
+
+document.getElementById("btn-forgot")?.addEventListener("click", async () => {
+  const identificador = document.getElementById("forgot-identificador").value.trim();
+  setMsg("forgot-msg", "");
+
+  if (!identificador) {
+    setMsg("forgot-msg", "Informe seu usuário ou email");
+    return;
+  }
+
+  const btn = document.getElementById("btn-forgot");
+  btn.disabled = true;
+  btn.innerText = "Enviando…";
+
+  try {
+    const res = await apiFetch("/api/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ identificador })
+    });
+    await res.json();
+
+    sessionStorage.setItem("depix-reset-identificador", identificador);
+    navigate("#reset-password");
+    setTimeout(() => setMsg("reset-msg", "Se o usuário existir, um código foi enviado para o email cadastrado.", true), 0);
+  } catch (e) {
+    setMsg("forgot-msg", e.message || "Sem conexão. Verifique sua internet e tente novamente.");
+  } finally {
+    btn.disabled = false;
+    btn.innerText = "Enviar código";
+  }
+});
+
+// =========================================
+// RESET PASSWORD
+// =========================================
+
+document.getElementById("btn-reset-password")?.addEventListener("click", async () => {
+  const codigo = document.getElementById("reset-code").value.trim();
+  const novaSenha = document.getElementById("reset-nova-senha").value;
+  const confirmarSenha = document.getElementById("reset-confirmar-senha").value;
+  const identificador = sessionStorage.getItem("depix-reset-identificador") || "";
+
+  setMsg("reset-msg", "");
+
+  if (!identificador) {
+    setMsg("reset-msg", "Sessão expirada. Solicite um novo código.");
+    return;
+  }
+
+  if (!codigo || codigo.length !== 6) {
+    setMsg("reset-msg", "Digite o código de 6 dígitos");
+    return;
+  }
+
+  if (!novaSenha || novaSenha.length < 8) {
+    setMsg("reset-msg", "A nova senha deve ter no mínimo 8 caracteres");
+    return;
+  }
+
+  if (novaSenha !== confirmarSenha) {
+    setMsg("reset-msg", "As senhas não coincidem");
+    return;
+  }
+
+  const btn = document.getElementById("btn-reset-password");
+  btn.disabled = true;
+  btn.innerText = "Redefinindo…";
+
+  try {
+    const res = await apiFetch("/api/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ identificador, codigo, novaSenha })
+    });
+    const data = await res.json();
+
+    if (!res.ok || data?.response?.errorMessage) {
+      setMsg("reset-msg", data?.response?.errorMessage || "Erro ao redefinir senha");
+      return;
+    }
+
+    sessionStorage.removeItem("depix-reset-identificador");
+    navigate("#login");
+    setTimeout(() => setMsg("login-msg", "Senha redefinida! Faça login com sua nova senha.", true), 0);
+  } catch (e) {
+    setMsg("reset-msg", e.message || "Sem conexão. Verifique sua internet e tente novamente.");
+  } finally {
+    btn.disabled = false;
+    btn.innerText = "Redefinir senha";
+  }
+});
+
+document.getElementById("btn-resend-reset")?.addEventListener("click", async (e) => {
+  e.preventDefault();
+  const identificador = sessionStorage.getItem("depix-reset-identificador") || "";
+
+  if (!identificador) {
+    setMsg("reset-msg", "Sessão expirada. Volte e solicite um novo código.");
+    return;
+  }
+
+  try {
+    const res = await apiFetch("/api/auth/resend-reset-code", {
+      method: "POST",
+      body: JSON.stringify({ identificador })
+    });
+    await res.json();
+
+    setMsg("reset-msg", "Código reenviado! Verifique seu email.", true);
+    startResendCooldown("btn-resend-reset", 30);
+  } catch (e) {
+    setMsg("reset-msg", e.message || "Sem conexão. Verifique sua internet e tente novamente.");
+  }
+});
+
+// =========================================
 // HOME — Mode switch (Depósito / Saque)
 // =========================================
 
@@ -325,7 +441,7 @@ function updateAddrDisplay() {
   const addr = getSelectedAddress();
   const display = document.getElementById("addr-display");
   if (display) {
-    display.innerText = addr ? abbreviateAddress(addr) : "Nenhum endereço";
+    display.innerText = addr ? abbreviateAddress(addr) : "Nenhuma carteira";
     display.title = addr || "";
   }
 }
@@ -337,12 +453,12 @@ document.getElementById("switchTrack")?.addEventListener("click", () => {
 
   if (modoSaque) {
     track.classList.add("active");
-    text.innerText = "Novo pagamento";
+    text.innerText = "Voltar para recebimento";
     document.getElementById("telaDeposito").classList.add("hidden");
     document.getElementById("telaSaque").classList.remove("hidden");
   } else {
     track.classList.remove("active");
-    text.innerText = "Sacar Depix";
+    text.innerText = "Transferir para conta";
     document.getElementById("telaSaque").classList.add("hidden");
     document.getElementById("telaDeposito").classList.remove("hidden");
   }
@@ -355,10 +471,10 @@ document.getElementById("valorModeTrack")?.addEventListener("click", () => {
 
   if (valorModeIsPix) {
     track.classList.add("active");
-    text.innerText = "Valor em PIX (você recebe)";
+    text.innerText = "Valor que você recebe";
   } else {
     track.classList.remove("active");
-    text.innerText = "Valor em Depix (você envia)";
+    text.innerText = "Valor que você envia";
   }
 });
 
@@ -381,7 +497,7 @@ document.getElementById("btnGerar")?.addEventListener("click", async () => {
   }
 
   if (!addr) {
-    setMsg("mensagem", "Selecione um endereço no menu");
+    setMsg("mensagem", "Selecione uma carteira no menu antes de continuar");
     return;
   }
 
@@ -398,6 +514,7 @@ document.getElementById("btnGerar")?.addEventListener("click", async () => {
 
   const btn = document.getElementById("btnGerar");
   btn.disabled = true;
+  btn.innerText = "Gerando…";
   document.getElementById("loading").classList.remove("hidden");
 
   try {
@@ -425,17 +542,25 @@ document.getElementById("btnGerar")?.addEventListener("click", async () => {
     document.getElementById("resultado").classList.remove("hidden");
 
   } catch (e) {
-    setMsg("mensagem", e.message || "Erro ao gerar QR Code");
+    setMsg("mensagem", e.message || "Não foi possível gerar o código. Tente novamente.");
   } finally {
     document.getElementById("loading").classList.add("hidden");
     btn.disabled = false;
+    btn.innerText = "Gerar código de pagamento";
   }
 });
 
 document.getElementById("btnCopy")?.addEventListener("click", async () => {
+  const copyBtn = document.getElementById("btnCopy");
   try {
     await navigator.clipboard.writeText(qrCopyPaste);
     showToast("Código copiado. Cole no app do seu banco.");
+    copyBtn.innerText = "Copiado!";
+    copyBtn.classList.add("copy-success");
+    setTimeout(() => {
+      copyBtn.innerText = "PIX copia e cola";
+      copyBtn.classList.remove("copy-success");
+    }, 2000);
   } catch {
     showToast("Não foi possível copiar. Copie manualmente.");
   }
@@ -471,7 +596,7 @@ document.getElementById("btnSacar")?.addEventListener("click", async () => {
   }
 
   if (!addr) {
-    setMsg("mensagemSaque", "Selecione um endereço no menu");
+    setMsg("mensagemSaque", "Selecione uma carteira no menu antes de continuar");
     return;
   }
 
@@ -491,6 +616,7 @@ document.getElementById("btnSacar")?.addEventListener("click", async () => {
 
   const btn = document.getElementById("btnSacar");
   btn.disabled = true;
+  btn.innerText = "Processando…";
   document.getElementById("loadingSaque").classList.remove("hidden");
 
   try {
@@ -536,17 +662,25 @@ document.getElementById("btnSacar")?.addEventListener("click", async () => {
     document.getElementById("resultadoSaque").classList.remove("hidden");
 
   } catch (e) {
-    setMsg("mensagemSaque", e.message || "Erro ao processar saque");
+    setMsg("mensagemSaque", e.message || "Não foi possível processar. Tente novamente.");
   } finally {
     document.getElementById("loadingSaque").classList.add("hidden");
     btn.disabled = false;
+    btn.innerText = "Solicitar transferência";
   }
 });
 
 document.getElementById("btnCopyAddress")?.addEventListener("click", async () => {
+  const copyBtn = document.getElementById("btnCopyAddress");
   try {
     await navigator.clipboard.writeText(saqueDepositAddress);
     showToast("Endereço copiado.");
+    copyBtn.innerText = "Copiado!";
+    copyBtn.classList.add("copy-success");
+    setTimeout(() => {
+      copyBtn.innerText = "Copiar endereço";
+      copyBtn.classList.remove("copy-success");
+    }, 2000);
   } catch {
     showToast("Não foi possível copiar. Copie manualmente.");
   }
@@ -593,89 +727,10 @@ document.getElementById("menu-logout")?.addEventListener("click", async () => {
     });
   } catch { /* ignore */ }
   clearAuth();
+  // Clear password field on logout so it doesn't persist
+  const loginSenha = document.getElementById("login-senha");
+  if (loginSenha) loginSenha.value = "";
   navigate("#login");
-});
-
-// FAQ menu item
-document.getElementById("menu-faq")?.addEventListener("click", () => {
-  closeMenu();
-  navigate("#faq");
-});
-
-// Contact modal
-document.getElementById("menu-contact")?.addEventListener("click", () => {
-  closeMenu();
-  setMsg("contact-msg", "");
-  document.getElementById("contact-subject").value = "";
-  document.getElementById("contact-message").value = "";
-  document.getElementById("contact-modal").classList.remove("hidden");
-});
-
-document.getElementById("close-contact-modal")?.addEventListener("click", () => {
-  document.getElementById("contact-modal").classList.add("hidden");
-});
-
-document.getElementById("btn-send-contact")?.addEventListener("click", async () => {
-  const assunto = document.getElementById("contact-subject").value.trim();
-  const mensagem = document.getElementById("contact-message").value.trim();
-  setMsg("contact-msg", "");
-
-  if (!assunto || !mensagem) {
-    setMsg("contact-msg", "Preencha o assunto e a mensagem");
-    return;
-  }
-
-  const btn = document.getElementById("btn-send-contact");
-  btn.disabled = true;
-
-  try {
-    const user = getUser();
-    const res = await apiFetch("/api/support/contact", {
-      method: "POST",
-      body: JSON.stringify({
-        assunto,
-        mensagem,
-        email: user?.email || "",
-        usuario: user?.usuario || ""
-      })
-    });
-
-    if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setMsg("contact-msg", data?.response?.errorMessage || "Erro ao enviar mensagem. Tente novamente.");
-      return;
-    }
-
-    setMsg("contact-msg", "Mensagem enviada! Responderemos em breve.", true);
-    setTimeout(() => {
-      document.getElementById("contact-modal").classList.add("hidden");
-    }, 1500);
-  } catch {
-    setMsg("contact-msg", "Erro de conexão. Tente novamente.");
-  } finally {
-    btn.disabled = false;
-  }
-});
-
-// FAQ accordion
-document.querySelector(".faq-list")?.addEventListener("click", (e) => {
-  const question = e.target.closest(".faq-question");
-  if (!question) return;
-
-  const item = question.closest(".faq-item");
-  const answer = item.querySelector(".faq-answer");
-
-  // Close all other items
-  document.querySelectorAll(".faq-item.open").forEach((openItem) => {
-    if (openItem !== item) {
-      openItem.classList.remove("open");
-      openItem.querySelector(".faq-answer")?.classList.add("hidden");
-    }
-  });
-
-  // Toggle clicked item
-  item.classList.toggle("open");
-  answer?.classList.toggle("hidden");
 });
 
 // =========================================
@@ -698,7 +753,7 @@ function renderAddressList() {
   const selected = getSelectedAddress();
 
   if (addresses.length === 0) {
-    container.innerHTML = '<p class="info-text">Nenhum endereço cadastrado.</p>';
+    container.innerHTML = '<p class="info-text">Nenhuma carteira cadastrada.</p>';
     return;
   }
 
@@ -756,6 +811,7 @@ document.getElementById("btn-confirm-password")?.addEventListener("click", async
 
   const btn = document.getElementById("btn-confirm-password");
   btn.disabled = true;
+  btn.innerText = "Confirmando…";
 
   try {
     const res = await apiFetch("/api/auth/verify-password", {
@@ -773,11 +829,12 @@ document.getElementById("btn-confirm-password")?.addEventListener("click", async
     pendingAddressChange = "";
     document.getElementById("password-modal").classList.add("hidden");
     updateAddrDisplay();
-    showToast("Endereço alterado com sucesso");
+    showToast("Carteira alterada com sucesso");
   } catch (e) {
-    setMsg("password-modal-msg", e.message || "Erro de conexão");
+    setMsg("password-modal-msg", e.message || "Sem conexão. Verifique sua internet e tente novamente.");
   } finally {
     btn.disabled = false;
+    btn.innerText = "Confirmar";
   }
 });
 
@@ -808,9 +865,13 @@ document.getElementById("btn-save-addr")?.addEventListener("click", () => {
   const addr = document.getElementById("new-addr-input").value.trim();
   setMsg("add-addr-msg", "");
 
-  const addrResult = validateLiquidAddress(addr);
-  if (!addrResult.valid) {
-    setMsg("add-addr-msg", addrResult.error);
+  if (!addr || addr.length < 10) {
+    setMsg("add-addr-msg", "Endereço deve ter no mínimo 10 caracteres");
+    return;
+  }
+
+  if (addr.length > 200) {
+    setMsg("add-addr-msg", "Endereço muito longo (máximo 200 caracteres)");
     return;
   }
 
@@ -822,7 +883,7 @@ document.getElementById("btn-save-addr")?.addEventListener("click", () => {
 
   document.getElementById("add-addr-modal").classList.add("hidden");
   updateAddrDisplay();
-  showToast("Endereço cadastrado com sucesso");
+  showToast("Carteira cadastrada com sucesso");
 
   if (window.location.hash === "#no-address") {
     navigate("#home");
@@ -876,6 +937,7 @@ document.getElementById("btn-request-report")?.addEventListener("click", async (
 
   const btn = document.getElementById("btn-request-report");
   btn.disabled = true;
+  btn.innerText = "Solicitando…";
 
   try {
     const res = await apiFetch("/api/reports", {
@@ -893,9 +955,10 @@ document.getElementById("btn-request-report")?.addEventListener("click", async (
     const email = user?.email || "seu email";
     setMsg("report-msg", `Relatório será enviado para ${email}. Pode levar alguns minutos.`, true);
   } catch (e) {
-    setMsg("report-msg", e.message || "Erro de conexão");
+    setMsg("report-msg", e.message || "Sem conexão. Verifique sua internet e tente novamente.");
   } finally {
     btn.disabled = false;
+    btn.innerText = "Solicitar relatório";
   }
 });
 
@@ -920,6 +983,9 @@ route("#home", () => {
 
 route("#login", () => {
   if (isLoggedIn()) goToAppropriateScreen();
+  // Always clear password field when showing login
+  const loginSenha = document.getElementById("login-senha");
+  if (loginSenha) loginSenha.value = "";
 });
 
 route("#register", () => { setMsg("register-msg", ""); });
@@ -933,8 +999,8 @@ route("#verify", () => {
   }
 });
 route("#no-address", () => {});
-
-route("#faq", () => {});
+route("#forgot-password", () => { setMsg("forgot-msg", ""); });
+route("#reset-password", () => { setMsg("reset-msg", ""); });
 
 route("#reports", () => {
   const now = new Date();
