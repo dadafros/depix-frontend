@@ -70,5 +70,39 @@ describe("Auth state management", () => {
       localStorageMock.setItem("depix-user", "not-json");
       expect(getUser()).toBeNull();
     });
+
+    it("should return null when user key does not exist", () => {
+      localStorageMock.setItem("depix-token", "jwt");
+      expect(getUser()).toBeNull();
+    });
+
+    it("should handle truncated JSON in localStorage", () => {
+      localStorageMock.setItem("depix-user", '{"broken');
+      expect(getUser()).toBeNull();
+    });
+  });
+
+  describe("partial auth states", () => {
+    it("should be logged in even without refresh token", () => {
+      localStorageMock.setItem("depix-token", "jwt-token");
+      // no refresh token set
+      expect(isLoggedIn()).toBe(true);
+      expect(getRefreshToken()).toBeNull();
+    });
+
+    it("setAuth should overwrite existing data", () => {
+      setAuth("token-1", "refresh-1", { id: "1" });
+      setAuth("token-2", "refresh-2", { id: "2" });
+      expect(getToken()).toBe("token-2");
+      expect(getRefreshToken()).toBe("refresh-2");
+      expect(getUser()).toEqual({ id: "2" });
+    });
+
+    it("clearAuth should be idempotent", () => {
+      // call without anything set — should not throw
+      clearAuth();
+      expect(getToken()).toBeNull();
+      expect(isLoggedIn()).toBe(false);
+    });
   });
 });

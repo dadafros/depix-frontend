@@ -39,7 +39,7 @@ import { navigate } from "../router.js";
 describe("apiFetch", () => {
   beforeEach(() => {
     localStorageMock.clear();
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     getToken.mockReturnValue(null);
     getRefreshToken.mockReturnValue(null);
     fetch.mockResolvedValue({ status: 200, ok: true, json: async () => ({}) });
@@ -178,6 +178,52 @@ describe("apiFetch", () => {
       const res = await apiFetch("/api/test");
       expect(res.status).toBe(401);
       expect(fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("should not attempt refresh when token exists but refresh token is null", async () => {
+      getToken.mockReturnValue("my-token");
+      getRefreshToken.mockReturnValue(null);
+
+      fetch.mockResolvedValueOnce({ status: 401, ok: false }); // initial 401
+
+      await expect(apiFetch("/api/test")).rejects.toThrow("Sessão expirada");
+      expect(clearAuth).toHaveBeenCalled();
+      expect(navigate).toHaveBeenCalledWith("#login");
+      // refresh fetch never called — only 1 fetch (original request)
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("should treat refresh 200 with empty body as failure", async () => {
+      getToken.mockReturnValue("expired-token");
+      getRefreshToken.mockReturnValue("my-refresh");
+
+      fetch
+        .mockResolvedValueOnce({ status: 401, ok: false })
+        .mockResolvedValueOnce({ status: 200, ok: true, json: async () => ({}) }); // no token/refreshToken
+
+      await expect(apiFetch("/api/test")).rejects.toThrow("Sessão expirada");
+      expect(clearAuth).toHaveBeenCalled();
+    });
+  });
+
+  describe("network failures", () => {
+    it("should propagate fetch rejection on initial request", async () => {
+      fetch.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+
+      await expect(apiFetch("/api/test")).rejects.toThrow("Failed to fetch");
+    });
+
+    it("should clear auth when refresh fetch rejects", async () => {
+      getToken.mockReturnValue("expired-token");
+      getRefreshToken.mockReturnValue("my-refresh");
+
+      fetch
+        .mockResolvedValueOnce({ status: 401, ok: false })
+        .mockRejectedValueOnce(new TypeError("Network error"));
+
+      await expect(apiFetch("/api/test")).rejects.toThrow("Sessão expirada");
+      expect(clearAuth).toHaveBeenCalled();
+      expect(navigate).toHaveBeenCalledWith("#login");
     });
   });
 });

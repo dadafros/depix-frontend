@@ -1,9 +1,10 @@
-const CACHE_NAME = "depix-static-v3";
+const CACHE_NAME = "depix-static-v4";
 
 const STATIC_FILES = [
   "./index.html",
   "./style.css",
   "./script.js",
+  "./script-helpers.js",
   "./utils.js",
   "./router.js",
   "./auth.js",

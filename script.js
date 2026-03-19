@@ -9,6 +9,7 @@ import {
   abbreviateAddress, hasAddresses
 } from "./addresses.js";
 import { ALLOWED_QR_HOSTS, isAllowedImageUrl, toCents, formatBRL } from "./utils.js";
+import { showToast, setMsg, goToAppropriateScreen as _goToAppropriateScreen } from "./script-helpers.js";
 
 // ===== Constants =====
 const MIN_VALOR_CENTS = 500;
@@ -28,25 +29,7 @@ if ("serviceWorker" in navigator) {
 }
 
 // ===== Utility functions =====
-
-function showToast(text) {
-  const toast = document.getElementById("toast");
-  toast.innerText = text;
-  toast.classList.remove("hidden");
-  toast.classList.add("show");
-  setTimeout(() => {
-    toast.classList.remove("show");
-    setTimeout(() => toast.classList.add("hidden"), 300);
-  }, 2000);
-}
-
-
-function setMsg(id, text, isSuccess = false) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.innerText = text;
-  el.classList.toggle("success", isSuccess);
-}
+// showToast and setMsg are imported from script-helpers.js
 
 function formatCurrencyInput(input) {
   if (!input) return;
@@ -835,15 +818,7 @@ document.getElementById("btn-request-report")?.addEventListener("click", async (
 // =========================================
 
 function goToAppropriateScreen() {
-  if (!isLoggedIn()) {
-    navigate("#login");
-    return;
-  }
-  if (hasAddresses()) {
-    navigate("#home");
-  } else {
-    navigate("#no-address");
-  }
+  _goToAppropriateScreen({ isLoggedIn, hasAddresses, navigate });
 }
 
 route("#home", () => {
