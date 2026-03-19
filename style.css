@@ -100,6 +100,22 @@ input[type="date"] {
   color-scheme: dark;
 }
 
+textarea {
+  width: 100%;
+  padding: 14px;
+  margin-bottom: 12px;
+  border-radius: 10px;
+  border: none;
+  font-size: 16px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #eaf6f6;
+  font-family: system-ui, sans-serif;
+  resize: vertical;
+  min-height: 100px;
+}
+textarea::placeholder { color: rgba(234, 246, 246, 0.4); }
+textarea:focus { outline: 2px solid #4fd1c5; outline-offset: -2px; }
+
 button {
   background: linear-gradient(135deg, #4fd1c5, #38b2ac);
   color: #003333;
@@ -636,6 +652,32 @@ button:focus-visible {
   margin: 16px 0;
   object-fit: contain;
 }
+
+/* ===== FAQ accordion ===== */
+.faq-list { text-align: left; }
+.faq-item { margin-bottom: 8px; }
+.faq-question {
+  background: rgba(255, 255, 255, 0.06);
+  text-align: left;
+  padding: 12px 40px 12px 16px;
+  font-size: 15px;
+  color: #eaf6f6;
+  position: relative;
+}
+.faq-question::after {
+  content: "▾";
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  opacity: 0.5;
+  transition: transform 0.2s ease;
+}
+.faq-item.open .faq-question::after { transform: translateY(-50%) rotate(180deg); }
+.faq-question:active { background: rgba(255, 255, 255, 0.12); }
+.faq-answer { padding: 8px 16px 12px; font-size: 14px; color: #b0d8d4; line-height: 1.6; }
+.faq-answer p { margin: 0; }
 
 /* ===== Install button ===== */
 .install-btn {

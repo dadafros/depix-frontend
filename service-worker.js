@@ -1,6 +1,32 @@
-const CACHE_NAME = "depix-static";
+const CACHE_NAME = "depix-v7";
 
-self.addEventListener("install", () => {
+const STATIC_FILES = [
+  "./",
+  "./index.html",
+  "./style.css",
+  "./script.js",
+  "./router.js",
+  "./auth.js",
+  "./api.js",
+  "./addresses.js",
+  "./utils.js",
+  "./validation.js",
+  "./script-helpers.js",
+  "./manifest.json",
+  "./icon-192.png",
+  "./icon-512.png"
+];
+
+self.addEventListener("install", event => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(cache =>
+      Promise.all(
+        STATIC_FILES.map(url =>
+          fetch(url, { cache: "reload" }).then(res => cache.put(url, res))
+        )
+      )
+    )
+  );
   self.skipWaiting();
 });
 

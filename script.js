@@ -9,6 +9,7 @@ import {
   abbreviateAddress, hasAddresses
 } from "./addresses.js";
 import { ALLOWED_QR_HOSTS, isAllowedImageUrl, toCents, formatBRL } from "./utils.js";
+import { validateLiquidAddress, validatePhone } from "./validation.js";
 import { showToast, setMsg, goToAppropriateScreen as _goToAppropriateScreen } from "./script-helpers.js";
 
 // ===== Constants =====
@@ -149,6 +150,12 @@ document.getElementById("btn-register")?.addEventListener("click", async () => {
 
   if (senha.length < 8) {
     setMsg("register-msg", "Senha deve ter no mínimo 8 caracteres");
+    return;
+  }
+
+  const phoneResult = validatePhone(whatsapp);
+  if (!phoneResult.valid) {
+    setMsg("register-msg", phoneResult.error);
     return;
   }
 
@@ -733,6 +740,86 @@ document.getElementById("menu-logout")?.addEventListener("click", async () => {
   navigate("#login");
 });
 
+// FAQ menu item
+document.getElementById("menu-faq")?.addEventListener("click", () => {
+  closeMenu();
+  navigate("#faq");
+});
+
+// Contact modal
+document.getElementById("menu-contact")?.addEventListener("click", () => {
+  closeMenu();
+  setMsg("contact-msg", "");
+  document.getElementById("contact-subject").value = "";
+  document.getElementById("contact-message").value = "";
+  document.getElementById("contact-modal").classList.remove("hidden");
+});
+
+document.getElementById("close-contact-modal")?.addEventListener("click", () => {
+  document.getElementById("contact-modal").classList.add("hidden");
+});
+
+document.getElementById("btn-send-contact")?.addEventListener("click", async () => {
+  const assunto = document.getElementById("contact-subject").value.trim();
+  const mensagem = document.getElementById("contact-message").value.trim();
+  setMsg("contact-msg", "");
+
+  if (!assunto || !mensagem) {
+    setMsg("contact-msg", "Preencha o assunto e a mensagem");
+    return;
+  }
+
+  const btn = document.getElementById("btn-send-contact");
+  btn.disabled = true;
+
+  try {
+    const user = getUser();
+    const res = await apiFetch("/api/support/contact", {
+      method: "POST",
+      body: JSON.stringify({
+        assunto,
+        mensagem,
+        email: user?.email || "",
+        usuario: user?.usuario || ""
+      })
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      setMsg("contact-msg", data?.response?.errorMessage || "Erro ao enviar mensagem. Tente novamente.");
+      return;
+    }
+
+    setMsg("contact-msg", "Mensagem enviada! Responderemos em breve.", true);
+    setTimeout(() => {
+      document.getElementById("contact-modal").classList.add("hidden");
+    }, 1500);
+  } catch {
+    setMsg("contact-msg", "Erro de conexão. Tente novamente.");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// FAQ accordion
+document.querySelector(".faq-list")?.addEventListener("click", (e) => {
+  const question = e.target.closest(".faq-question");
+  if (!question) return;
+
+  const item = question.closest(".faq-item");
+  const answer = item.querySelector(".faq-answer");
+
+  document.querySelectorAll(".faq-item.open").forEach((openItem) => {
+    if (openItem !== item) {
+      openItem.classList.remove("open");
+      openItem.querySelector(".faq-answer")?.classList.add("hidden");
+    }
+  });
+
+  item.classList.toggle("open");
+  answer?.classList.toggle("hidden");
+});
+
 // =========================================
 // ADDRESS MANAGEMENT
 // =========================================
@@ -865,13 +952,9 @@ document.getElementById("btn-save-addr")?.addEventListener("click", () => {
   const addr = document.getElementById("new-addr-input").value.trim();
   setMsg("add-addr-msg", "");
 
-  if (!addr || addr.length < 10) {
-    setMsg("add-addr-msg", "Endereço deve ter no mínimo 10 caracteres");
-    return;
-  }
-
-  if (addr.length > 200) {
-    setMsg("add-addr-msg", "Endereço muito longo (máximo 200 caracteres)");
+  const addrResult = validateLiquidAddress(addr);
+  if (!addrResult.valid) {
+    setMsg("add-addr-msg", addrResult.error);
     return;
   }
 
@@ -999,6 +1082,7 @@ route("#verify", () => {
   }
 });
 route("#no-address", () => {});
+route("#faq", () => {});
 route("#forgot-password", () => { setMsg("forgot-msg", ""); });
 route("#reset-password", () => { setMsg("reset-msg", ""); });
 

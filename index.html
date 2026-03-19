@@ -283,6 +283,12 @@
       <button id="menu-report-saques" class="menu-item">Saques</button>
     </div>
 
+    <div class="menu-section">
+      <h3>Ajuda</h3>
+      <button id="menu-faq" class="menu-item">Perguntas frequentes</button>
+      <button id="menu-contact" class="menu-item">Ajuda / Contato</button>
+    </div>
+
     <div class="menu-section menu-footer">
       <button id="menu-logout" class="menu-item danger">Sair</button>
     </div>
@@ -342,6 +348,69 @@
     </p>
   </div>
 </section>
+
+<!-- ===== FAQ ===== -->
+<section data-view="faq" class="page hidden">
+  <div class="card">
+    <h1>Perguntas frequentes</h1>
+    <div class="faq-list">
+      <div class="faq-item">
+        <button class="faq-question">O que é o DePix?</button>
+        <div class="faq-answer hidden"><p>O DePix é uma plataforma que conecta o PIX à rede Liquid, permitindo que você receba pagamentos via PIX e converta para ativos digitais, ou faça o caminho inverso.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question">Como funciona um depósito?</button>
+        <div class="faq-answer hidden"><p>Você escolhe o valor desejado, o DePix gera um QR Code PIX. Basta pagar pelo app do seu banco e o valor é enviado para sua carteira digital.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question">Como funciona um saque?</button>
+        <div class="faq-answer hidden"><p>Você informa o valor e sua chave PIX. O DePix gera um endereço Liquid para você enviar os fundos. Após a confirmação, o valor é transferido via PIX para sua conta bancária.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question">O que é um endereço Liquid?</button>
+        <div class="faq-answer hidden"><p>É o endereço da sua carteira na rede Liquid. Você obtém esse endereço no app SideSwap, na opção "Receber". É como um número de conta para receber ativos digitais.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question">Como adicionar ou alterar meu endereço?</button>
+        <div class="faq-answer hidden"><p>Acesse o menu (☰) e vá em "Adicionar carteira" para cadastrar um novo endereço, ou "Trocar carteira" para selecionar outro endereço já cadastrado.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question">Quanto tempo leva para processar?</button>
+        <div class="faq-answer hidden"><p>Depósitos são processados em poucos minutos após a confirmação do PIX. Saques podem levar até 30 minutos dependendo da confirmação na rede Liquid.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question">Quais são as taxas?</button>
+        <div class="faq-answer hidden"><p>As taxas de saque são exibidas antes de confirmar a operação. Depósitos não possuem taxa adicional.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question">O DePix é seguro?</button>
+        <div class="faq-answer hidden"><p>Sim. Utilizamos autenticação JWT, senha criptografada, conexão HTTPS e não armazenamos dados bancários. Toda troca de carteira exige confirmação de senha.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question">Como reportar um problema?</button>
+        <div class="faq-answer hidden"><p>Acesse o menu (☰) e toque em "Ajuda / Contato". Descreva seu problema e responderemos por email.</p></div>
+      </div>
+    </div>
+    <p class="link-text">
+      <a href="#home" class="link">← Voltar</a>
+    </p>
+  </div>
+</section>
+
+<!-- ===== CONTATO (modal) ===== -->
+<div id="contact-modal" class="modal hidden">
+  <div class="modal-box">
+    <h2>Ajuda / Contato</h2>
+    <p class="info-text">Descreva seu problema ou dúvida e responderemos por email.</p>
+    <div id="contact-msg" class="mensagem"></div>
+    <label for="contact-subject">Assunto</label>
+    <input id="contact-subject" placeholder="Resumo do problema ou dúvida" />
+    <label for="contact-message">Mensagem</label>
+    <textarea id="contact-message" placeholder="Descreva em detalhes..." rows="5"></textarea>
+    <button id="btn-send-contact">Enviar</button>
+    <button id="close-contact-modal" class="secondary">Cancelar</button>
+  </div>
+</div>
 
 <!-- Botão instalar -->
 <button id="installBtn" class="install-btn">
