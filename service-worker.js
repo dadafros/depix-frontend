@@ -1,25 +1,6 @@
-const CACHE_NAME = "depix-static-v5";
+const CACHE_NAME = "depix-static";
 
-const STATIC_FILES = [
-  "./index.html",
-  "./style.css",
-  "./script.js",
-  "./script-helpers.js",
-  "./utils.js",
-  "./validation.js",
-  "./router.js",
-  "./auth.js",
-  "./api.js",
-  "./addresses.js",
-  "./manifest.json",
-  "./icon-192.png",
-  "./icon-512.png"
-];
-
-self.addEventListener("install", event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_FILES))
-  );
+self.addEventListener("install", () => {
   self.skipWaiting();
 });
 
@@ -48,11 +29,16 @@ self.addEventListener("fetch", event => {
     return;
   }
 
-  // Cache-first for static files only
+  // Stale-while-revalidate: serve cache immediately, update in background
   event.respondWith(
-    caches.match(req).then(cached => {
-      if (cached) return cached;
-      return fetch(req);
-    })
+    caches.open(CACHE_NAME).then(cache =>
+      cache.match(req).then(cached => {
+        const fetched = fetch(req).then(response => {
+          if (response.ok) cache.put(req, response.clone());
+          return response;
+        });
+        return cached || fetched;
+      })
+    )
   );
 });
