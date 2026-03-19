@@ -9,8 +9,8 @@ import {
   abbreviateAddress, hasAddresses
 } from "./addresses.js";
 import { ALLOWED_QR_HOSTS, isAllowedImageUrl, toCents, formatBRL } from "./utils.js";
-import { showToast, setMsg, goToAppropriateScreen as _goToAppropriateScreen } from "./script-helpers.js";
 import { validateLiquidAddress, validatePhone } from "./validation.js";
+import { showToast, setMsg, goToAppropriateScreen as _goToAppropriateScreen } from "./script-helpers.js";
 
 // ===== Constants =====
 const MIN_VALOR_CENTS = 500;
@@ -148,14 +148,14 @@ document.getElementById("btn-register")?.addEventListener("click", async () => {
     return;
   }
 
-  if (senha.length < 8) {
-    setMsg("register-msg", "Senha deve ter no mínimo 8 caracteres");
-    return;
-  }
-
   const phoneResult = validatePhone(whatsapp);
   if (!phoneResult.valid) {
     setMsg("register-msg", phoneResult.error);
+    return;
+  }
+
+  if (senha.length < 8) {
+    setMsg("register-msg", "Senha deve ter no mínimo 8 caracteres");
     return;
   }
 
@@ -771,6 +771,7 @@ document.getElementById("btn-send-contact")?.addEventListener("click", async () 
 
   const btn = document.getElementById("btn-send-contact");
   btn.disabled = true;
+  btn.innerText = "Enviando…";
 
   try {
     const user = getUser();
@@ -795,9 +796,10 @@ document.getElementById("btn-send-contact")?.addEventListener("click", async () 
       document.getElementById("contact-modal").classList.add("hidden");
     }, 1500);
   } catch {
-    setMsg("contact-msg", "Erro de conexão. Tente novamente.");
+    setMsg("contact-msg", "Sem conexão. Verifique sua internet e tente novamente.");
   } finally {
     btn.disabled = false;
+    btn.innerText = "Enviar";
   }
 });
 
@@ -1082,10 +1084,9 @@ route("#verify", () => {
   }
 });
 route("#no-address", () => {});
+route("#faq", () => {});
 route("#forgot-password", () => { setMsg("forgot-msg", ""); });
 route("#reset-password", () => { setMsg("reset-msg", ""); });
-
-route("#faq", () => {});
 
 route("#reports", () => {
   const now = new Date();
