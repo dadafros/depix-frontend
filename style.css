@@ -751,3 +751,110 @@ textarea:focus {
     bottom: 32px;
   }
 }
+
+/* ===== TRANSACTIONS LIST ===== */
+
+.transactions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.transaction-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.transaction-item:hover {
+  background: rgba(255,255,255,0.1);
+}
+
+.transaction-item.highlight {
+  background: rgba(79,209,197,0.15);
+  border: 1px solid rgba(79,209,197,0.3);
+}
+
+.transaction-type {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  min-width: 56px;
+  text-align: center;
+}
+
+.transaction-type.deposit {
+  background: rgba(79,209,197,0.2);
+  color: #4fd1c5;
+}
+
+.transaction-type.withdraw {
+  background: rgba(159,122,234,0.2);
+  color: #b794f4;
+}
+
+.transaction-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.transaction-amount {
+  font-weight: 600;
+  font-size: 14px;
+  color: #eaf6f6;
+}
+
+.transaction-date {
+  font-size: 11px;
+  color: #b0d8d4;
+  opacity: 0.7;
+}
+
+.transaction-status {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.transaction-status.status-green {
+  background: rgba(104,211,145,0.2);
+  color: #68d391;
+}
+
+.transaction-status.status-yellow {
+  background: rgba(236,201,75,0.2);
+  color: #ecc94b;
+}
+
+.transaction-status.status-orange {
+  background: rgba(237,137,54,0.2);
+  color: #ed8936;
+}
+
+.transaction-status.status-red {
+  background: rgba(255,107,107,0.2);
+  color: #ff6b6b;
+}
+
+.transaction-status.status-blue {
+  background: rgba(99,179,237,0.2);
+  color: #63b3ed;
+}
+
+.transaction-status.status-gray {
+  background: rgba(160,174,192,0.2);
+  color: #a0aec0;
+}

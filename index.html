@@ -197,6 +197,7 @@
         <img id="qrImage" alt="QR Code PIX" />
         <p id="qrId"></p>
         <button id="btnCopy">PIX copia e cola</button>
+        <button id="btnAcompanhar" class="secondary">Acompanhe esta transação</button>
         <button id="btnReset" class="secondary">Novo pagamento</button>
       </div>
     </div>
@@ -256,6 +257,7 @@
 
         <p class="resultado-sublabel qr-hint">Abra o app SideSwap e escaneie o QR Code acima para completar a transferência.</p>
 
+        <button id="btnAcompanharSaque" class="secondary">Acompanhe esta transação</button>
         <button id="btnNovoSaque" class="secondary">Nova transferência</button>
       </div>
     </div>
@@ -275,6 +277,11 @@
       <h3>Endereços</h3>
       <button id="menu-select-addr" class="menu-item">Trocar endereço</button>
       <button id="menu-add-addr" class="menu-item">Adicionar endereço</button>
+    </div>
+
+    <div class="menu-section">
+      <h3>Transações</h3>
+      <button id="menu-transactions" class="menu-item">Status de transações</button>
     </div>
 
     <div class="menu-section">
@@ -343,6 +350,22 @@
 
     <button id="btn-request-report">Solicitar relatório</button>
 
+    <p class="link-text">
+      <a href="#home" class="link">← Voltar</a>
+    </p>
+  </div>
+</section>
+
+<!-- ===== TRANSAÇÕES ===== -->
+<section data-view="transactions" class="page hidden">
+  <div class="card">
+    <h1>Transações</h1>
+    <div id="transactions-msg" class="mensagem"></div>
+    <div id="transactions-loading" class="hidden"><span class="spinner"></span> Carregando transações…</div>
+    <div id="transactions-empty" class="hidden">
+      <p class="info-text">Nenhuma transação encontrada.</p>
+    </div>
+    <div id="transactions-list" class="transactions-list"></div>
     <p class="link-text">
       <a href="#home" class="link">← Voltar</a>
     </p>

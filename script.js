@@ -23,6 +23,9 @@ let reportType = "";
 let modoSaque = false;
 let valorModeIsPix = false;
 let saqueDepositAddress = "";
+let lastDepositQrId = "";
+let lastWithdrawalId = "";
+let transactionsPollingInterval = null;
 
 // Register service worker
 if ("serviceWorker" in navigator) {
@@ -272,9 +275,9 @@ document.getElementById("btn-resend-verify")?.addEventListener("click", async (e
   }
 
   try {
-    const res = await apiFetch("/api/auth/resend", {
+    const res = await apiFetch("/api/auth/verify", {
       method: "POST",
-      body: JSON.stringify({ usuario })
+      body: JSON.stringify({ action: "resend", usuario })
     });
     const data = await res.json();
 
@@ -304,9 +307,9 @@ document.getElementById("btn-resend-login")?.addEventListener("click", async (e)
   sessionStorage.setItem("depix-verify-usuario", usuario);
 
   try {
-    const res = await apiFetch("/api/auth/resend", {
+    const res = await apiFetch("/api/auth/verify", {
       method: "POST",
-      body: JSON.stringify({ usuario })
+      body: JSON.stringify({ action: "resend", usuario })
     });
     const data = await res.json();
 
@@ -427,9 +430,9 @@ document.getElementById("btn-resend-reset")?.addEventListener("click", async (e)
   }
 
   try {
-    const res = await apiFetch("/api/auth/resend", {
+    const res = await apiFetch("/api/auth/verify", {
       method: "POST",
-      body: JSON.stringify({ tipo: "reset_senha", identificador })
+      body: JSON.stringify({ action: "resend_reset", identificador })
     });
     await res.json();
 
@@ -544,6 +547,7 @@ document.getElementById("btnGerar")?.addEventListener("click", async () => {
     }
 
     qrCopyPaste = data.response.qrCopyPaste;
+    lastDepositQrId = data.response.id;
     document.getElementById("qrImage").src = data.response.qrImageUrl;
     document.getElementById("qrId").innerText = "ID: " + data.response.id;
     document.getElementById("resultado").classList.remove("hidden");
@@ -650,6 +654,7 @@ document.getElementById("btnSacar")?.addEventListener("click", async () => {
     }
 
     const r = data.response;
+    lastWithdrawalId = r.id;
 
     document.getElementById("saqueDepositAmount").innerText = formatBRL(r.depositAmountInCents);
     document.getElementById("saquePayoutAmount").innerText = formatBRL(r.payoutAmountInCents);
@@ -728,9 +733,9 @@ document.getElementById("menu-logout")?.addEventListener("click", async () => {
   closeMenu();
   try {
     const refreshToken = getRefreshToken();
-    await apiFetch("/api/auth/logout", {
+    await apiFetch("/api/auth/refresh", {
       method: "POST",
-      body: JSON.stringify({ refreshToken })
+      body: JSON.stringify({ action: "logout", refreshToken })
     });
   } catch { /* ignore */ }
   clearAuth();
@@ -1048,6 +1053,164 @@ document.getElementById("btn-request-report")?.addEventListener("click", async (
 });
 
 // =========================================
+// TRANSACTIONS
+// =========================================
+
+const DEPOSIT_STATUS_LABELS = {
+  pending: "Pendente", depix_sent: "Concluído", under_review: "Em análise",
+  canceled: "Cancelado", error: "Erro", refunded: "Reembolsado",
+  expired: "Expirado", pending_pix2fa: "Aguardando 2FA", delayed: "Atrasado"
+};
+
+const WITHDRAW_STATUS_LABELS = {
+  unsent: "Aguardando", sending: "Enviando", sent: "Enviado",
+  error: "Erro", cancelled: "Cancelado", refunded: "Reembolsado"
+};
+
+const NON_TERMINAL_STATUSES = new Set([
+  "pending", "sending", "unsent", "under_review", "pending_pix2fa", "delayed"
+]);
+
+function statusColor(status) {
+  if (["depix_sent", "sent"].includes(status)) return "status-green";
+  if (["pending", "sending", "pending_pix2fa"].includes(status)) return "status-yellow";
+  if (["under_review", "delayed"].includes(status)) return "status-orange";
+  if (["canceled", "cancelled", "error"].includes(status)) return "status-red";
+  if (status === "refunded") return "status-blue";
+  return "status-gray";
+}
+
+function formatDateShort(isoStr) {
+  if (!isoStr) return "";
+  const d = new Date(isoStr);
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", timeZone: "America/Sao_Paulo" });
+}
+
+function renderTransactions(transactions, highlightId) {
+  const list = document.getElementById("transactions-list");
+  const empty = document.getElementById("transactions-empty");
+
+  if (!transactions || transactions.length === 0) {
+    list.innerHTML = "";
+    empty.classList.remove("hidden");
+    return;
+  }
+
+  empty.classList.add("hidden");
+
+  list.innerHTML = transactions.map(tx => {
+    const isDeposit = tx.tipo === "deposit";
+    const typeClass = isDeposit ? "deposit" : "withdraw";
+    const typeLabel = isDeposit ? "Depósito" : "Saque";
+    const status = tx.status || (isDeposit ? "pending" : "unsent");
+    const statusLabel = isDeposit
+      ? (DEPOSIT_STATUS_LABELS[status] || status)
+      : (WITHDRAW_STATUS_LABELS[status] || status);
+    const amount = isDeposit
+      ? formatBRL(tx.valor_centavos)
+      : formatBRL(tx.payout_amount_centavos || tx.deposit_amount_centavos);
+    const txId = isDeposit ? tx.qr_id : tx.withdrawal_id;
+    const isHighlighted = highlightId && txId === highlightId;
+
+    return `<div class="transaction-item${isHighlighted ? " highlight" : ""}" data-tx-id="${txId || ""}">
+      <span class="transaction-type ${typeClass}">${typeLabel}</span>
+      <div class="transaction-info">
+        <span class="transaction-amount">${amount}</span>
+        <span class="transaction-date">${formatDateShort(tx.criado_em)}</span>
+      </div>
+      <span class="transaction-status ${statusColor(status)}">${statusLabel}</span>
+    </div>`;
+  }).join("");
+
+  // Scroll to highlighted transaction
+  if (highlightId) {
+    const el = list.querySelector(`[data-tx-id="${highlightId}"]`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+}
+
+async function loadTransactions() {
+  const loading = document.getElementById("transactions-loading");
+  const msg = document.getElementById("transactions-msg");
+
+  loading.classList.remove("hidden");
+  setMsg("transactions-msg", "");
+  document.getElementById("transactions-list").innerHTML = "";
+  document.getElementById("transactions-empty").classList.add("hidden");
+
+  try {
+    const res = await apiFetch("/api/status?type=all");
+    const data = await res.json();
+
+    if (!res.ok) {
+      setMsg("transactions-msg", data?.response?.errorMessage || data?.errorMessage || "Erro ao carregar transações");
+      return;
+    }
+
+    const transactions = data.transactions || [];
+    const hash = window.location.hash;
+    const params = new URLSearchParams(hash.split("?")[1] || "");
+    const highlightId = params.get("id") || "";
+
+    renderTransactions(transactions, highlightId);
+
+    // Auto-refresh if there are non-terminal transactions
+    stopTransactionsPolling();
+    const hasPending = transactions.some(tx => NON_TERMINAL_STATUSES.has(tx.status));
+    if (hasPending) {
+      transactionsPollingInterval = setInterval(async () => {
+        try {
+          const r = await apiFetch("/api/status?type=all");
+          const d = await r.json();
+          if (r.ok) {
+            const txs = d.transactions || [];
+            renderTransactions(txs, highlightId);
+            if (!txs.some(tx => NON_TERMINAL_STATUSES.has(tx.status))) {
+              stopTransactionsPolling();
+            }
+          }
+        } catch { /* ignore polling errors */ }
+      }, 30000);
+    }
+
+  } catch (e) {
+    setMsg("transactions-msg", e.message || "Erro ao carregar transações");
+  } finally {
+    loading.classList.add("hidden");
+  }
+}
+
+function stopTransactionsPolling() {
+  if (transactionsPollingInterval) {
+    clearInterval(transactionsPollingInterval);
+    transactionsPollingInterval = null;
+  }
+}
+
+// Transactions menu button
+document.getElementById("menu-transactions")?.addEventListener("click", () => {
+  closeMenu();
+  navigate("#transactions");
+});
+
+// Acompanhe buttons
+document.getElementById("btnAcompanhar")?.addEventListener("click", () => {
+  if (lastDepositQrId) {
+    navigate("#transactions?type=deposit&id=" + lastDepositQrId);
+  } else {
+    navigate("#transactions");
+  }
+});
+
+document.getElementById("btnAcompanharSaque")?.addEventListener("click", () => {
+  if (lastWithdrawalId) {
+    navigate("#transactions?type=withdraw&id=" + lastWithdrawalId);
+  } else {
+    navigate("#transactions");
+  }
+});
+
+// =========================================
 // ROUTING SETUP
 // =========================================
 
@@ -1056,6 +1219,7 @@ function goToAppropriateScreen() {
 }
 
 route("#home", () => {
+  stopTransactionsPolling();
   updateAddrDisplay();
   document.getElementById("resultado")?.classList.add("hidden");
   document.getElementById("valor").value = "";
@@ -1067,6 +1231,7 @@ route("#home", () => {
 });
 
 route("#login", () => {
+  stopTransactionsPolling();
   if (isLoggedIn()) goToAppropriateScreen();
   // Always clear password field when showing login
   const loginSenha = document.getElementById("login-senha");
@@ -1085,6 +1250,7 @@ route("#verify", () => {
 });
 route("#no-address", () => {});
 route("#faq", () => {});
+route("#transactions", () => { loadTransactions(); });
 route("#forgot-password", () => { setMsg("forgot-msg", ""); });
 route("#reset-password", () => { setMsg("reset-msg", ""); });
 
