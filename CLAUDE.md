@@ -8,7 +8,7 @@ DePix is a Progressive Web App (PWA) for generating PIX QR codes (deposits) and 
 - **Frontend (this repo)**: `dadafros/depix` — Vanilla JS PWA on GitHub Pages
 - **Backend**: `dadafros/depix-backend` — Vercel serverless API
 
-**Live URL**: `https://dadafros.github.io/depix/`
+**Live URL**: `https://depixapp.com`
 
 ## Architecture
 

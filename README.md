@@ -1,9 +1,9 @@
 # DePix
 
 [![CI](https://github.com/dadafros/depix/actions/workflows/ci.yml/badge.svg)](https://github.com/dadafros/depix/actions/workflows/ci.yml)
-[![GitHub Pages](https://img.shields.io/badge/deploy-GitHub%20Pages-blue?logo=github)](https://dadafros.github.io/depix/)
+[![GitHub Pages](https://img.shields.io/badge/deploy-GitHub%20Pages-blue?logo=github)](https://depixapp.com)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![PWA](https://img.shields.io/badge/PWA-installable-5A0FC8?logo=pwa)](https://dadafros.github.io/depix/)
+[![PWA](https://img.shields.io/badge/PWA-installable-5A0FC8?logo=pwa)](https://depixapp.com)
 
 Progressive Web App for generating PIX QR codes and processing withdrawals via the [Liquid Network](https://liquid.net).
 
@@ -97,7 +97,7 @@ npm test
 
 Deployed automatically to GitHub Pages on push to `main`. The app is served at:
 
-**https://dadafros.github.io/depix/**
+**https://depixapp.com**
 
 ## Related
 
