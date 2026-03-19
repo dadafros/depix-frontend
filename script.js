@@ -341,7 +341,7 @@ document.getElementById("btn-forgot")?.addEventListener("click", async () => {
   btn.innerText = "Enviando…";
 
   try {
-    const res = await apiFetch("/api/auth/forgot-password", {
+    const res = await apiFetch("/api/auth/password-reset", {
       method: "POST",
       body: JSON.stringify({ identificador })
     });
@@ -395,9 +395,9 @@ document.getElementById("btn-reset-password")?.addEventListener("click", async (
   btn.innerText = "Redefinindo…";
 
   try {
-    const res = await apiFetch("/api/auth/reset-password", {
+    const res = await apiFetch("/api/auth/password-reset", {
       method: "POST",
-      body: JSON.stringify({ identificador, codigo, novaSenha })
+      body: JSON.stringify({ action: "reset", identificador, codigo, novaSenha })
     });
     const data = await res.json();
 
