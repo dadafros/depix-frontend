@@ -29,7 +29,8 @@ export function getCurrentView() {
 
 function onHashChange() {
   const hash = window.location.hash || "#login";
-  const viewName = hash.replace("#", "");
+  const [hashBase] = hash.split("?");
+  const viewName = hashBase.replace("#", "");
 
   // Hide all views
   document.querySelectorAll("section[data-view]").forEach(s => {
@@ -43,8 +44,8 @@ function onHashChange() {
     currentView = viewName;
   }
 
-  // Call route handler
-  const handler = routes[hash];
+  // Call route handler (match on base hash without query params)
+  const handler = routes[hashBase];
   if (handler) handler();
 }
 
