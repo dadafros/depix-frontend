@@ -1,10 +1,13 @@
 const CACHE_NAME = "depix-static-v2";
 
-// ⚠️ SOMENTE arquivos estáticos seguros
 const STATIC_FILES = [
   "./index.html",
   "./style.css",
   "./script.js",
+  "./router.js",
+  "./auth.js",
+  "./api.js",
+  "./addresses.js",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png"
@@ -31,10 +34,9 @@ self.addEventListener("activate", event => {
 self.addEventListener("fetch", event => {
   const req = event.request;
 
-  // ❌ Nunca interferir com POST (pagamento)
+  // Never interfere with POST or API calls
   if (req.method !== "GET") return;
 
-  // ❌ Nunca cachear chamadas externas / API
   if (
     req.url.startsWith("https://depix-backend.vercel.app") ||
     req.url.startsWith("https://api.qrserver.com") ||
@@ -43,7 +45,7 @@ self.addEventListener("fetch", event => {
     return;
   }
 
-  // ✅ Cache-first apenas para arquivos estáticos
+  // Cache-first for static files only
   event.respondWith(
     caches.match(req).then(cached => {
       if (cached) return cached;
