@@ -1,3 +1,41 @@
+const API = "https://depix-backend.vercel.app";
+
+/* ======================
+   ELEMENTOS — Auth
+====================== */
+const telaLogin = document.getElementById("telaLogin");
+const telaCadastro = document.getElementById("telaCadastro");
+const telaVerificacao = document.getElementById("telaVerificacao");
+const telaApp = document.getElementById("telaApp");
+
+const loginUsuario = document.getElementById("loginUsuario");
+const loginSenha = document.getElementById("loginSenha");
+const btnLogin = document.getElementById("btnLogin");
+const mensagemLogin = document.getElementById("mensagemLogin");
+const loadingLogin = document.getElementById("loadingLogin");
+const linkCadastro = document.getElementById("linkCadastro");
+
+const cadNome = document.getElementById("cadNome");
+const cadEmail = document.getElementById("cadEmail");
+const cadWhatsapp = document.getElementById("cadWhatsapp");
+const cadUsuario = document.getElementById("cadUsuario");
+const cadSenha = document.getElementById("cadSenha");
+const btnCadastro = document.getElementById("btnCadastro");
+const mensagemCadastro = document.getElementById("mensagemCadastro");
+const loadingCadastro = document.getElementById("loadingCadastro");
+const linkLogin = document.getElementById("linkLogin");
+
+const verifCodigo = document.getElementById("verifCodigo");
+const btnVerificar = document.getElementById("btnVerificar");
+const btnReenviar = document.getElementById("btnReenviar");
+const mensagemVerificacao = document.getElementById("mensagemVerificacao");
+const loadingVerificacao = document.getElementById("loadingVerificacao");
+const loadingReenviar = document.getElementById("loadingReenviar");
+const linkVoltarLogin = document.getElementById("linkVoltarLogin");
+
+const headerUsuario = document.getElementById("headerUsuario");
+const btnLogout = document.getElementById("btnLogout");
+
 /* ======================
    ELEMENTOS — Depósito
 ====================== */
@@ -47,14 +85,97 @@ const installBtn = document.getElementById("installBtn");
 const modal = document.getElementById("installModal");
 const closeModal = document.getElementById("closeModal");
 
-const MIN_VALOR_CENTS = 500;      // R$ 5,00
-const MAX_VALOR_CENTS = 300000;   // R$ 3.000,00
+const MIN_VALOR_CENTS = 500;
+const MAX_VALOR_CENTS = 300000;
 
 let qrCopyPaste = "";
 let deferredPrompt = null;
-let modoSaque = false;           // false = depósito, true = saque
-let valorModeIsPix = false;      // false = depositAmount (Depix), true = payoutAmount (PIX)
-let saqueDepositAddress = "";    // endereço completo para cópia
+let modoSaque = false;
+let valorModeIsPix = false;
+let saqueDepositAddress = "";
+let pendingVerifUsuario = "";   // username aguardando verificação
+
+/* ======================
+   AUTH — Token management
+====================== */
+function getAuth() {
+  try {
+    const raw = localStorage.getItem("depix-auth");
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function setAuth(data) {
+  localStorage.setItem("depix-auth", JSON.stringify(data));
+}
+
+function clearAuth() {
+  localStorage.removeItem("depix-auth");
+}
+
+function getAccessToken() {
+  const auth = getAuth();
+  return auth?.token || null;
+}
+
+async function refreshAccessToken() {
+  const auth = getAuth();
+  if (!auth?.refreshToken) return false;
+
+  try {
+    const res = await fetch(API + "/api/auth/refresh", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken: auth.refreshToken })
+    });
+
+    if (!res.ok) {
+      clearAuth();
+      return false;
+    }
+
+    const data = await res.json();
+    setAuth({
+      token: data.token,
+      refreshToken: data.refreshToken,
+      user: auth.user
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function authFetch(url, opts = {}) {
+  const token = getAccessToken();
+  if (!token) throw new Error("Faça login para continuar");
+
+  opts.headers = {
+    ...opts.headers,
+    "Authorization": "Bearer " + token,
+    "X-Device-Id": getDeviceId()
+  };
+
+  let res = await fetch(url, opts);
+
+  // Se 401, tenta refresh
+  if (res.status === 401) {
+    const refreshed = await refreshAccessToken();
+    if (refreshed) {
+      opts.headers["Authorization"] = "Bearer " + getAccessToken();
+      res = await fetch(url, opts);
+    } else {
+      clearAuth();
+      showScreen("login");
+      throw new Error("Sessão expirada. Faça login novamente.");
+    }
+  }
+
+  return res;
+}
 
 /* ======================
    DEVICE ID (rate limit)
@@ -85,7 +206,45 @@ function isAllowedImageUrl(url) {
 }
 
 /* ======================
-   DETECTAR SE JÁ ESTÁ INSTALADO
+   SCREEN MANAGEMENT
+====================== */
+function showScreen(name) {
+  telaLogin.classList.add("hidden");
+  telaCadastro.classList.add("hidden");
+  telaVerificacao.classList.add("hidden");
+  telaApp.classList.add("hidden");
+
+  // Limpar mensagens ao trocar de tela
+  mensagemLogin.innerText = "";
+  mensagemCadastro.innerText = "";
+  mensagemVerificacao.innerText = "";
+
+  if (name === "login") telaLogin.classList.remove("hidden");
+  else if (name === "cadastro") telaCadastro.classList.remove("hidden");
+  else if (name === "verificacao") telaVerificacao.classList.remove("hidden");
+  else if (name === "app") {
+    telaApp.classList.remove("hidden");
+    const auth = getAuth();
+    if (auth?.user) {
+      headerUsuario.innerText = auth.user.usuario;
+    }
+  }
+}
+
+/* ======================
+   INIT — Verificar se já está logado
+====================== */
+function init() {
+  const auth = getAuth();
+  if (auth?.token) {
+    showScreen("app");
+  } else {
+    showScreen("login");
+  }
+}
+
+/* ======================
+   PWA
 ====================== */
 function isAppInstalled() {
   return (
@@ -98,13 +257,232 @@ if (isAppInstalled()) {
   installBtn.style.display = "none";
 }
 
-/* Restaurar endereço salvo */
+/* Restaurar campos salvos */
 const savedEndereco = localStorage.getItem("depix-endereco");
 if (savedEndereco) enderecoInput.value = savedEndereco;
 
-/* Restaurar chave PIX salva */
 const savedPixKey = localStorage.getItem("depix-pixkey");
 if (savedPixKey) pixKeyInput.value = savedPixKey;
+
+/* ======================
+   AUTH — Login
+====================== */
+btnLogin.onclick = async () => {
+  mensagemLogin.innerText = "";
+  mensagemLogin.classList.remove("success");
+
+  const usuario = loginUsuario.value.trim();
+  const senha = loginSenha.value;
+
+  if (!usuario || !senha) {
+    mensagemLogin.innerText = "Preencha todos os campos";
+    return;
+  }
+
+  btnLogin.disabled = true;
+  loadingLogin.classList.remove("hidden");
+
+  try {
+    const res = await fetch(API + "/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ usuario, senha })
+    });
+
+    const data = await res.json();
+
+    if (res.status === 403 && data.usuario) {
+      // Email não verificado — ir para tela de verificação
+      pendingVerifUsuario = data.usuario;
+      showScreen("verificacao");
+      return;
+    }
+
+    if (data?.response?.errorMessage) {
+      throw new Error(data.response.errorMessage);
+    }
+
+    if (!data.token) {
+      throw new Error("Resposta inesperada do servidor");
+    }
+
+    setAuth({
+      token: data.token,
+      refreshToken: data.refreshToken,
+      user: data.user
+    });
+
+    loginUsuario.value = "";
+    loginSenha.value = "";
+    showScreen("app");
+
+  } catch (e) {
+    mensagemLogin.innerText = e.message || "Erro ao fazer login";
+  } finally {
+    loadingLogin.classList.add("hidden");
+    btnLogin.disabled = false;
+  }
+};
+
+/* ======================
+   AUTH — Cadastro
+====================== */
+btnCadastro.onclick = async () => {
+  mensagemCadastro.innerText = "";
+  mensagemCadastro.classList.remove("success");
+
+  const nome = cadNome.value.trim();
+  const email = cadEmail.value.trim();
+  const whatsapp = cadWhatsapp.value.trim();
+  const usuario = cadUsuario.value.trim();
+  const senha = cadSenha.value;
+
+  if (!nome || !email || !whatsapp || !usuario || !senha) {
+    mensagemCadastro.innerText = "Preencha todos os campos";
+    return;
+  }
+
+  if (senha.length < 8) {
+    mensagemCadastro.innerText = "Senha deve ter no mínimo 8 caracteres";
+    return;
+  }
+
+  btnCadastro.disabled = true;
+  loadingCadastro.classList.remove("hidden");
+
+  try {
+    const res = await fetch(API + "/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nome, email, whatsapp, usuario, senha })
+    });
+
+    const data = await res.json();
+
+    if (data?.response?.errorMessage) {
+      throw new Error(data.response.errorMessage);
+    }
+
+    // Sucesso — ir para verificação
+    pendingVerifUsuario = data.usuario || usuario.toLowerCase();
+    showScreen("verificacao");
+
+  } catch (e) {
+    mensagemCadastro.innerText = e.message || "Erro ao criar conta";
+  } finally {
+    loadingCadastro.classList.add("hidden");
+    btnCadastro.disabled = false;
+  }
+};
+
+/* ======================
+   AUTH — Verificação de email
+====================== */
+btnVerificar.onclick = async () => {
+  mensagemVerificacao.innerText = "";
+  mensagemVerificacao.classList.remove("success");
+
+  const codigo = verifCodigo.value.trim();
+
+  if (!codigo || !/^\d{6}$/.test(codigo)) {
+    mensagemVerificacao.innerText = "Digite o código de 6 dígitos";
+    return;
+  }
+
+  btnVerificar.disabled = true;
+  loadingVerificacao.classList.remove("hidden");
+
+  try {
+    const res = await fetch(API + "/api/auth/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ usuario: pendingVerifUsuario, codigo })
+    });
+
+    const data = await res.json();
+
+    if (data?.response?.errorMessage) {
+      throw new Error(data.response.errorMessage);
+    }
+
+    // Sucesso — voltar para login com mensagem de sucesso
+    verifCodigo.value = "";
+    showScreen("login");
+    mensagemLogin.classList.add("success");
+    mensagemLogin.innerText = "Email verificado! Agora faça login.";
+
+  } catch (e) {
+    mensagemVerificacao.innerText = e.message || "Erro ao verificar código";
+  } finally {
+    loadingVerificacao.classList.add("hidden");
+    btnVerificar.disabled = false;
+  }
+};
+
+/* ======================
+   AUTH — Reenviar código
+====================== */
+btnReenviar.onclick = async () => {
+  mensagemVerificacao.innerText = "";
+  mensagemVerificacao.classList.remove("success");
+
+  btnReenviar.disabled = true;
+  loadingReenviar.classList.remove("hidden");
+
+  try {
+    const res = await fetch(API + "/api/auth/resend-verification", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ usuario: pendingVerifUsuario })
+    });
+
+    const data = await res.json();
+
+    if (data?.response?.errorMessage) {
+      throw new Error(data.response.errorMessage);
+    }
+
+    mensagemVerificacao.classList.add("success");
+    mensagemVerificacao.innerText = "Novo código enviado! Verifique seu email.";
+
+  } catch (e) {
+    mensagemVerificacao.innerText = e.message || "Erro ao reenviar código";
+  } finally {
+    loadingReenviar.classList.add("hidden");
+    btnReenviar.disabled = false;
+  }
+};
+
+/* ======================
+   AUTH — Logout
+====================== */
+btnLogout.onclick = async (e) => {
+  e.preventDefault();
+  const auth = getAuth();
+
+  try {
+    await fetch(API + "/api/auth/logout", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + (auth?.token || "")
+      },
+      body: JSON.stringify({ refreshToken: auth?.refreshToken || "" })
+    });
+  } catch {
+    // Ignora erros de logout
+  }
+
+  clearAuth();
+  showScreen("login");
+};
+
+/* ======================
+   AUTH — Navegação entre telas
+====================== */
+linkCadastro.onclick = (e) => { e.preventDefault(); showScreen("cadastro"); };
+linkLogin.onclick = (e) => { e.preventDefault(); showScreen("login"); };
+linkVoltarLogin.onclick = (e) => { e.preventDefault(); showScreen("login"); };
 
 /* ======================
    SWITCH — Depósito / Saque
@@ -159,12 +537,8 @@ formatCurrencyInput(valorInput);
 formatCurrencyInput(valorSaqueInput);
 
 function isValorValidoEmCentavos(cents) {
-  if (cents < MIN_VALOR_CENTS) {
-    return "O valor mínimo é R$ 5,00";
-  }
-  if (cents > MAX_VALOR_CENTS) {
-    return "O valor máximo é R$ 3.000,00";
-  }
+  if (cents < MIN_VALOR_CENTS) return "O valor mínimo é R$ 5,00";
+  if (cents > MAX_VALOR_CENTS) return "O valor máximo é R$ 3.000,00";
   return null;
 }
 
@@ -195,7 +569,6 @@ btnGerar.onclick = async () => {
   }
 
   const valorCents = toCents(valorInput.value);
-
   const erroValor = isValorValidoEmCentavos(valorCents);
   if (erroValor) {
     mensagem.innerText = erroValor;
@@ -206,7 +579,7 @@ btnGerar.onclick = async () => {
   loading.classList.remove("hidden");
 
   try {
-    const res = await fetch("https://depix-backend.vercel.app/api/depix", {
+    const res = await fetch(API + "/api/depix", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -231,7 +604,6 @@ btnGerar.onclick = async () => {
     qrCopyPaste = data.response.qrCopyPaste;
     qrImage.src = data.response.qrImageUrl;
     qrId.innerText = "ID: " + data.response.id;
-
     resultado.classList.remove("hidden");
 
   } catch (e) {
@@ -243,7 +615,7 @@ btnGerar.onclick = async () => {
 };
 
 /* ======================
-   GERAR SAQUE
+   GERAR SAQUE (autenticado)
 ====================== */
 btnSacar.onclick = async () => {
   mensagemSaque.innerText = "";
@@ -253,15 +625,18 @@ btnSacar.onclick = async () => {
     return;
   }
 
-  const valorCents = toCents(valorSaqueInput.value);
+  if (!enderecoInput.value.trim()) {
+    mensagemSaque.innerText = "Preencha o Endereço Liquid na tela de pagamento antes de sacar";
+    return;
+  }
 
+  const valorCents = toCents(valorSaqueInput.value);
   const erroValor = isValorValidoEmCentavos(valorCents);
   if (erroValor) {
     mensagemSaque.innerText = erroValor;
     return;
   }
 
-  // Salvar chave PIX para conveniência
   localStorage.setItem("depix-pixkey", pixKeyInput.value.trim());
 
   btnSacar.disabled = true;
@@ -269,7 +644,8 @@ btnSacar.onclick = async () => {
 
   try {
     const body = {
-      pixKey: pixKeyInput.value.trim()
+      pixKey: pixKeyInput.value.trim(),
+      depixAddress: enderecoInput.value.trim()
     };
 
     if (valorModeIsPix) {
@@ -278,12 +654,9 @@ btnSacar.onclick = async () => {
       body.depositAmountInCents = valorCents;
     }
 
-    const res = await fetch("https://depix-backend.vercel.app/api/withdraw", {
+    const res = await authFetch(API + "/api/withdraw", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Device-Id": getDeviceId()
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
     });
 
@@ -300,7 +673,6 @@ btnSacar.onclick = async () => {
     saqueDepositAddress = r.depositAddress;
     saqueAddress.innerText = shortenAddress(r.depositAddress);
 
-    // Gerar QR code do endereço Liquid para a SideSwap ler
     const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=" + encodeURIComponent(r.depositAddress);
     saqueQr.src = qrUrl;
     saqueQr.classList.remove("hidden");
@@ -345,7 +717,9 @@ btnCopy.onclick = async () => {
 
 btnReset.onclick = () => {
   localStorage.setItem("depix-endereco", enderecoInput.value.trim());
-  location.reload();
+  resultado.classList.add("hidden");
+  valorInput.value = "";
+  mensagem.innerText = "";
 };
 
 /* ======================
@@ -394,3 +768,16 @@ window.addEventListener("appinstalled", () => {
 closeModal.onclick = () => {
   modal.classList.add("hidden");
 };
+
+/* ======================
+   SUBMIT COM ENTER
+====================== */
+loginSenha.addEventListener("keydown", e => { if (e.key === "Enter") btnLogin.click(); });
+loginUsuario.addEventListener("keydown", e => { if (e.key === "Enter") loginSenha.focus(); });
+cadSenha.addEventListener("keydown", e => { if (e.key === "Enter") btnCadastro.click(); });
+verifCodigo.addEventListener("keydown", e => { if (e.key === "Enter") btnVerificar.click(); });
+
+/* ======================
+   INICIAR APP
+====================== */
+init();

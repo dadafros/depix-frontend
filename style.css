@@ -48,6 +48,12 @@ button {
   background: linear-gradient(135deg, #4fd1c5, #38b2ac);
   color: #003333;
   font-weight: 600;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .secondary {
@@ -63,9 +69,56 @@ button {
 .mensagem {
   min-height: 20px;
   color: #ff6b6b;
+  font-size: 14px;
 }
 
-/* Botão instalar */
+.mensagem.success {
+  color: #4fd1c5;
+}
+
+/* ===== Auth screens ===== */
+.auth-link {
+  font-size: 13px;
+  opacity: 0.7;
+  margin-top: 4px;
+}
+
+.auth-link a {
+  color: #4fd1c5;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.auth-subtitle {
+  font-size: 13px;
+  opacity: 0.7;
+  line-height: 1.5;
+  margin: 0 0 14px;
+}
+
+/* ===== App header ===== */
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.header-user {
+  font-size: 13px;
+  opacity: 0.6;
+}
+
+.header-logout {
+  font-size: 13px;
+  color: #ff6b6b;
+  text-decoration: none;
+  opacity: 0.8;
+}
+
+/* ===== Botão instalar ===== */
 .install-btn {
   position: fixed;
   right: 16px;
@@ -78,7 +131,6 @@ button {
   width: auto;
   max-width: none;
 }
-
 
 /* Modal */
 .modal {
@@ -310,4 +362,3 @@ button {
   object-fit: contain;
   border-radius: 8px;
 }
-

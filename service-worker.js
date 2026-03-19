@@ -1,4 +1,4 @@
-const CACHE_NAME = "depix-static-v2";
+const CACHE_NAME = "depix-static-v3";
 
 // ⚠️ SOMENTE arquivos estáticos seguros
 const STATIC_FILES = [
