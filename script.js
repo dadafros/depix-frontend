@@ -8,11 +8,11 @@ import {
   getSelectedAddress, setSelectedAddress,
   abbreviateAddress, hasAddresses
 } from "./addresses.js";
+import { ALLOWED_QR_HOSTS, isAllowedImageUrl, toCents, formatBRL } from "./utils.js";
 
 // ===== Constants =====
 const MIN_VALOR_CENTS = 500;
 const MAX_VALOR_CENTS = 300000;
-const ALLOWED_QR_HOSTS = ["depix.eulen.app", "eulen.app", "api.qrserver.com"];
 
 let qrCopyPaste = "";
 let deferredPrompt = null;
@@ -40,29 +40,6 @@ function showToast(text) {
   }, 2000);
 }
 
-function isAllowedImageUrl(url) {
-  if (typeof url !== "string") return false;
-  if (url.startsWith("data:image/")) return true;
-  try {
-    const parsed = new URL(url);
-    return (
-      parsed.protocol === "https:" &&
-      ALLOWED_QR_HOSTS.some(h => parsed.hostname === h || parsed.hostname.endsWith("." + h))
-    );
-  } catch {
-    return false;
-  }
-}
-
-function toCents(v) {
-  return Math.round(
-    parseFloat(v.replace("R$", "").replace(/\./g, "").replace(",", ".")) * 100
-  );
-}
-
-function formatBRL(cents) {
-  return "R$ " + (cents / 100).toFixed(2).replace(".", ",");
-}
 
 function setMsg(id, text, isSuccess = false) {
   const el = document.getElementById(id);
