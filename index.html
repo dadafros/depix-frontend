@@ -2,24 +2,378 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <title>DePix</title>
+  <title>DePix — Receba PIX em Bitcoin | Pagamentos PIX para Cripto</title>
 
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; img-src 'self' data: https://*.eulen.app https://depix.eulen.app https://api.qrserver.com; connect-src https://depix-backend.vercel.app; style-src 'self'" />
-  <meta name="theme-color" content="#0f3d3e" />
+  <meta name="description" content="DePix converte pagamentos PIX em bitcoin, dólar digital ou stablecoin automaticamente. Receba PIX como lojista ou compre cripto como pessoa física — com privacidade, sem exchange." />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; img-src 'self' data: https://*.eulen.app https://depix.eulen.app https://api.qrserver.com; connect-src https://depix-backend.vercel.app; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com" />
+  <meta name="theme-color" content="#0a0f14" />
+
+  <link rel="canonical" href="https://depixapp.com/" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://depixapp.com/" />
+  <meta property="og:title" content="DePix — PIX para Bitcoin e Dólar Digital" />
+  <meta property="og:description" content="Converta pagamentos PIX em bitcoin ou dólar digital. Sem exchange, sem burocracia, com privacidade." />
+  <meta property="og:image" content="https://depixapp.com/icon-512.png" />
+
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="DePix — PIX para Bitcoin e Dólar Digital" />
+  <meta name="twitter:description" content="Converta pagamentos PIX em bitcoin ou dólar digital. Sem exchange, sem burocracia, com privacidade." />
+  <meta name="twitter:image" content="https://depixapp.com/icon-512.png" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "DePix",
+    "applicationCategory": "FinanceApplication",
+    "operatingSystem": "Web",
+    "description": "Converta pagamentos PIX em bitcoin, dólar digital ou stablecoin. Receba PIX como lojista ou compre cripto como pessoa física.",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "BRL"
+    },
+    "url": "https://depixapp.com/"
+  }
+  </script>
 
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icon-192.png" />
   <link rel="apple-touch-icon" href="icon-192.png" />
 
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
+<!-- ===== LANDING PAGE ===== -->
+<section data-view="landing" class="landing-page">
+
+  <nav class="landing-nav">
+    <div class="landing-nav-inner">
+      <span class="landing-logo">DePix App</span>
+      <a href="#login" class="landing-nav-cta">Entrar</a>
+    </div>
+  </nav>
+
+  <header class="landing-hero">
+    <h1 class="landing-hero-title">
+      <span class="landing-merchant-text">Receba PIX.<br>Acumule <em>cripto</em>.</span>
+      <span class="landing-individual-text hidden">Compre bitcoin<br>com <em>PIX</em>.</span>
+    </h1>
+    <p class="landing-hero-subtitle">
+      <span class="landing-merchant-text">A forma mais simples de aceitar pagamentos e proteger seu dinheiro em ativos digitais.</span>
+      <span class="landing-individual-text hidden">A forma mais simples de comprar bitcoin ou dólar digital com privacidade.</span>
+    </p>
+
+    <div class="landing-toggle" role="radiogroup" aria-label="Tipo de usuário">
+      <button class="landing-toggle-option active" id="toggleMerchant" role="radio" aria-checked="true">Sou lojista ou autônomo</button>
+      <button class="landing-toggle-option" id="toggleIndividual" role="radio" aria-checked="false">Sou pessoa física</button>
+    </div>
+
+    <a href="#login" class="landing-cta-btn">Começar agora</a>
+  </header>
+
+  <!-- Merchant content -->
+  <div class="landing-content landing-merchant-content">
+
+    <div class="landing-section">
+      <h2>Como funciona para seu negócio</h2>
+      <div class="landing-steps">
+        <div class="landing-step">
+          <div class="landing-step-num">1</div>
+          <h3>Cadastre-se</h3>
+          <p>Crie sua conta no DePix em 1 minuto. Sem burocracia, sem maquininha.</p>
+        </div>
+        <div class="landing-step">
+          <div class="landing-step-num">2</div>
+          <h3>Gere o QR Code PIX</h3>
+          <p>Informe o valor da venda e mostre o QR Code para seu cliente pagar pelo banco.</p>
+        </div>
+        <div class="landing-step">
+          <div class="landing-step-num">3</div>
+          <h3>Receba em cripto</h3>
+          <p>O cliente paga via PIX normalmente. Você recebe stablecoin direto na sua carteira.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="landing-section">
+      <h2>Por que usar DePix no seu negócio?</h2>
+      <div class="landing-benefits">
+        <div class="landing-benefit">
+          <div class="landing-benefit-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          </div>
+          <h3>Sem maquininha</h3>
+          <p>Aceite pagamentos só com o celular. Sem aluguel de equipamento, sem mensalidade.</p>
+        </div>
+        <div class="landing-benefit">
+          <div class="landing-benefit-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <h3>Proteção contra inflação</h3>
+          <p>Receba em stablecoin pareada ao dólar ou acumule bitcoin. Seu dinheiro não perde valor.</p>
+        </div>
+        <div class="landing-benefit">
+          <div class="landing-benefit-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
+          </div>
+          <h3>Privacidade</h3>
+          <p>Transações confidenciais na rede Liquid. Sem KYC de exchange.</p>
+        </div>
+        <div class="landing-benefit">
+          <div class="landing-benefit-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          </div>
+          <h3>Saque via PIX</h3>
+          <p>Converta de volta para reais e saque direto na sua conta bancária quando quiser.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="landing-section">
+      <h2>Taxas e limites</h2>
+      <div class="landing-info-grid">
+        <div class="landing-info-item">
+          <span class="landing-info-label">Taxa</span>
+          <span class="landing-info-value">2% + R$ 0,99</span>
+        </div>
+        <div class="landing-info-item">
+          <span class="landing-info-label">Prazo</span>
+          <span class="landing-info-value">D+1 (~24h)</span>
+        </div>
+        <div class="landing-info-item">
+          <span class="landing-info-label">Mínimo</span>
+          <span class="landing-info-value">R$ 5,00</span>
+        </div>
+        <div class="landing-info-item">
+          <span class="landing-info-label">Máximo</span>
+          <span class="landing-info-value">R$ 3.000/dia <em>por cliente</em></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="landing-section">
+      <h2>O que fazer com seu DePix</h2>
+      <div class="landing-ecosystem">
+        <div class="landing-eco-card">
+          <h3>Dólar digital (USDt)</h3>
+          <p>Converta DePix em dólar digital na SideSwap. Proteja seu patrimônio da desvalorização do real.</p>
+        </div>
+        <div class="landing-eco-card">
+          <h3>Bitcoin (L-BTC)</h3>
+          <p>Troque DePix por Bitcoin na rede Liquid. Depois faça peg-out para Bitcoin on-chain.</p>
+        </div>
+        <div class="landing-eco-card">
+          <h3>Cartão cripto</h3>
+          <p>Use cartões como Kast ou RedotPay para gastar suas criptos em qualquer lugar do mundo.</p>
+        </div>
+        <div class="landing-eco-card">
+          <h3>Saque PIX</h3>
+          <p>Converta seus DePix de volta para reais e saque direto na conta bancária, a qualquer momento.</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Individual content -->
+  <div class="landing-content landing-individual-content hidden">
+
+    <div class="landing-section">
+      <h2>Como comprar cripto com PIX</h2>
+      <div class="landing-steps">
+        <div class="landing-step">
+          <div class="landing-step-num">1</div>
+          <h3>Cadastre-se</h3>
+          <p>Crie sua conta em 1 minuto. Sem KYC de exchange, sem envio de documentos.</p>
+        </div>
+        <div class="landing-step">
+          <div class="landing-step-num">2</div>
+          <h3>Pague com PIX</h3>
+          <p>Escolha o valor, gere o QR Code e pague pelo app do seu banco normalmente.</p>
+        </div>
+        <div class="landing-step">
+          <div class="landing-step-num">3</div>
+          <h3>Receba na sua carteira</h3>
+          <p>Os ativos digitais chegam direto na sua carteira pessoal. Você no controle.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="landing-section">
+      <h2>Por que comprar cripto com DePix?</h2>
+      <div class="landing-benefits">
+        <div class="landing-benefit">
+          <div class="landing-benefit-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
+          </div>
+          <h3>Privacidade total</h3>
+          <p>Sem cadastro em exchange. Sem envio de documentos. Compre cripto de forma discreta.</p>
+        </div>
+        <div class="landing-benefit">
+          <div class="landing-benefit-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          </div>
+          <h3>Simples como um PIX</h3>
+          <p>Pague com PIX e receba cripto. Sem complicação, sem transferir para exchange.</p>
+        </div>
+        <div class="landing-benefit">
+          <div class="landing-benefit-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <h3>Proteção patrimonial</h3>
+          <p>Converta reais em bitcoin ou dólar digital e proteja seu poder de compra contra a inflação.</p>
+        </div>
+        <div class="landing-benefit">
+          <div class="landing-benefit-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-5"/></svg>
+          </div>
+          <h3>Liquidez imediata</h3>
+          <p>Converta de volta para PIX quando precisar. Seu dinheiro sempre acessível.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="landing-section">
+      <h2>Taxas e limites</h2>
+      <div class="landing-info-grid">
+        <div class="landing-info-item">
+          <span class="landing-info-label">Taxa</span>
+          <span class="landing-info-value">2% + R$ 0,99</span>
+        </div>
+        <div class="landing-info-item">
+          <span class="landing-info-label">Prazo</span>
+          <span class="landing-info-value">D+1 (~24h)</span>
+        </div>
+        <div class="landing-info-item">
+          <span class="landing-info-label">Mínimo</span>
+          <span class="landing-info-value">R$ 5,00</span>
+        </div>
+        <div class="landing-info-item">
+          <span class="landing-info-label">Máximo</span>
+          <span class="landing-info-value">R$ 3.000/dia</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="landing-section">
+      <h2>O que fazer com sua cripto</h2>
+      <div class="landing-ecosystem">
+        <div class="landing-eco-card">
+          <h3>Guardar em dólar (USDt)</h3>
+          <p>Proteja seu dinheiro da inflação convertendo para dólar digital na SideSwap.</p>
+        </div>
+        <div class="landing-eco-card">
+          <h3>Acumular Bitcoin</h3>
+          <p>Converta para Bitcoin na rede Liquid e faça autocustódia real dos seus satoshis.</p>
+        </div>
+        <div class="landing-eco-card">
+          <h3>Gastar no mundo</h3>
+          <p>Use cartões cripto como Kast ou RedotPay para gastar em qualquer lugar do mundo.</p>
+        </div>
+        <div class="landing-eco-card">
+          <h3>Sacar em PIX</h3>
+          <p>Converta de volta para reais e saque direto na conta bancária quando precisar.</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- FAQ — shared by both modes, SEO-optimized with schema.org -->
+  <div class="landing-section landing-faq-section">
+    <h2>Perguntas Frequentes</h2>
+    <div class="landing-faq" itemscope itemtype="https://schema.org/FAQPage">
+
+      <details class="landing-faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+        <summary itemprop="name">O que é o DePix?</summary>
+        <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+          <p itemprop="text">O DePix é a primeira stablecoin brasileira na rede Liquid, pareada 1:1 com o Real (BRL). Ele permite que você receba pagamentos via PIX normalmente, mas o valor é convertido automaticamente em criptomoeda — protegendo seu dinheiro com a segurança da blockchain.</p>
+        </div>
+      </details>
+
+      <details class="landing-faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+        <summary itemprop="name">Como funciona um depósito?</summary>
+        <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+          <p itemprop="text">Você escolhe o valor desejado, o DePix gera um QR Code PIX. Basta pagar pelo app do seu banco e o valor é enviado para sua carteira digital.</p>
+        </div>
+      </details>
+
+      <details class="landing-faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+        <summary itemprop="name">Como funciona um saque?</summary>
+        <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+          <p itemprop="text">Você informa o valor e sua chave PIX. O DePix gera um endereço Liquid para você enviar os fundos. Após a confirmação, o valor é transferido via PIX para sua conta bancária.</p>
+        </div>
+      </details>
+
+      <details class="landing-faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+        <summary itemprop="name">O que é um endereço Liquid?</summary>
+        <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+          <p itemprop="text">É o endereço da sua carteira na rede Liquid. Você obtém esse endereço no app SideSwap, na opção "Receber". É como um número de conta para receber ativos digitais.</p>
+        </div>
+      </details>
+
+      <details class="landing-faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+        <summary itemprop="name">Quanto tempo leva para processar?</summary>
+        <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+          <p itemprop="text">As transações podem levar até 24 horas para serem completamente processadas. Em algumas situações, pode ser mais rápido.</p>
+        </div>
+      </details>
+
+      <details class="landing-faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+        <summary itemprop="name">Quais são as taxas e limites?</summary>
+        <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+          <p itemprop="text">A taxa é de 2% + R$ 0,99 por transação. O valor mínimo é R$ 5,00 e o máximo é R$ 3.000,00 por dia por CPF. O prazo de processamento é D+1 (aproximadamente 24 horas).</p>
+        </div>
+      </details>
+
+      <details class="landing-faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+        <summary itemprop="name">O DePix é seguro?</summary>
+        <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+          <p itemprop="text">Sim. Utilizamos autenticação JWT, senha criptografada, conexão HTTPS e não armazenamos dados bancários. Toda troca de endereço exige confirmação de senha.</p>
+        </div>
+      </details>
+
+      <details class="landing-faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+        <summary itemprop="name">Como reportar um problema?</summary>
+        <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+          <p itemprop="text">Acesse o menu e toque em "Ajuda / Contato". Descreva seu problema e responderemos por email.</p>
+        </div>
+      </details>
+
+    </div>
+  </div>
+
+  <div class="landing-section landing-final-cta">
+    <h2>
+      <span class="landing-merchant-text">Comece a aceitar DePix hoje</span>
+      <span class="landing-individual-text hidden">Comece a comprar cripto hoje</span>
+    </h2>
+    <p>
+      <span class="landing-merchant-text">Sem taxas abusivas. Sem intermediários. Sem burocracia.</span>
+      <span class="landing-individual-text hidden">Sem exchange. Sem KYC. Sem complicação.</span>
+    </p>
+    <a href="#login" class="landing-cta-btn">Criar conta grátis</a>
+  </div>
+
+  <footer class="landing-footer">
+    <p>DePix — A primeira stablecoin brasileira na Liquid Network</p>
+    <p>Transações rápidas, privadas e de baixo custo.</p>
+  </footer>
+
+</section>
+
 <!-- ===== LOGIN ===== -->
 <section data-view="login" class="page hidden">
   <div class="card">
-    <h1>Entrar no DePix</h1>
+    <h1>Entrar no DePix App</h1>
     <div id="login-msg" class="mensagem"></div>
     <p id="login-verify-action" class="link-text hidden">
       <a href="#" id="btn-resend-login" class="link">Reenviar código de verificação</a>
@@ -148,7 +502,7 @@
       <button id="menu-btn-empty" class="icon-btn" aria-label="Menu">☰</button>
     </div>
     <div class="empty-state">
-      <div class="empty-icon">📋</div>
+      <div class="empty-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#38e3ac" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg></div>
       <h2>Bem-vindo ao DePix!</h2>
       <p class="info-text">Para começar a receber pagamentos, você precisa informar o endereço da sua carteira digital. É como um "número de conta" que você copia do app SideSwap.</p>
       <div class="hint">
@@ -445,18 +799,34 @@
 
 <!-- Botão instalar -->
 <button id="installBtn" class="install-btn">
-  ⬇️ Instalar o app
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Instalar o app
 </button>
 
 <!-- Modal de instruções de instalação -->
 <div id="installModal" class="modal hidden">
-  <div class="modal-box">
-    <h2>Instalar aplicativo</h2>
-    <p>Se o navegador não mostrar a instalação automática:</p>
-    <ul>
-      <li>Abra o menu do navegador</li>
-      <li>Escolha <b>Instalar app</b> ou <b>Adicionar à tela inicial</b></li>
-    </ul>
+  <div class="modal-box install-modal">
+    <h2>Instalar o DePix App</h2>
+    <p class="info-text">Adicione o DePix na tela inicial do seu celular para acesso rápido, como um app nativo.</p>
+
+    <div id="install-ios" class="install-instructions">
+      <h3>No iPhone / iPad (Safari)</h3>
+      <ol class="install-steps">
+        <li>Toque no botão <b>Compartilhar</b> <span class="install-icon-hint">(<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px;"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>)</span> na barra inferior do Safari</li>
+        <li>Role as opções e toque em <b>Adicionar à Tela de Início</b></li>
+        <li>Confirme tocando em <b>Adicionar</b></li>
+      </ol>
+      <p class="install-note">O DePix vai aparecer na sua tela inicial como um app comum.</p>
+    </div>
+
+    <div id="install-android" class="install-instructions">
+      <h3>No Android (Chrome)</h3>
+      <ol class="install-steps">
+        <li>Toque no menu <b>&#8942;</b> (3 pontinhos) no canto superior</li>
+        <li>Escolha <b>Adicionar à tela inicial</b> ou <b>Instalar app</b></li>
+        <li>Confirme tocando em <b>Instalar</b></li>
+      </ol>
+    </div>
+
     <button id="closeModal">Entendi</button>
   </div>
 </div>

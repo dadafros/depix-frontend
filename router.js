@@ -28,7 +28,7 @@ export function getCurrentView() {
 }
 
 function onHashChange() {
-  const hash = window.location.hash || "#login";
+  const hash = window.location.hash || "#landing";
   const [hashBase] = hash.split("?");
   const viewName = hashBase.replace("#", "");
 
