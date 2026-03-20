@@ -306,12 +306,13 @@ button:focus-visible {
 .store-badge {
   display: inline-flex;
   text-decoration: none;
-  border-radius: 6px;
-  transition: opacity 0.2s;
+  border-radius: 8px;
+  transition: transform 0.15s, opacity 0.15s;
 }
 
 .store-badge:hover {
-  opacity: 0.85;
+  transform: scale(1.04);
+  opacity: 0.9;
 }
 
 /* ===== Mode Switch (toggle depósito/saque) ===== */
