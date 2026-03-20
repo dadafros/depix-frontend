@@ -876,14 +876,13 @@ textarea:focus {
 
 .hint-link {
   color: #38e3ac;
-  text-decoration: none;
-  font-weight: 500;
-  display: inline-block;
-  margin-top: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline;
 }
 
 .hint-link:hover {
-  text-decoration: underline;
+  opacity: 0.8;
 }
 
 .guide-steps {
@@ -930,77 +929,182 @@ textarea:focus {
   margin: 8px 0;
 }
 
-.guide-mockup-screen {
+
+
+.guide-list {
+  margin: 0 0 8px;
+  padding-left: 18px;
+  font-size: 0.85rem;
+  color: #8a9bb0;
+  line-height: 1.7;
+}
+
+.guide-list li {
+  margin-bottom: 2px;
+}
+
+.guide-list code {
+  color: #38e3ac;
+  font-size: 0.8rem;
+}
+
+.guide-warning {
+  background: rgba(255, 107, 107, 0.08);
+  border: 1px solid rgba(255, 107, 107, 0.2);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.8rem;
+  color: #ff9b9b;
+  line-height: 1.5;
+  margin-top: 8px;
+}
+
+.guide-mockup-trio {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 14px 0;
+}
+
+.guide-mini-mockup {
   background: #151c24;
   border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 12px;
-  padding: 14px;
+  border-radius: 16px;
+  padding: 12px;
   text-align: center;
 }
 
-.guide-mockup-header {
-  font-size: 0.75rem;
-  color: #5a6d82;
-  margin-bottom: 10px;
-  font-weight: 600;
-}
-
-.guide-mockup-btn {
-  background: #38e3ac;
-  color: #0a0f14;
-  border-radius: 8px;
-  padding: 8px 16px;
-  font-weight: 600;
-  font-size: 0.8rem;
-  margin: 6px auto;
-  display: inline-block;
-}
-
-.guide-mockup-btn-secondary {
-  background: transparent;
-  color: #8a9bb0;
-  border: 1px solid rgba(255,255,255,0.1);
-}
-
-.guide-mockup-row {
+.guide-mini-screen {
+  background: #0a0f14;
+  border-radius: 10px;
+  padding: 14px 10px;
+  min-height: 120px;
   display: flex;
-  justify-content: space-between;
-  padding: 8px 12px;
-  font-size: 0.8rem;
-  color: #c0cdd8;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
-}
-
-.guide-mockup-actions {
-  display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  gap: 16px;
-  margin-top: 10px;
+  gap: 8px;
 }
 
-.guide-mockup-action {
-  font-size: 0.8rem;
+.guide-mini-label {
+  font-size: 10px;
   color: #5a6d82;
-  padding: 6px 16px;
-  border-radius: 6px;
-}
-
-.guide-mockup-action-highlight {
-  background: rgba(56, 227, 172, 0.15);
-  color: #38e3ac;
-  font-weight: 600;
-}
-
-.guide-mockup-qr {
-  margin: 8px 0;
-}
-
-.guide-mockup-addr {
+  margin-top: 8px;
   font-family: monospace;
-  font-size: 0.75rem;
+  letter-spacing: 0.03em;
+  line-height: 1.3;
+}
+
+.guide-screen-subtitle {
+  font-size: 9px;
   color: #5a6d82;
-  margin: 8px 0;
+  margin-bottom: 4px;
+}
+
+.guide-screen-option {
+  width: 90%;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 6px;
+  text-align: left;
+}
+
+.guide-screen-option + .guide-screen-option {
+  margin-top: 6px;
+}
+
+.guide-screen-option-selected {
+  border-color: #38e3ac;
+  background: rgba(56,227,172,0.08);
+}
+
+.guide-screen-option-title {
+  font-size: 10px;
+  font-weight: 600;
+  color: #c0cdd8;
+  margin-bottom: 2px;
+}
+
+.guide-screen-option-desc {
+  font-size: 8px;
+  color: #5a6d82;
+  line-height: 1.3;
+}
+
+.guide-screen-qr {
+  width: 70px;
+  height: 70px;
+  background: white;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.guide-screen-address {
+  font-family: monospace;
+  font-size: 7px;
+  color: #38e3ac;
   word-break: break-all;
+  line-height: 1.4;
+  padding: 6px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 4px;
+  width: 90%;
+}
+
+.guide-screen-total {
+  font-family: monospace;
+  font-size: 12px;
+  color: #c0cdd8;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.guide-screen-asset-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 90%;
+  padding: 6px 8px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 5px;
+}
+
+.guide-screen-asset-row + .guide-screen-asset-row {
+  margin-top: 5px;
+}
+
+.guide-screen-asset-left {
+  display: flex;
+  align-items: center;
+}
+
+.guide-screen-asset-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-right: 6px;
+}
+
+.guide-screen-asset-name {
+  font-size: 9px;
+  font-weight: 600;
+  color: #c0cdd8;
+}
+
+.guide-screen-asset-value {
+  font-family: monospace;
+  font-size: 9px;
+  color: #5a6d82;
+}
+
+@media (max-width: 360px) {
+  .guide-mockup-trio {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ===== Toast ===== */

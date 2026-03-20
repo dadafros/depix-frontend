@@ -94,6 +94,15 @@ document.getElementById("close-wallet-guide")?.addEventListener("click", () => {
   document.getElementById("wallet-guide-modal")?.classList.add("hidden");
 });
 
+// SideSwap link — opens correct store based on device
+document.getElementById("sideswap-link")?.addEventListener("click", () => {
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const url = isIOS
+    ? "https://apps.apple.com/br/app/sideswap/id1556476417"
+    : "https://play.google.com/store/apps/details?id=io.sideswap";
+  window.open(url, "_blank", "noopener,noreferrer");
+});
+
 if (isAppInstalled()) {
   const btn = document.getElementById("installBtn");
   if (btn) btn.style.display = "none";
