@@ -295,6 +295,25 @@ button:focus-visible {
   margin-bottom: 8px;
 }
 
+.store-badges {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 16px 0 4px;
+  flex-wrap: wrap;
+}
+
+.store-badge {
+  display: inline-flex;
+  text-decoration: none;
+  border-radius: 6px;
+  transition: opacity 0.2s;
+}
+
+.store-badge:hover {
+  opacity: 0.85;
+}
+
 /* ===== Mode Switch (toggle depósito/saque) ===== */
 .mode-switch {
   margin-bottom: 18px;
