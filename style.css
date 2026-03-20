@@ -1214,9 +1214,9 @@ textarea:focus {
 
 .faq-feature-item {
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
   background: rgba(56, 227, 172, 0.04);
   border: 1px solid rgba(56, 227, 172, 0.1);
   border-radius: 10px;
@@ -1226,20 +1226,25 @@ textarea:focus {
 }
 
 .faq-feature-icon {
-  width: 32px;
-  height: 32px;
-  min-width: 32px;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(56, 227, 172, 0.1);
+  background: rgba(56, 227, 172, 0.12);
   border-radius: 8px;
+  flex-shrink: 0;
 }
 
 .faq-feature-icon svg {
-  width: 18px;
-  height: 18px;
-  stroke: #38e3ac;
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  stroke: #4fd1c5;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .faq-feature-desc {
@@ -1296,8 +1301,8 @@ textarea:focus {
 }
 
 .faq-eco-enor {
-  background: rgba(100, 149, 237, 0.15);
-  color: #6495ed;
+  background: rgba(139, 92, 246, 0.15);
+  color: #a78bfa;
 }
 
 .faq-eco-kast {
@@ -1316,7 +1321,7 @@ textarea:focus {
 }
 
 .faq-eco-p2p-name { color: #38e3ac; }
-.faq-eco-enor-name { color: #6495ed; }
+.faq-eco-enor-name { color: #a78bfa; }
 .faq-eco-kast-name { color: #e0e0e0; }
 .faq-eco-redot-name { color: #ef4444; }
 
@@ -1341,9 +1346,6 @@ textarea:focus {
 }
 
 .faq-eco-tip {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
   padding: 12px 14px;
   background: rgba(255, 193, 7, 0.06);
   border: 1px solid rgba(255, 193, 7, 0.15);
@@ -1351,27 +1353,27 @@ textarea:focus {
   margin: 12px 0;
 }
 
-.faq-eco-tip .faq-icon {
-  color: #ffc107;
-  min-width: 20px;
+.faq-eco-tip p {
+  font-size: 0.8rem;
+  color: #8a9bb0;
+  margin: 0;
+  line-height: 1.6;
+}
+
+.faq-eco-inline-icon {
+  width: 14px;
+  height: 14px;
+  display: inline-block;
+  vertical-align: -2px;
+  stroke: #ffc107;
+  margin-right: 2px;
 }
 
 .faq-eco-tip strong {
-  font-size: 0.82rem;
   color: #ffc107;
 }
 
-.faq-eco-tip p {
-  font-size: 0.78rem;
-  color: #8a9bb0;
-  margin: 4px 0 0;
-  line-height: 1.4;
-}
-
 .faq-eco-highlight {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
   padding: 14px 16px;
   background: linear-gradient(135deg, rgba(56, 227, 172, 0.08), rgba(56, 227, 172, 0.03));
   border: 1px solid rgba(56, 227, 172, 0.2);
@@ -1380,28 +1382,29 @@ textarea:focus {
 }
 
 .faq-eco-badge {
+  display: inline-block;
   background: #38e3ac;
   color: #0a0f14;
-  padding: 3px 10px;
+  padding: 1px 7px;
   border-radius: 20px;
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   white-space: nowrap;
-  margin-top: 2px;
+  vertical-align: 1px;
+  margin-right: 2px;
 }
 
 .faq-eco-highlight strong {
-  font-size: 0.85rem;
   color: #c0cdd8;
 }
 
 .faq-eco-highlight p {
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   color: #8a9bb0;
-  margin: 4px 0 0;
-  line-height: 1.4;
+  margin: 0;
+  line-height: 1.6;
 }
 
 .faq-eco-footer {
@@ -1986,6 +1989,9 @@ textarea:focus {
 .landing-final-cta {
   text-align: center;
   padding: 52px 20px;
+  max-width: none;
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
   background: linear-gradient(135deg, rgba(56, 227, 172, 0.06), rgba(56, 227, 172, 0.02));
   border-top: 1px solid rgba(56, 227, 172, 0.12);
   border-bottom: 1px solid rgba(56, 227, 172, 0.12);
