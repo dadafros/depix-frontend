@@ -295,21 +295,21 @@
       <details class="landing-faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
         <summary itemprop="name">O que é o DePix?</summary>
         <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
-          <p itemprop="text">O DePix é a primeira stablecoin brasileira na rede Liquid, pareada 1:1 com o Real (BRL). Ele permite que você receba pagamentos via PIX normalmente, mas o valor é convertido automaticamente em criptomoeda — protegendo seu dinheiro com a segurança da blockchain.</p>
+          <div itemprop="text" class="faq-content-what-is"></div>
         </div>
       </details>
 
       <details class="landing-faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
         <summary itemprop="name">Como funciona um depósito?</summary>
         <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
-          <p itemprop="text">Você escolhe o valor desejado, o DePix gera um QR Code PIX. Basta pagar pelo app do seu banco e o valor é enviado para sua carteira digital.</p>
+          <div itemprop="text" class="faq-content-deposit"></div>
         </div>
       </details>
 
       <details class="landing-faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
         <summary itemprop="name">Como funciona um saque?</summary>
         <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
-          <p itemprop="text">Você informa o valor e sua chave PIX. O DePix gera um endereço Liquid para você enviar os fundos. Após a confirmação, o valor é transferido via PIX para sua conta bancária.</p>
+          <div itemprop="text" class="faq-content-withdraw"></div>
         </div>
       </details>
 
@@ -345,6 +345,13 @@
         <summary itemprop="name">O que você pode fazer com DePix?</summary>
         <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
           <div itemprop="text" class="faq-content-depix-uses"></div>
+        </div>
+      </details>
+
+      <details class="landing-faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+        <summary itemprop="name">O Ecossistema DePix</summary>
+        <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+          <div itemprop="text" class="faq-content-ecosystem"></div>
         </div>
       </details>
 
@@ -738,15 +745,15 @@
     <div class="faq-list">
       <div class="faq-item">
         <button class="faq-question">O que é o DePix?</button>
-        <div class="faq-answer hidden"><p>O DePix é a primeira stablecoin brasileira na rede Liquid, pareada 1:1 com o Real (BRL). Ele permite que você receba pagamentos via PIX normalmente, mas o valor é convertido automaticamente em criptomoeda — protegendo seu dinheiro com a segurança da blockchain.</p></div>
+        <div class="faq-answer hidden faq-content-what-is"></div>
       </div>
       <div class="faq-item">
         <button class="faq-question">Como funciona um depósito?</button>
-        <div class="faq-answer hidden"><p>Você escolhe o valor desejado, o DePix gera um QR Code PIX. Basta pagar pelo app do seu banco e o valor é enviado para sua carteira digital.</p></div>
+        <div class="faq-answer hidden faq-content-deposit"></div>
       </div>
       <div class="faq-item">
         <button class="faq-question">Como funciona um saque?</button>
-        <div class="faq-answer hidden"><p>Você informa o valor e sua chave PIX. O DePix gera um endereço Liquid para você enviar os fundos. Após a confirmação, o valor é transferido via PIX para sua conta bancária.</p></div>
+        <div class="faq-answer hidden faq-content-withdraw"></div>
       </div>
       <div class="faq-item">
         <button class="faq-question">O que é um endereço Liquid?</button>
@@ -779,6 +786,10 @@
       <div class="faq-item">
         <button class="faq-question">O que você pode fazer com DePix?</button>
         <div class="faq-answer hidden faq-content-depix-uses"></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question">O Ecossistema DePix</button>
+        <div class="faq-answer hidden faq-content-ecosystem"></div>
       </div>
       <div class="faq-item">
         <button class="faq-question">Como reportar um problema?</button>
@@ -978,6 +989,102 @@
 </div>
 
 <!-- Shared FAQ content templates (single source of truth) -->
+<template id="tpl-faq-what-is">
+  <p>O DePix é a primeira stablecoin brasileira na rede Liquid, pareada 1:1 com o Real (BRL). Ele permite que você receba pagamentos via PIX normalmente, mas o valor é convertido automaticamente em criptomoeda — protegendo seu dinheiro com a segurança da blockchain.</p>
+  <div class="faq-features-grid">
+    <div class="faq-feature-item">
+      <div class="faq-feature-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      </div>
+      <div><strong>Sem cadastro bancário</strong><br><span class="faq-feature-desc">Não precisa de conta em exchange</span></div>
+    </div>
+    <div class="faq-feature-item">
+      <div class="faq-feature-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
+      </div>
+      <div><strong>Privacidade</strong><br><span class="faq-feature-desc">Transações confidenciais</span></div>
+    </div>
+    <div class="faq-feature-item">
+      <div class="faq-feature-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      </div>
+      <div><strong>Liberdade financeira</strong><br><span class="faq-feature-desc">Bitcoin, USDT ou cartão</span></div>
+    </div>
+    <div class="faq-feature-item">
+      <div class="faq-feature-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      </div>
+      <div><strong>Simples como PIX</strong><br><span class="faq-feature-desc">Seu cliente paga normalmente</span></div>
+    </div>
+  </div>
+  <p>Para mais informações, acesse <a href="https://depix.info" target="_blank" rel="noopener noreferrer" class="hint-link">depix.info</a></p>
+</template>
+
+<template id="tpl-faq-deposit">
+  <p>Você escolhe o valor desejado, o DePix App gera um QR Code PIX. Basta pagar pelo app do seu banco e o valor é enviado para sua carteira digital.</p>
+</template>
+
+<template id="tpl-faq-withdraw">
+  <p>Você informa o valor e sua chave PIX. O DePix App gera um endereço Liquid para você enviar os fundos. Após a confirmação, o valor é transferido via PIX para sua conta bancária.</p>
+</template>
+
+<template id="tpl-faq-ecosystem">
+  <p>O DePix abre portas para um ecossistema financeiro completo.</p>
+  <div class="faq-eco-grid">
+    <a href="https://p2p.land" target="_blank" rel="noopener noreferrer" class="faq-eco-card">
+      <div class="faq-eco-header">
+        <div class="faq-eco-icon faq-eco-p2p">P2P</div>
+        <span class="faq-eco-name faq-eco-p2p-name">P2P.Land</span>
+        <svg class="faq-eco-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      </div>
+      <strong>Troque DePix por outras criptomoedas</strong>
+      <p>Plataforma peer-to-peer para trocar DePix por criptos em outras blockchains (Bitcoin, Ethereum, Polygon, etc).</p>
+    </a>
+    <a href="https://enorsecurities.com" target="_blank" rel="noopener noreferrer" class="faq-eco-card">
+      <div class="faq-eco-header">
+        <div class="faq-eco-icon faq-eco-enor"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h18v18H3V3zm2 2v14h14V5H5zm2 2h10v2H7V7zm0 4h10v2H7v-2zm0 4h7v2H7v-2z"/></svg></div>
+        <span class="faq-eco-name faq-eco-enor-name">Enor Securities</span>
+        <svg class="faq-eco-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      </div>
+      <strong>Invista em ativos tokenizados</strong>
+      <p>Invista em ativos tokenizados usando DePix. Mercado de valores mobiliários diretamente na rede Liquid.</p>
+    </a>
+    <a href="https://kast.xyz" target="_blank" rel="noopener noreferrer" class="faq-eco-card">
+      <div class="faq-eco-header">
+        <div class="faq-eco-icon faq-eco-kast"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></div>
+        <span class="faq-eco-name faq-eco-kast-name">Kast</span>
+        <svg class="faq-eco-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      </div>
+      <strong>Cartão cripto internacional</strong>
+      <p>Cartão de crédito/débito alimentado por cripto. Gaste em qualquer lugar do mundo.</p>
+    </a>
+    <a href="https://redotpay.com" target="_blank" rel="noopener noreferrer" class="faq-eco-card">
+      <div class="faq-eco-header">
+        <div class="faq-eco-icon faq-eco-redot"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg></div>
+        <span class="faq-eco-name faq-eco-redot-name">RedotPay</span>
+        <svg class="faq-eco-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      </div>
+      <strong>Pague com cripto globalmente</strong>
+      <p>Outra opção de cartão cripto aceito globalmente. Aceito em milhões de estabelecimentos.</p>
+    </a>
+  </div>
+  <div class="faq-eco-tip">
+    <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    <div>
+      <strong>Cartões cripto (Kast, RedotPay e similares)</strong>
+      <p>Para usar cartões, converta DePix para a moeda aceita (geralmente USDT na rede Polygon) via SideSwap e/ou P2P.Land antes de carregar o cartão.</p>
+    </div>
+  </div>
+  <div class="faq-eco-highlight">
+    <div class="faq-eco-badge">Disponível</div>
+    <div>
+      <strong>Saque DePix direto para sua conta bancária via PIX.</strong>
+      <p>Rápido, simples e sem complicação. Converta seus DePix de volta para reais a qualquer momento.</p>
+    </div>
+  </div>
+  <p class="faq-eco-footer">Novos serviços e integrações estão em constante expansão.</p>
+</template>
+
 <template id="tpl-faq-security">
   <p><strong>Sim — sua segurança vem primeiro.</strong></p>
   <p>Seus fundos nunca ficam no Depix App. Eles permanecem protegidos na blockchain, na sua própria carteira (como a SideSwap), garantindo que você tenha total controle dos seus ativos.</p>

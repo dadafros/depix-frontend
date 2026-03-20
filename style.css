@@ -879,6 +879,7 @@ textarea:focus {
   font-weight: 600;
   cursor: pointer;
   display: inline;
+  text-decoration: none;
 }
 
 .hint-link:hover {
@@ -1203,8 +1204,217 @@ textarea:focus {
   color: #38e3ac;
 }
 
+/* FAQ "O que é o DePix" features grid */
+.faq-features-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.faq-feature-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(56, 227, 172, 0.04);
+  border: 1px solid rgba(56, 227, 172, 0.1);
+  border-radius: 10px;
+  font-size: 0.82rem;
+  color: #c0cdd8;
+  line-height: 1.4;
+}
+
+.faq-feature-icon {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(56, 227, 172, 0.1);
+  border-radius: 8px;
+}
+
+.faq-feature-icon svg {
+  width: 18px;
+  height: 18px;
+  stroke: #38e3ac;
+}
+
+.faq-feature-desc {
+  font-size: 0.75rem;
+  color: #5a6d82;
+}
+
+/* FAQ Ecosystem */
+.faq-eco-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.faq-eco-card {
+  display: block;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.faq-eco-card:hover {
+  border-color: rgba(56, 227, 172, 0.3);
+  background: rgba(56, 227, 172, 0.04);
+}
+
+.faq-eco-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.faq-eco-icon {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.faq-eco-p2p {
+  background: rgba(56, 227, 172, 0.15);
+  color: #38e3ac;
+}
+
+.faq-eco-enor {
+  background: rgba(100, 149, 237, 0.15);
+  color: #6495ed;
+}
+
+.faq-eco-kast {
+  background: rgba(255, 107, 107, 0.15);
+  color: #ff6b6b;
+}
+
+.faq-eco-redot {
+  background: rgba(255, 193, 7, 0.15);
+  color: #ffc107;
+}
+
+.faq-eco-name {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.faq-eco-p2p-name { color: #38e3ac; }
+.faq-eco-enor-name { color: #6495ed; }
+.faq-eco-kast-name { color: #ff6b6b; }
+.faq-eco-redot-name { color: #ffc107; }
+
+.faq-eco-link-icon {
+  width: 14px;
+  height: 14px;
+  color: #5a6d82;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.faq-eco-card strong {
+  font-size: 0.82rem;
+  color: #c0cdd8;
+}
+
+.faq-eco-card p {
+  font-size: 0.78rem;
+  color: #5a6d82;
+  margin: 4px 0 0;
+  line-height: 1.4;
+}
+
+.faq-eco-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  background: rgba(255, 193, 7, 0.06);
+  border: 1px solid rgba(255, 193, 7, 0.15);
+  border-radius: 10px;
+  margin: 12px 0;
+}
+
+.faq-eco-tip .faq-icon {
+  color: #ffc107;
+  min-width: 20px;
+}
+
+.faq-eco-tip strong {
+  font-size: 0.82rem;
+  color: #ffc107;
+}
+
+.faq-eco-tip p {
+  font-size: 0.78rem;
+  color: #8a9bb0;
+  margin: 4px 0 0;
+  line-height: 1.4;
+}
+
+.faq-eco-highlight {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, rgba(56, 227, 172, 0.08), rgba(56, 227, 172, 0.03));
+  border: 1px solid rgba(56, 227, 172, 0.2);
+  border-radius: 12px;
+  margin: 12px 0;
+}
+
+.faq-eco-badge {
+  background: #38e3ac;
+  color: #0a0f14;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  margin-top: 2px;
+}
+
+.faq-eco-highlight strong {
+  font-size: 0.85rem;
+  color: #c0cdd8;
+}
+
+.faq-eco-highlight p {
+  font-size: 0.78rem;
+  color: #8a9bb0;
+  margin: 4px 0 0;
+  line-height: 1.4;
+}
+
+.faq-eco-footer {
+  text-align: center;
+  font-size: 0.75rem;
+  color: #5a6d82;
+  margin-top: 8px;
+}
+
 @media (max-width: 480px) {
-  .faq-security-grid {
+  .faq-security-grid,
+  .faq-features-grid,
+  .faq-eco-grid {
     grid-template-columns: 1fr;
   }
 }

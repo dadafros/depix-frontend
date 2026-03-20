@@ -104,7 +104,14 @@ document.getElementById("sideswap-link")?.addEventListener("click", () => {
 });
 
 // Populate shared FAQ content from templates (single source of truth)
-for (const [tplId, cls] of [["tpl-faq-security", "faq-content-security"], ["tpl-faq-depix-uses", "faq-content-depix-uses"]]) {
+for (const [tplId, cls] of [
+  ["tpl-faq-what-is", "faq-content-what-is"],
+  ["tpl-faq-deposit", "faq-content-deposit"],
+  ["tpl-faq-withdraw", "faq-content-withdraw"],
+  ["tpl-faq-security", "faq-content-security"],
+  ["tpl-faq-depix-uses", "faq-content-depix-uses"],
+  ["tpl-faq-ecosystem", "faq-content-ecosystem"]
+]) {
   const tpl = document.getElementById(tplId);
   if (tpl) {
     for (const target of document.querySelectorAll("." + cls)) {
