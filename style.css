@@ -868,6 +868,141 @@ textarea:focus {
   margin-bottom: 12px;
 }
 
+/* ===== Wallet Guide Modal ===== */
+.wallet-guide-modal {
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.hint-link {
+  color: #38e3ac;
+  text-decoration: none;
+  font-weight: 500;
+  display: inline-block;
+  margin-top: 6px;
+}
+
+.hint-link:hover {
+  text-decoration: underline;
+}
+
+.guide-steps {
+  text-align: left;
+}
+
+.guide-step {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.guide-step-number {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #38e3ac;
+  color: #0a0f14;
+  font-weight: 700;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+}
+
+.guide-step-content h3 {
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+  color: #e8edf2;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.guide-step-content p {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  color: #8a9bb0;
+  line-height: 1.5;
+}
+
+.guide-mockup {
+  margin: 8px 0;
+}
+
+.guide-mockup-screen {
+  background: #151c24;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 14px;
+  text-align: center;
+}
+
+.guide-mockup-header {
+  font-size: 0.75rem;
+  color: #5a6d82;
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.guide-mockup-btn {
+  background: #38e3ac;
+  color: #0a0f14;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-weight: 600;
+  font-size: 0.8rem;
+  margin: 6px auto;
+  display: inline-block;
+}
+
+.guide-mockup-btn-secondary {
+  background: transparent;
+  color: #8a9bb0;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.guide-mockup-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  color: #c0cdd8;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.guide-mockup-actions {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 10px;
+}
+
+.guide-mockup-action {
+  font-size: 0.8rem;
+  color: #5a6d82;
+  padding: 6px 16px;
+  border-radius: 6px;
+}
+
+.guide-mockup-action-highlight {
+  background: rgba(56, 227, 172, 0.15);
+  color: #38e3ac;
+  font-weight: 600;
+}
+
+.guide-mockup-qr {
+  margin: 8px 0;
+}
+
+.guide-mockup-addr {
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: #5a6d82;
+  margin: 8px 0;
+  word-break: break-all;
+}
+
 /* ===== Toast ===== */
 .toast {
   position: fixed;

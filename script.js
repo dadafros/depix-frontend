@@ -85,6 +85,15 @@ document.getElementById("closeModal")?.addEventListener("click", () => {
   document.getElementById("installModal")?.classList.add("hidden");
 });
 
+// Wallet guide modal
+document.getElementById("wallet-guide-link")?.addEventListener("click", (e) => {
+  e.preventDefault();
+  document.getElementById("wallet-guide-modal")?.classList.remove("hidden");
+});
+document.getElementById("close-wallet-guide")?.addEventListener("click", () => {
+  document.getElementById("wallet-guide-modal")?.classList.add("hidden");
+});
+
 if (isAppInstalled()) {
   const btn = document.getElementById("installBtn");
   if (btn) btn.style.display = "none";
