@@ -299,26 +299,27 @@ button:focus-visible {
   display: flex;
   justify-content: center;
   gap: 10px;
-  margin: 16px 0 4px;
+  margin: 16px 0 16px;
   flex-wrap: wrap;
 }
 
 .store-badge {
   display: inline-flex;
   text-decoration: none;
-  border-radius: 10px;
-  background: linear-gradient(145deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%);
-  border: 1px solid rgba(255,255,255,0.12);
-  padding: 10px 14px;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  transition: transform 0.15s, border-color 0.15s, background 0.15s;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  overflow: hidden;
+  transition: transform 0.15s, background 0.15s;
+}
+
+.store-badge svg {
+  display: block;
 }
 
 .store-badge:hover {
-  transform: scale(1.04);
-  border-color: rgba(255,255,255,0.22);
-  background: linear-gradient(145deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 100%);
+  transform: scale(1.03);
+  background: rgba(255,255,255,0.1);
 }
 
 /* ===== Mode Switch (toggle depósito/saque) ===== */
