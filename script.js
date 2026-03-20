@@ -72,7 +72,13 @@ document.getElementById("installBtn")?.addEventListener("click", async () => {
     document.getElementById("installBtn").style.display = "none";
     return;
   }
-  document.getElementById("installModal")?.classList.remove("hidden");
+  const modal = document.getElementById("installModal");
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const iosSection = document.getElementById("install-ios");
+  const androidSection = document.getElementById("install-android");
+  if (iosSection) iosSection.style.opacity = isIOS ? "1" : "0.6";
+  if (androidSection) androidSection.style.opacity = isIOS ? "0.6" : "1";
+  modal?.classList.remove("hidden");
 });
 
 document.getElementById("closeModal")?.addEventListener("click", () => {
@@ -1261,6 +1267,41 @@ route("#reports", () => {
   document.getElementById("report-start").value = thirtyDaysAgo.toISOString().split("T")[0];
 });
 
+route("#landing", () => {});
+
+// ===== Landing page toggle =====
+function setupLandingToggle() {
+  const merchantBtn = document.getElementById("toggleMerchant");
+  const individualBtn = document.getElementById("toggleIndividual");
+  if (!merchantBtn || !individualBtn) return;
+
+  function setMode(mode) {
+    const isMerchant = mode === "merchant";
+    merchantBtn.classList.toggle("active", isMerchant);
+    individualBtn.classList.toggle("active", !isMerchant);
+    merchantBtn.setAttribute("aria-checked", isMerchant);
+    individualBtn.setAttribute("aria-checked", !isMerchant);
+
+    document.querySelectorAll(".landing-merchant-text, .landing-merchant-content").forEach(el => {
+      el.classList.toggle("hidden", !isMerchant);
+    });
+    document.querySelectorAll(".landing-individual-text, .landing-individual-content").forEach(el => {
+      el.classList.toggle("hidden", isMerchant);
+    });
+  }
+
+  merchantBtn.addEventListener("click", () => setMode("merchant"));
+  individualBtn.addEventListener("click", () => setMode("individual"));
+}
+setupLandingToggle();
+
 // ===== Initialize =====
-goToAppropriateScreen();
+const isPWA = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
+
+if (isPWA || (window.location.hash && window.location.hash !== "#" && window.location.hash !== "#landing")) {
+  goToAppropriateScreen();
+} else if (isLoggedIn()) {
+  goToAppropriateScreen();
+}
+// else: no hash + not logged in + browser mode → router shows #landing
 initRouter();

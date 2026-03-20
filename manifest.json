@@ -1,11 +1,11 @@
 {
   "name": "DePix - Pagamento PIX",
   "short_name": "DePix",
-  "start_url": "/",
+  "start_url": "/#login",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#071b1f",
-  "theme_color": "#38b2ac",
+  "background_color": "#0a0f14",
+  "theme_color": "#38e3ac",
   "icons": [
     {
       "src": "icon-192.png",

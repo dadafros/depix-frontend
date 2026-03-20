@@ -58,6 +58,7 @@ describe("Router", () => {
     hashValue = "";
     for (const k in sections) delete sections[k];
     for (const k in listeners) delete listeners[k];
+    createSection("landing");
     createSection("login");
     createSection("home");
     createSection("register");
@@ -125,11 +126,11 @@ describe("Router", () => {
       expect(handler).toHaveBeenCalledTimes(1);
     });
 
-    it("should default to #login when hash is empty", () => {
+    it("should default to #landing when hash is empty", () => {
       hashValue = "";
       initRouter();
 
-      expect(sections["login"].classList.contains("hidden")).toBe(false);
+      expect(sections["landing"].classList.contains("hidden")).toBe(false);
     });
 
     it("should not crash when hash has no matching section", () => {
