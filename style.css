@@ -961,9 +961,15 @@ textarea:focus {
 
 .guide-mockup-trio {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 12px;
   margin: 14px 0;
+}
+
+.guide-mockup-trio .guide-mini-mockup:nth-child(3) {
+  grid-column: 1 / -1;
+  max-width: 60%;
+  justify-self: center;
 }
 
 .guide-mini-mockup {
@@ -1101,9 +1107,15 @@ textarea:focus {
   color: #5a6d82;
 }
 
-@media (max-width: 360px) {
+@media (max-width: 380px) {
+  .card {
+    padding: 20px;
+  }
   .guide-mockup-trio {
     grid-template-columns: 1fr;
+  }
+  .guide-mockup-trio .guide-mini-mockup:nth-child(3) {
+    max-width: 100%;
   }
 }
 

@@ -96,8 +96,8 @@ document.getElementById("close-wallet-guide")?.addEventListener("click", () => {
 
 // SideSwap link — opens correct store based on device
 document.getElementById("sideswap-link")?.addEventListener("click", () => {
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  const url = isIOS
+  const isApple = /iPad|iPhone|iPod/.test(navigator.userAgent) || /Mac/.test(navigator.platform);
+  const url = isApple
     ? "https://apps.apple.com/br/app/sideswap/id1556476417"
     : "https://play.google.com/store/apps/details?id=io.sideswap";
   window.open(url, "_blank", "noopener,noreferrer");
@@ -122,7 +122,7 @@ if (isAppInstalled()) {
 // LOGIN
 // =========================================
 
-document.getElementById("btn-login")?.addEventListener("click", async () => {
+async function handleLogin() {
   const usuario = document.getElementById("login-usuario").value.trim();
   const senha = document.getElementById("login-senha").value;
 
@@ -165,7 +165,16 @@ document.getElementById("btn-login")?.addEventListener("click", async () => {
     btn.disabled = false;
     btn.innerText = "Entrar";
   }
-});
+}
+
+document.getElementById("btn-login")?.addEventListener("click", handleLogin);
+
+// Enter key triggers login
+for (const id of ["login-usuario", "login-senha"]) {
+  document.getElementById(id)?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") handleLogin();
+  });
+}
 
 // =========================================
 // REGISTER
@@ -769,20 +778,18 @@ document.getElementById("menu-overlay")?.addEventListener("click", (e) => {
 });
 
 // Logout
-document.getElementById("menu-logout")?.addEventListener("click", async () => {
+document.getElementById("menu-logout")?.addEventListener("click", () => {
   closeMenu();
-  try {
-    const refreshToken = getRefreshToken();
-    await apiFetch("/api/auth/refresh", {
-      method: "POST",
-      body: JSON.stringify({ action: "logout", refreshToken })
-    });
-  } catch { /* ignore */ }
+  const refreshToken = getRefreshToken();
   clearAuth();
-  // Clear password field on logout so it doesn't persist
   const loginSenha = document.getElementById("login-senha");
   if (loginSenha) loginSenha.value = "";
   navigate("#login");
+  // Fire-and-forget API call after navigating
+  apiFetch("/api/auth/refresh", {
+    method: "POST",
+    body: JSON.stringify({ action: "logout", refreshToken })
+  }).catch(() => {});
 });
 
 // FAQ menu item
