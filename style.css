@@ -40,7 +40,7 @@ body {
 .card {
   background: #111921;
   border: 1px solid rgba(56, 227, 172, 0.08);
-  padding: 28px;
+  padding: 32px;
   border-radius: 18px;
   width: 100%;
   max-width: 420px;
@@ -298,8 +298,44 @@ button:focus-visible {
 /* ===== Mode Switch (toggle depósito/saque) ===== */
 .mode-switch {
   margin-bottom: 18px;
+  display: flex;
+  justify-content: center;
 }
 
+.mode-toggle {
+  display: flex;
+  width: 100%;
+  background: #0a0f14;
+  border: 1px solid rgba(56, 227, 172, 0.15);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 0;
+}
+
+.mode-toggle-option {
+  flex: 1;
+  width: auto;
+  padding: 9px 12px;
+  margin: 0;
+  border-radius: 7px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #5a6d82;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  white-space: nowrap;
+}
+
+.mode-toggle-option.active {
+  background: rgba(56, 227, 172, 0.15);
+  color: #38e3ac;
+  font-weight: 600;
+}
+
+/* ===== Switch base (used by valor mode switch) ===== */
 .switch-label {
   display: flex;
   align-items: center;
@@ -513,31 +549,55 @@ button:focus-visible {
 }
 
 .menu-section {
-  margin-bottom: 24px;
+  margin-bottom: 20px;
+}
+
+.menu-section h3 {
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  color: #5a6d82;
+  margin-bottom: 6px;
+  padding-left: 14px;
 }
 
 .menu-item {
-  background: rgba(255, 255, 255, 0.04);
+  background: transparent;
   text-align: left;
-  padding: 14px 16px;
+  padding: 12px 14px;
   font-size: 15px;
-  color: #e8edf2;
-  margin-bottom: 6px;
-  min-height: 48px;
+  color: #c0cdd8;
+  margin-bottom: 2px;
+  min-height: 44px;
+  border-radius: 10px;
+  transition: background 0.15s, color 0.15s;
+  display: flex;
+  align-items: center;
 }
 
 .menu-item:active {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(56, 227, 172, 0.1);
+  color: #e8edf2;
+}
+
+@media (hover: hover) {
+  .menu-item:hover:not(:disabled) {
+    background: rgba(56, 227, 172, 0.06);
+    color: #e8edf2;
+  }
 }
 
 .menu-item.danger {
   color: #ff6b6b;
 }
 
+.menu-item.danger:active {
+  background: rgba(255, 107, 107, 0.1);
+}
+
 .menu-footer {
   margin-top: auto;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 14px;
 }
 
 /* ===== Modal ===== */
@@ -964,11 +1024,19 @@ textarea:focus {
 }
 
 .landing-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
   font-family: 'Space Grotesk', system-ui, sans-serif;
-  font-size: 1.5rem;
+  font-size: 1.35rem;
   font-weight: 700;
   color: #38e3ac;
   letter-spacing: -0.03em;
+}
+
+.landing-logo-icon {
+  flex-shrink: 0;
 }
 
 .landing-nav-cta {

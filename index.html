@@ -56,7 +56,7 @@
 
   <nav class="landing-nav">
     <div class="landing-nav-inner">
-      <span class="landing-logo">DePix App</span>
+      <a href="#landing" class="landing-logo"><img src="icon-192.png" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
       <a href="#login" class="landing-nav-cta">Entrar</a>
     </div>
   </nav>
@@ -526,24 +526,23 @@
 
     <!-- ===== SWITCH MODO ===== -->
     <div class="mode-switch">
-      <label class="switch-label" id="switchLabel">
-        <span id="switchText">Transferir para conta</span>
-        <span class="switch-track" id="switchTrack">
-          <span class="switch-thumb"></span>
-        </span>
-      </label>
+      <div class="mode-toggle" role="radiogroup" aria-label="Modo">
+        <button class="mode-toggle-option active" id="modeDeposit" role="radio" aria-checked="true">Receber pagamento</button>
+        <button class="mode-toggle-option" id="modeWithdraw" role="radio" aria-checked="false">Sacar DePix</button>
+      </div>
     </div>
 
     <!-- ===== TELA: DEPÓSITO (QR PIX) ===== -->
     <div id="telaDeposito">
-      <h1>Receber pagamento</h1>
 
       <div id="mensagem" class="mensagem"></div>
 
-      <label for="valor">Valor do pagamento</label>
-      <input id="valor" placeholder="R$ 0,00" inputmode="numeric" />
+      <div id="formDeposito">
+        <label for="valor">Valor do pagamento</label>
+        <input id="valor" placeholder="R$ 0,00" inputmode="numeric" />
 
-      <button id="btnGerar">Gerar código de pagamento</button>
+        <button id="btnGerar">Gerar código de pagamento</button>
+      </div>
 
       <div id="loading" class="hidden"><span class="spinner"></span> Gerando código de pagamento…</div>
 
@@ -558,8 +557,6 @@
 
     <!-- ===== TELA: SAQUE ===== -->
     <div id="telaSaque" class="hidden">
-      <h1>Transferir para sua conta</h1>
-
       <div id="mensagemSaque" class="mensagem"></div>
 
       <div id="formSaque">

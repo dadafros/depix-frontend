@@ -462,22 +462,26 @@ function updateAddrDisplay() {
   }
 }
 
-document.getElementById("switchTrack")?.addEventListener("click", () => {
-  modoSaque = !modoSaque;
-  const track = document.getElementById("switchTrack");
-  const text = document.getElementById("switchText");
+document.getElementById("modeDeposit")?.addEventListener("click", () => {
+  if (!modoSaque) return;
+  modoSaque = false;
+  document.getElementById("modeDeposit").classList.add("active");
+  document.getElementById("modeDeposit").setAttribute("aria-checked", "true");
+  document.getElementById("modeWithdraw").classList.remove("active");
+  document.getElementById("modeWithdraw").setAttribute("aria-checked", "false");
+  document.getElementById("telaSaque").classList.add("hidden");
+  document.getElementById("telaDeposito").classList.remove("hidden");
+});
 
-  if (modoSaque) {
-    track.classList.add("active");
-    text.innerText = "Voltar para recebimento";
-    document.getElementById("telaDeposito").classList.add("hidden");
-    document.getElementById("telaSaque").classList.remove("hidden");
-  } else {
-    track.classList.remove("active");
-    text.innerText = "Transferir para conta";
-    document.getElementById("telaSaque").classList.add("hidden");
-    document.getElementById("telaDeposito").classList.remove("hidden");
-  }
+document.getElementById("modeWithdraw")?.addEventListener("click", () => {
+  if (modoSaque) return;
+  modoSaque = true;
+  document.getElementById("modeWithdraw").classList.add("active");
+  document.getElementById("modeWithdraw").setAttribute("aria-checked", "true");
+  document.getElementById("modeDeposit").classList.remove("active");
+  document.getElementById("modeDeposit").setAttribute("aria-checked", "false");
+  document.getElementById("telaDeposito").classList.add("hidden");
+  document.getElementById("telaSaque").classList.remove("hidden");
 });
 
 document.getElementById("valorModeTrack")?.addEventListener("click", () => {
@@ -556,6 +560,7 @@ document.getElementById("btnGerar")?.addEventListener("click", async () => {
     lastDepositQrId = data.response.id;
     document.getElementById("qrImage").src = data.response.qrImageUrl;
     document.getElementById("qrId").innerText = "ID: " + data.response.id;
+    document.getElementById("formDeposito").classList.add("hidden");
     document.getElementById("resultado").classList.remove("hidden");
 
   } catch (e) {
@@ -585,6 +590,7 @@ document.getElementById("btnCopy")?.addEventListener("click", async () => {
 
 document.getElementById("btnReset")?.addEventListener("click", () => {
   document.getElementById("resultado").classList.add("hidden");
+  document.getElementById("formDeposito").classList.remove("hidden");
   document.getElementById("valor").value = "";
   setMsg("mensagem", "");
 });
