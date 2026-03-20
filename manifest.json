@@ -1,6 +1,6 @@
 {
-  "name": "DePix - Pagamento PIX",
-  "short_name": "DePix",
+  "name": "Depix App",
+  "short_name": "Depix App",
   "start_url": "/#login",
   "scope": "/",
   "display": "standalone",
