@@ -647,7 +647,7 @@
 
     <div class="menu-section">
       <h3>Transações</h3>
-      <button id="menu-transactions" class="menu-item">Status de transações</button>
+      <button id="menu-transactions" class="menu-item">Extrato</button>
     </div>
 
     <div class="menu-section">
@@ -786,13 +786,45 @@
 <!-- ===== TRANSAÇÕES ===== -->
 <section data-view="transactions" class="page hidden">
   <div class="card">
-    <h1>Transações</h1>
+    <h1>Extrato</h1>
+
+    <div class="extrato-filters">
+      <div class="extrato-filter-row">
+        <select id="filter-type">
+          <option value="all">Todos</option>
+          <option value="deposit">Depósitos</option>
+          <option value="withdraw">Saques</option>
+        </select>
+        <select id="filter-status">
+          <option value="">Todos os status</option>
+          <option value="pending">Pendente</option>
+          <option value="depix_sent">Concluído</option>
+          <option value="under_review">Em análise</option>
+          <option value="canceled">Cancelado</option>
+          <option value="error">Erro</option>
+          <option value="refunded">Reembolsado</option>
+          <option value="expired">Expirado</option>
+          <option value="unsent">Aguardando</option>
+          <option value="sending">Enviando</option>
+          <option value="sent">Enviado</option>
+        </select>
+      </div>
+      <div class="extrato-filter-row">
+        <input id="filter-start-date" type="date" placeholder="Data inicial" />
+        <input id="filter-end-date" type="date" placeholder="Data final" />
+      </div>
+      <button id="btn-apply-filters" class="secondary btn-sm">Filtrar</button>
+    </div>
+
     <div id="transactions-msg" class="mensagem"></div>
-    <div id="transactions-loading" class="hidden"><span class="spinner"></span> Carregando transações…</div>
+    <div id="transactions-loading" class="hidden"><span class="spinner"></span> Carregando…</div>
     <div id="transactions-empty" class="hidden">
       <p class="info-text">Nenhuma transação encontrada.</p>
     </div>
     <div id="transactions-list" class="transactions-list"></div>
+    <div id="transactions-load-more" class="hidden">
+      <button id="btn-load-more" class="secondary">Carregar mais</button>
+    </div>
     <p class="link-text">
       <a href="#home" class="link">← Voltar</a>
     </p>

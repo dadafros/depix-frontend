@@ -1267,17 +1267,37 @@ function renderTransactions(transactions, highlightId) {
   }
 }
 
-async function loadTransactions() {
+let transactionsOffset = 0;
+
+function buildTransactionsUrl(offset) {
+  const type = document.getElementById("filter-type")?.value || "all";
+  const status = document.getElementById("filter-status")?.value || "";
+  const startDate = document.getElementById("filter-start-date")?.value || "";
+  const endDate = document.getElementById("filter-end-date")?.value || "";
+
+  let url = `/api/status?type=${type}`;
+  if (status) url += `&status=${status}`;
+  if (startDate) url += `&startDate=${startDate}`;
+  if (endDate) url += `&endDate=${endDate}`;
+  if (offset) url += `&offset=${offset}`;
+  return url;
+}
+
+async function loadTransactions(append = false) {
   const loading = document.getElementById("transactions-loading");
-  const msg = document.getElementById("transactions-msg");
+  const loadMore = document.getElementById("transactions-load-more");
 
   loading.classList.remove("hidden");
-  setMsg("transactions-msg", "");
-  document.getElementById("transactions-list").innerHTML = "";
-  document.getElementById("transactions-empty").classList.add("hidden");
+  loadMore.classList.add("hidden");
+  if (!append) {
+    setMsg("transactions-msg", "");
+    document.getElementById("transactions-list").innerHTML = "";
+    document.getElementById("transactions-empty").classList.add("hidden");
+    transactionsOffset = 0;
+  }
 
   try {
-    const res = await apiFetch("/api/status?type=all");
+    const res = await apiFetch(buildTransactionsUrl(transactionsOffset));
     const data = await res.json();
 
     if (!res.ok) {
@@ -1286,29 +1306,39 @@ async function loadTransactions() {
     }
 
     const transactions = data.transactions || [];
+    const hasMore = data.hasMore || false;
     const hash = window.location.hash;
     const params = new URLSearchParams(hash.split("?")[1] || "");
     const highlightId = params.get("id") || "";
 
-    renderTransactions(transactions, highlightId);
+    if (append) {
+      appendTransactions(transactions);
+    } else {
+      renderTransactions(transactions, highlightId);
+    }
 
-    // Auto-refresh if there are non-terminal transactions
-    stopTransactionsPolling();
-    const hasPending = transactions.some(tx => NON_TERMINAL_STATUSES.has(tx.status));
-    if (hasPending) {
-      transactionsPollingInterval = setInterval(async () => {
-        try {
-          const r = await apiFetch("/api/status?type=all");
-          const d = await r.json();
-          if (r.ok) {
-            const txs = d.transactions || [];
-            renderTransactions(txs, highlightId);
-            if (!txs.some(tx => NON_TERMINAL_STATUSES.has(tx.status))) {
-              stopTransactionsPolling();
+    transactionsOffset += transactions.length;
+    loadMore.classList.toggle("hidden", !hasMore);
+
+    // Auto-refresh if there are non-terminal transactions (only on first load)
+    if (!append) {
+      stopTransactionsPolling();
+      const hasPending = transactions.some(tx => NON_TERMINAL_STATUSES.has(tx.status));
+      if (hasPending) {
+        transactionsPollingInterval = setInterval(async () => {
+          try {
+            const r = await apiFetch(buildTransactionsUrl(0));
+            const d = await r.json();
+            if (r.ok) {
+              const txs = d.transactions || [];
+              renderTransactions(txs, highlightId);
+              if (!txs.some(tx => NON_TERMINAL_STATUSES.has(tx.status))) {
+                stopTransactionsPolling();
+              }
             }
-          }
-        } catch { /* ignore polling errors */ }
-      }, 30000);
+          } catch { /* ignore polling errors */ }
+        }, 30000);
+      }
     }
 
   } catch (e) {
@@ -1316,6 +1346,33 @@ async function loadTransactions() {
   } finally {
     loading.classList.add("hidden");
   }
+}
+
+function appendTransactions(transactions) {
+  const list = document.getElementById("transactions-list");
+  const html = transactions.map(tx => {
+    const isDeposit = tx.tipo === "deposit";
+    const typeClass = isDeposit ? "deposit" : "withdraw";
+    const typeLabel = isDeposit ? "Depósito" : "Saque";
+    const status = tx.status || (isDeposit ? "pending" : "unsent");
+    const statusLabel = isDeposit
+      ? (DEPOSIT_STATUS_LABELS[status] || status)
+      : (WITHDRAW_STATUS_LABELS[status] || status);
+    const amount = isDeposit
+      ? formatBRL(tx.valor_centavos)
+      : formatBRL(tx.payout_amount_centavos || tx.deposit_amount_centavos);
+    const txId = isDeposit ? tx.qr_id : tx.withdrawal_id;
+
+    return `<div class="transaction-item" data-tx-id="${txId || ""}">
+      <span class="transaction-type ${typeClass}">${typeLabel}</span>
+      <div class="transaction-info">
+        <span class="transaction-amount">${amount}</span>
+        <span class="transaction-date">${formatDateShort(tx.criado_em)}</span>
+      </div>
+      <span class="transaction-status ${statusColor(status)}">${statusLabel}</span>
+    </div>`;
+  }).join("");
+  list.insertAdjacentHTML("beforeend", html);
 }
 
 function stopTransactionsPolling() {
@@ -1329,6 +1386,16 @@ function stopTransactionsPolling() {
 document.getElementById("menu-transactions")?.addEventListener("click", () => {
   closeMenu();
   navigate("#transactions");
+});
+
+// Transactions filters
+document.getElementById("btn-apply-filters")?.addEventListener("click", () => {
+  loadTransactions();
+});
+
+// Load more
+document.getElementById("btn-load-more")?.addEventListener("click", () => {
+  loadTransactions(true);
 });
 
 // Acompanhe buttons
