@@ -1224,26 +1224,114 @@ function formatDateShort(isoStr) {
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", timeZone: "America/Sao_Paulo" });
 }
 
-function renderTransactions(transactions, highlightId) {
+let allTransactions = [];
+let filteredTransactions = [];
+let displayedCount = 0;
+const PAGE_SIZE = 50;
+
+async function loadTransactions() {
+  const loading = document.getElementById("transactions-loading");
+
+  loading.classList.remove("hidden");
+  setMsg("transactions-msg", "");
+  document.getElementById("transactions-list").innerHTML = "";
+  document.getElementById("transactions-empty").classList.add("hidden");
+  document.getElementById("transactions-load-more").classList.add("hidden");
+  document.getElementById("transactions-count").classList.add("hidden");
+
+  try {
+    const res = await apiFetch("/api/status?type=all");
+    const data = await res.json();
+
+    if (!res.ok) {
+      setMsg("transactions-msg", data?.response?.errorMessage || data?.errorMessage || "Erro ao carregar transações");
+      return;
+    }
+
+    allTransactions = data.transactions || [];
+    applyFilters();
+
+    // Auto-refresh if there are non-terminal transactions
+    stopTransactionsPolling();
+    const hasPending = allTransactions.some(tx => NON_TERMINAL_STATUSES.has(tx.status));
+    if (hasPending) {
+      transactionsPollingInterval = setInterval(async () => {
+        try {
+          const r = await apiFetch("/api/status?type=all");
+          const d = await r.json();
+          if (r.ok) {
+            allTransactions = d.transactions || [];
+            applyFilters();
+            if (!allTransactions.some(tx => NON_TERMINAL_STATUSES.has(tx.status))) {
+              stopTransactionsPolling();
+            }
+          }
+        } catch { /* ignore polling errors */ }
+      }, 30000);
+    }
+
+  } catch (e) {
+    setMsg("transactions-msg", e.message || "Erro ao carregar transações");
+  } finally {
+    loading.classList.add("hidden");
+  }
+}
+
+function applyFilters() {
+  const type = document.querySelector(".extrato-pill.active")?.dataset.filterType || "all";
+  const status = document.getElementById("filter-status")?.value || "";
+  const startDate = document.getElementById("filter-start-date")?.value || "";
+  const endDate = document.getElementById("filter-end-date")?.value || "";
+
+  filteredTransactions = allTransactions.filter(tx => {
+    if (type !== "all" && tx.tipo !== type) return false;
+    if (status && tx.status !== status) return false;
+    if (startDate) {
+      const txDate = (tx.criado_em || "").slice(0, 10);
+      if (txDate < startDate) return false;
+    }
+    if (endDate) {
+      const txDate = (tx.criado_em || "").slice(0, 10);
+      if (txDate > endDate) return false;
+    }
+    return true;
+  });
+
+  displayedCount = 0;
+  document.getElementById("transactions-list").innerHTML = "";
+  renderNextPage();
+}
+
+function renderNextPage() {
   const list = document.getElementById("transactions-list");
   const empty = document.getElementById("transactions-empty");
+  const loadMore = document.getElementById("transactions-load-more");
+  const countEl = document.getElementById("transactions-count");
 
-  if (!transactions || transactions.length === 0) {
+  const nextBatch = filteredTransactions.slice(displayedCount, displayedCount + PAGE_SIZE);
+
+  if (displayedCount === 0 && nextBatch.length === 0) {
     list.innerHTML = "";
     empty.classList.remove("hidden");
+    loadMore.classList.add("hidden");
+    countEl.classList.add("hidden");
     return;
   }
 
   empty.classList.add("hidden");
 
-  list.innerHTML = transactions.map(tx => {
+  const hash = window.location.hash;
+  const params = new URLSearchParams(hash.split("?")[1] || "");
+  const highlightId = params.get("id") || "";
+
+  const html = nextBatch.map(tx => {
     const isDeposit = tx.tipo === "deposit";
     const typeClass = isDeposit ? "deposit" : "withdraw";
     const typeLabel = isDeposit ? "Depósito" : "Saque";
-    const status = tx.status || (isDeposit ? "pending" : "unsent");
+    const st = tx.status || (isDeposit ? "pending" : "unsent");
     const statusLabel = isDeposit
-      ? (DEPOSIT_STATUS_LABELS[status] || status)
-      : (WITHDRAW_STATUS_LABELS[status] || status);
+      ? (DEPOSIT_STATUS_LABELS[st] || st)
+      : (WITHDRAW_STATUS_LABELS[st] || st);
     const amount = isDeposit
       ? formatBRL(tx.valor_centavos)
       : formatBRL(tx.payout_amount_centavos || tx.deposit_amount_centavos);
@@ -1256,123 +1344,29 @@ function renderTransactions(transactions, highlightId) {
         <span class="transaction-amount">${amount}</span>
         <span class="transaction-date">${formatDateShort(tx.criado_em)}</span>
       </div>
-      <span class="transaction-status ${statusColor(status)}">${statusLabel}</span>
+      <span class="transaction-status ${statusColor(st)}">${statusLabel}</span>
     </div>`;
   }).join("");
 
-  // Scroll to highlighted transaction
-  if (highlightId) {
+  if (displayedCount === 0) {
+    list.innerHTML = html;
+  } else {
+    list.insertAdjacentHTML("beforeend", html);
+  }
+
+  displayedCount += nextBatch.length;
+
+  const hasMore = displayedCount < filteredTransactions.length;
+  loadMore.classList.toggle("hidden", !hasMore);
+
+  countEl.innerText = `Mostrando ${displayedCount} de ${filteredTransactions.length}`;
+  countEl.classList.remove("hidden");
+
+  // Scroll to highlighted on first render
+  if (displayedCount <= PAGE_SIZE && highlightId) {
     const el = list.querySelector(`[data-tx-id="${highlightId}"]`);
     if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
   }
-}
-
-let transactionsOffset = 0;
-
-function buildTransactionsUrl(offset) {
-  const type = document.getElementById("filter-type")?.value || "all";
-  const status = document.getElementById("filter-status")?.value || "";
-  const startDate = document.getElementById("filter-start-date")?.value || "";
-  const endDate = document.getElementById("filter-end-date")?.value || "";
-
-  let url = `/api/status?type=${type}`;
-  if (status) url += `&status=${status}`;
-  if (startDate) url += `&startDate=${startDate}`;
-  if (endDate) url += `&endDate=${endDate}`;
-  if (offset) url += `&offset=${offset}`;
-  return url;
-}
-
-async function loadTransactions(append = false) {
-  const loading = document.getElementById("transactions-loading");
-  const loadMore = document.getElementById("transactions-load-more");
-
-  loading.classList.remove("hidden");
-  loadMore.classList.add("hidden");
-  if (!append) {
-    setMsg("transactions-msg", "");
-    document.getElementById("transactions-list").innerHTML = "";
-    document.getElementById("transactions-empty").classList.add("hidden");
-    transactionsOffset = 0;
-  }
-
-  try {
-    const res = await apiFetch(buildTransactionsUrl(transactionsOffset));
-    const data = await res.json();
-
-    if (!res.ok) {
-      setMsg("transactions-msg", data?.response?.errorMessage || data?.errorMessage || "Erro ao carregar transações");
-      return;
-    }
-
-    const transactions = data.transactions || [];
-    const hasMore = data.hasMore || false;
-    const hash = window.location.hash;
-    const params = new URLSearchParams(hash.split("?")[1] || "");
-    const highlightId = params.get("id") || "";
-
-    if (append) {
-      appendTransactions(transactions);
-    } else {
-      renderTransactions(transactions, highlightId);
-    }
-
-    transactionsOffset += transactions.length;
-    loadMore.classList.toggle("hidden", !hasMore);
-
-    // Auto-refresh if there are non-terminal transactions (only on first load)
-    if (!append) {
-      stopTransactionsPolling();
-      const hasPending = transactions.some(tx => NON_TERMINAL_STATUSES.has(tx.status));
-      if (hasPending) {
-        transactionsPollingInterval = setInterval(async () => {
-          try {
-            const r = await apiFetch(buildTransactionsUrl(0));
-            const d = await r.json();
-            if (r.ok) {
-              const txs = d.transactions || [];
-              renderTransactions(txs, highlightId);
-              if (!txs.some(tx => NON_TERMINAL_STATUSES.has(tx.status))) {
-                stopTransactionsPolling();
-              }
-            }
-          } catch { /* ignore polling errors */ }
-        }, 30000);
-      }
-    }
-
-  } catch (e) {
-    setMsg("transactions-msg", e.message || "Erro ao carregar transações");
-  } finally {
-    loading.classList.add("hidden");
-  }
-}
-
-function appendTransactions(transactions) {
-  const list = document.getElementById("transactions-list");
-  const html = transactions.map(tx => {
-    const isDeposit = tx.tipo === "deposit";
-    const typeClass = isDeposit ? "deposit" : "withdraw";
-    const typeLabel = isDeposit ? "Depósito" : "Saque";
-    const status = tx.status || (isDeposit ? "pending" : "unsent");
-    const statusLabel = isDeposit
-      ? (DEPOSIT_STATUS_LABELS[status] || status)
-      : (WITHDRAW_STATUS_LABELS[status] || status);
-    const amount = isDeposit
-      ? formatBRL(tx.valor_centavos)
-      : formatBRL(tx.payout_amount_centavos || tx.deposit_amount_centavos);
-    const txId = isDeposit ? tx.qr_id : tx.withdrawal_id;
-
-    return `<div class="transaction-item" data-tx-id="${txId || ""}">
-      <span class="transaction-type ${typeClass}">${typeLabel}</span>
-      <div class="transaction-info">
-        <span class="transaction-amount">${amount}</span>
-        <span class="transaction-date">${formatDateShort(tx.criado_em)}</span>
-      </div>
-      <span class="transaction-status ${statusColor(status)}">${statusLabel}</span>
-    </div>`;
-  }).join("");
-  list.insertAdjacentHTML("beforeend", html);
 }
 
 function stopTransactionsPolling() {
@@ -1388,15 +1382,22 @@ document.getElementById("menu-transactions")?.addEventListener("click", () => {
   navigate("#transactions");
 });
 
-// Transactions filters
-document.getElementById("btn-apply-filters")?.addEventListener("click", () => {
-  loadTransactions();
+// Extrato: pill toggle filters
+document.querySelectorAll(".extrato-pill").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".extrato-pill").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    applyFilters();
+  });
 });
 
-// Load more
-document.getElementById("btn-load-more")?.addEventListener("click", () => {
-  loadTransactions(true);
-});
+// Extrato: auto-filter on change
+document.getElementById("filter-status")?.addEventListener("change", applyFilters);
+document.getElementById("filter-start-date")?.addEventListener("change", applyFilters);
+document.getElementById("filter-end-date")?.addEventListener("change", applyFilters);
+
+// Extrato: load more (client-side pagination)
+document.getElementById("btn-load-more")?.addEventListener("click", renderNextPage);
 
 // Acompanhe buttons
 document.getElementById("btnAcompanhar")?.addEventListener("click", () => {

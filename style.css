@@ -1570,10 +1570,38 @@ textarea:focus {
   color: #a0aec0;
 }
 
-/* ===== Extrato filters ===== */
+/* ===== Extrato ===== */
 
 .extrato-filters {
   margin-bottom: 16px;
+}
+
+.extrato-type-toggle {
+  display: flex;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+  padding: 3px;
+  margin-bottom: 12px;
+}
+
+.extrato-pill {
+  flex: 1;
+  padding: 8px 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #5a6d82;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  width: auto;
+  margin: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.extrato-pill.active {
+  background: rgba(56, 227, 172, 0.15);
+  color: #38e3ac;
 }
 
 .extrato-filter-row {
@@ -1587,25 +1615,30 @@ textarea:focus {
   flex: 1;
   padding: 10px 12px;
   margin-bottom: 0;
-  font-size: 14px;
+  font-size: 13px;
   min-width: 0;
-  height: 42px;
+  height: 40px;
   box-sizing: border-box;
   -webkit-appearance: none;
   appearance: none;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: #c0cdd8;
 }
 
 .extrato-filter-row select {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235a6d82' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
+  background-color: rgba(255, 255, 255, 0.04);
   padding-right: 32px;
 }
 
-.btn-sm {
-  padding: 10px 16px;
-  font-size: 14px;
-  margin-bottom: 0;
+.extrato-count {
+  font-size: 12px;
+  color: #5a6d82;
+  margin-bottom: 8px;
 }
 
 #transactions-load-more {

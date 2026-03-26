@@ -789,12 +789,12 @@
     <h1>Extrato</h1>
 
     <div class="extrato-filters">
+      <div class="extrato-type-toggle" role="radiogroup">
+        <button class="extrato-pill active" data-filter-type="all">Todos</button>
+        <button class="extrato-pill" data-filter-type="deposit">Depósitos</button>
+        <button class="extrato-pill" data-filter-type="withdraw">Saques</button>
+      </div>
       <div class="extrato-filter-row">
-        <select id="filter-type">
-          <option value="all">Todos</option>
-          <option value="deposit">Depósitos</option>
-          <option value="withdraw">Saques</option>
-        </select>
         <select id="filter-status">
           <option value="">Todos os status</option>
           <option value="pending">Pendente</option>
@@ -810,12 +810,12 @@
         </select>
       </div>
       <div class="extrato-filter-row">
-        <input id="filter-start-date" type="date" placeholder="Data inicial" />
-        <input id="filter-end-date" type="date" placeholder="Data final" />
+        <input id="filter-start-date" type="date" />
+        <input id="filter-end-date" type="date" />
       </div>
-      <button id="btn-apply-filters" class="secondary btn-sm">Filtrar</button>
     </div>
 
+    <div id="transactions-count" class="extrato-count hidden"></div>
     <div id="transactions-msg" class="mensagem"></div>
     <div id="transactions-loading" class="hidden"><span class="spinner"></span> Carregando…</div>
     <div id="transactions-empty" class="hidden">
