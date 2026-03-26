@@ -153,79 +153,64 @@ describe("Affiliate program helpers", () => {
   });
 
   describe("renderReferralsHTML", () => {
-    const mockFormatBRL = (cents) => `R$ ${(cents / 100).toFixed(2)}`;
     const mockFormatDate = (iso) => new Date(iso).toLocaleDateString("pt-BR");
 
     it("should return isEmpty true for empty array", () => {
-      const result = renderReferralsHTML([], mockFormatBRL, mockFormatDate);
+      const result = renderReferralsHTML([], mockFormatDate);
       expect(result.isEmpty).toBe(true);
       expect(result.html).toBe("");
     });
 
     it("should return isEmpty true for null", () => {
-      const result = renderReferralsHTML(null, mockFormatBRL, mockFormatDate);
+      const result = renderReferralsHTML(null, mockFormatDate);
       expect(result.isEmpty).toBe(true);
       expect(result.html).toBe("");
     });
 
     it("should return isEmpty true for undefined", () => {
-      const result = renderReferralsHTML(undefined, mockFormatBRL, mockFormatDate);
+      const result = renderReferralsHTML(undefined, mockFormatDate);
       expect(result.isEmpty).toBe(true);
       expect(result.html).toBe("");
     });
 
     it("should return correct HTML for single referral", () => {
       const referrals = [
-        { nome: "Joao", monthlyVolumeCents: 50000, registeredAt: "2025-06-15T00:00:00Z" }
+        { nome: "Joao", registeredAt: "2025-06-15T00:00:00Z" }
       ];
-      const result = renderReferralsHTML(referrals, mockFormatBRL, mockFormatDate);
+      const result = renderReferralsHTML(referrals, mockFormatDate);
       expect(result.isEmpty).toBe(false);
       expect(result.html).toContain("Joao");
-      expect(result.html).toContain("R$ 500.00");
       expect(result.html).toContain("Desde");
       expect(result.html).toContain("referral-item");
     });
 
     it("should return correct HTML for multiple referrals", () => {
       const referrals = [
-        { nome: "Ana", monthlyVolumeCents: 10000, registeredAt: "2025-01-10T00:00:00Z" },
-        { nome: "Carlos", monthlyVolumeCents: 25000, registeredAt: "2025-03-20T00:00:00Z" }
+        { nome: "Ana", registeredAt: "2025-01-10T00:00:00Z" },
+        { nome: "Carlos", registeredAt: "2025-03-20T00:00:00Z" }
       ];
-      const result = renderReferralsHTML(referrals, mockFormatBRL, mockFormatDate);
+      const result = renderReferralsHTML(referrals, mockFormatDate);
       expect(result.isEmpty).toBe(false);
       expect(result.html).toContain("Ana");
       expect(result.html).toContain("Carlos");
-      expect(result.html).toContain("R$ 100.00");
-      expect(result.html).toContain("R$ 250.00");
     });
 
-    it("should include name, volume, and date in output", () => {
+    it("should include name and date in output", () => {
       const referrals = [
-        { nome: "Test User", monthlyVolumeCents: 99999, registeredAt: "2025-12-25T00:00:00Z" }
+        { nome: "Test User", registeredAt: "2025-12-25T00:00:00Z" }
       ];
-      const result = renderReferralsHTML(referrals, mockFormatBRL, mockFormatDate);
+      const result = renderReferralsHTML(referrals, mockFormatDate);
       expect(result.html).toContain('class="referral-name"');
-      expect(result.html).toContain('class="referral-volume"');
       expect(result.html).toContain('class="referral-date"');
       expect(result.html).toContain("Test User");
-      expect(result.html).toContain("R$ 999.99");
-    });
-
-    it("should use the provided formatBRL function", () => {
-      const customFormat = () => "CUSTOM";
-      const referrals = [
-        { nome: "X", monthlyVolumeCents: 1, registeredAt: "2025-01-01T00:00:00Z" }
-      ];
-      const result = renderReferralsHTML(referrals, customFormat, mockFormatDate);
-      expect(result.html).toContain("CUSTOM");
     });
 
     it("should use the provided formatDateShort function", () => {
       const customDate = () => "01/jan";
       const referrals = [
-        { nome: "Y", monthlyVolumeCents: 1, registeredAt: "2025-01-01T00:00:00Z" }
+        { nome: "Y", registeredAt: "2025-01-01T00:00:00Z" }
       ];
-      const result = renderReferralsHTML(referrals, mockFormatBRL, customDate);
+      const result = renderReferralsHTML(referrals, customDate);
       expect(result.html).toContain("Desde 01/jan");
     });
   });

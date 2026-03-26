@@ -38,22 +38,18 @@ export function buildAffiliateLink(referralCode) {
 
 /**
  * Generate HTML for the referrals list.
- * @param {Array} referrals - array of { nome, monthlyVolumeCents, registeredAt }
- * @param {function} formatBRL - currency formatter
+ * @param {Array} referrals - array of { nome, registeredAt }
  * @param {function} formatDateShort - date formatter
  * @returns {{ html: string, isEmpty: boolean }}
  */
-export function renderReferralsHTML(referrals, formatBRL, formatDateShort) {
+export function renderReferralsHTML(referrals, formatDateShort) {
   if (!referrals || referrals.length === 0) {
     return { html: "", isEmpty: true };
   }
   const html = referrals.map(r => `
     <div class="referral-item">
       <span class="referral-name">${r.nome}</span>
-      <div class="referral-info">
-        <span class="referral-volume">${formatBRL(r.monthlyVolumeCents)}</span>
-        <span class="referral-date">Desde ${formatDateShort(r.registeredAt)}</span>
-      </div>
+      <span class="referral-date">Desde ${formatDateShort(r.registeredAt)}</span>
     </div>
   `).join("");
   return { html, isEmpty: false };

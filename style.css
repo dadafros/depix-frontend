@@ -1664,25 +1664,12 @@ textarea:focus {
 .referral-name {
   font-weight: 500;
   font-size: 0.9rem;
-  flex-shrink: 0;
-}
-
-.referral-info {
-  flex: 1;
-  min-width: 0;
-  text-align: right;
-}
-
-.referral-volume {
-  font-weight: 600;
-  color: #38e3ac;
-  display: block;
-  font-size: 0.9rem;
 }
 
 .referral-date {
   font-size: 0.75rem;
   color: #5a6d82;
+  margin-left: auto;
 }
 
 /* ===== Landing Page ===== */

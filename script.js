@@ -1112,7 +1112,7 @@ function renderReferrals(referrals) {
   const list = document.getElementById("affiliates-list");
   const empty = document.getElementById("affiliates-empty");
 
-  const { html, isEmpty } = renderReferralsHTML(referrals, formatBRL, formatDateShort);
+  const { html, isEmpty } = renderReferralsHTML(referrals, formatDateShort);
   list.innerHTML = html;
   empty.classList.toggle("hidden", !isEmpty);
 }
