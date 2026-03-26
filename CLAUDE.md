@@ -1,4 +1,8 @@
-# CLAUDE.md — DePix Frontend
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## DePix Frontend
 
 ## Project Overview
 
@@ -21,28 +25,41 @@ DePix is a Progressive Web App (PWA) for generating PIX QR codes (deposits) and 
 - **Backend**: Communicates with `https://depix-backend.vercel.app` via authenticated fetch
 
 ### Design Philosophy
-This project is intentionally zero-dependency and framework-free. All JS is vanilla ES modules loaded directly by the browser. This ensures fast loading, no build step, and simple deployment to any static hosting.
+This project is intentionally zero-dependency and framework-free. All JS is vanilla ES modules loaded directly by the browser. No build step — files are served as-is.
+
+### Module Dependency Flow
+`script.js` is the single entry point imported by `index.html`. It imports everything else:
+- `router.js`, `auth.js`, `api.js`, `addresses.js` — core modules (no cross-dependencies except `api.js` → `auth.js`)
+- `utils.js`, `validation.js` — pure functions, no side effects, no DOM access
+- `script-helpers.js` — DOM helpers extracted for testability (depends on DOM but not other modules)
 
 ## File Structure
 
 ```
 depix/
 ├── index.html          # All views as <section data-view="xxx"> + modals + toast
-├── script.js           # Main entry point — imports all modules, all event handlers
+├── script.js           # Main entry point — imports all modules, event handlers, app state
+├── script-helpers.js   # DOM helpers extracted from script.js (showToast, setMsg, goToAppropriateScreen)
 ├── router.js           # Hash-based SPA router (route, navigate, initRouter)
 ├── auth.js             # Auth state in localStorage (getToken, setAuth, clearAuth, isLoggedIn)
 ├── api.js              # Fetch wrapper with auto JWT refresh on 401 (apiFetch)
 ├── addresses.js        # Address CRUD in localStorage (add, remove, select, abbreviate)
+├── utils.js            # Pure utilities (isAllowedImageUrl, toCents, formatBRL)
+├── validation.js       # Input validators (validateLiquidAddress, validatePhone)
 ├── style.css           # All styles — dark teal theme, responsive, animations
 ├── service-worker.js   # Offline cache (static assets only, never caches API calls)
 ├── manifest.json       # PWA manifest (name, icons, start_url, display)
-├── icon-192.png        # App icon 192x192
-├── icon-512.png        # App icon 512x512
-├── package.json        # Dev dependencies only (vitest for testing)
-└── tests/
-    ├── addresses.test.js  # Tests for address management + abbreviation
-    ├── auth.test.js       # Tests for auth state management
-    └── router.test.js     # Tests for router module
+├── package.json        # Dev dependencies only (vitest + jsdom for testing)
+└── tests/              # Vitest tests with jsdom environment
+    ├── addresses.test.js
+    ├── api.test.js
+    ├── auth.test.js
+    ├── integration.test.js
+    ├── router.test.js
+    ├── script-helpers.test.js
+    ├── transactions.test.js
+    ├── utils.test.js
+    └── validation.test.js
 ```
 
 ## Screens / Views
@@ -98,9 +115,13 @@ Each view is a `<section data-view="name">` in index.html, shown/hidden by the r
 ## Commands
 
 ```bash
-npm test            # Run all tests (vitest)
-npm run test:watch  # Watch mode
+npm test                           # Run all tests (vitest)
+npm run test:watch                 # Watch mode
+npm run test:coverage              # Tests with coverage report
+npx vitest run tests/auth.test.js  # Run a single test file
 ```
+
+Requires Node.js >= 22.
 
 ## UI/UX Notes
 
@@ -119,7 +140,7 @@ npm run test:watch  # Watch mode
 - SSH key alias `github-personal` maps to `~/.ssh/id_ed25519_outlook`
 - Commit as: `dadafros <davi_bf@outlook.com>`
 - Branch naming: `feat/*` for features, `claude/*` for Claude Code branches
-- CI: GitHub Actions on push/PR to main
+- CI: GitHub Actions runs `npm test` on push to `main`/`feat/*` and PRs to `main`
 - Deploy: GitHub Pages from main branch
 
 ## Workflow Rules

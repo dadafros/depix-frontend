@@ -1,4 +1,4 @@
-const CACHE_NAME = "depix-v16";
+const CACHE_NAME = "depix-v17";
 
 const STATIC_FILES = [
   "./",
@@ -12,6 +12,7 @@ const STATIC_FILES = [
   "./utils.js",
   "./validation.js",
   "./script-helpers.js",
+  "./affiliates.js",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png"

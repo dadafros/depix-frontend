@@ -11,6 +11,7 @@ import {
 import { ALLOWED_QR_HOSTS, isAllowedImageUrl, toCents, formatBRL } from "./utils.js";
 import { validateLiquidAddress, validatePhone } from "./validation.js";
 import { showToast, setMsg, goToAppropriateScreen as _goToAppropriateScreen } from "./script-helpers.js";
+import { captureReferralCode, buildRegistrationBody, clearReferralCode, buildAffiliateLink, renderReferralsHTML } from "./affiliates.js";
 
 // ===== Constants =====
 const MIN_VALOR_CENTS = 500;
@@ -224,7 +225,7 @@ document.getElementById("btn-register")?.addEventListener("click", async () => {
   try {
     const res = await apiFetch("/api/auth/register", {
       method: "POST",
-      body: JSON.stringify({ nome, email, whatsapp, usuario, senha })
+      body: JSON.stringify(buildRegistrationBody({ nome, email, whatsapp, usuario, senha }))
     });
     const data = await res.json();
 
@@ -233,6 +234,7 @@ document.getElementById("btn-register")?.addEventListener("click", async () => {
       return;
     }
 
+    clearReferralCode();
     sessionStorage.setItem("depix-verify-usuario", usuario);
     const infoEl = document.getElementById("verify-info");
     if (infoEl) {
@@ -1059,6 +1061,82 @@ document.getElementById("menu-report-saques")?.addEventListener("click", () => {
   navigate("#reports");
 });
 
+document.getElementById("menu-report-comissoes")?.addEventListener("click", () => {
+  closeMenu();
+  reportType = "comissao";
+  document.getElementById("report-title").innerText = "Relatório de Comissões";
+  setMsg("report-msg", "");
+  navigate("#reports");
+});
+
+// ===== AFILIADOS =====
+
+document.getElementById("menu-affiliates")?.addEventListener("click", () => {
+  closeMenu();
+  navigate("#affiliates");
+});
+
+async function loadAffiliateData() {
+  const loading = document.getElementById("affiliates-loading");
+  const content = document.getElementById("affiliates-content");
+
+  loading.classList.remove("hidden");
+  content.classList.add("hidden");
+  setMsg("affiliates-msg", "");
+
+  try {
+    const res = await apiFetch("/api/status?type=affiliates");
+    const data = await res.json();
+
+    if (!res.ok) {
+      setMsg("affiliates-msg", data?.response?.errorMessage || "Erro ao carregar dados de afiliado");
+      return;
+    }
+
+    document.getElementById("affiliate-link").value = buildAffiliateLink(data.referralCode);
+    document.getElementById("affiliate-commission-rate").innerText = `${data.commissionRate}%`;
+    document.getElementById("affiliate-volume").innerText = formatBRL(data.monthlyVolumeCents);
+    document.getElementById("affiliate-commission-value").innerText = formatBRL(data.monthlyCommissionCents);
+
+    renderReferrals(data.referrals);
+    content.classList.remove("hidden");
+  } catch (e) {
+    setMsg("affiliates-msg", e.message || "Sem conexão. Verifique sua internet.");
+  } finally {
+    loading.classList.add("hidden");
+  }
+}
+
+function renderReferrals(referrals) {
+  const list = document.getElementById("affiliates-list");
+  const empty = document.getElementById("affiliates-empty");
+
+  const { html, isEmpty } = renderReferralsHTML(referrals, formatBRL, formatDateShort);
+  list.innerHTML = html;
+  empty.classList.toggle("hidden", !isEmpty);
+}
+
+document.getElementById("btn-copy-affiliate")?.addEventListener("click", async () => {
+  const link = document.getElementById("affiliate-link").value;
+  const btn = document.getElementById("btn-copy-affiliate");
+  try {
+    await navigator.clipboard.writeText(link);
+    showToast("Link copiado!");
+    btn.innerText = "Copiado!";
+    setTimeout(() => { btn.innerText = "Copiar"; }, 2000);
+  } catch {
+    showToast("Não foi possível copiar.");
+  }
+});
+
+document.getElementById("affiliate-volume-info")?.addEventListener("click", () => {
+  document.getElementById("volume-info-modal")?.classList.remove("hidden");
+});
+
+document.getElementById("close-volume-info")?.addEventListener("click", () => {
+  document.getElementById("volume-info-modal")?.classList.add("hidden");
+});
+
 document.getElementById("btn-request-report")?.addEventListener("click", async () => {
   const dataInicio = document.getElementById("report-start").value;
   const dataFim = document.getElementById("report-end").value;
@@ -1297,7 +1375,10 @@ route("#login", () => {
   if (loginSenha) loginSenha.value = "";
 });
 
-route("#register", () => { setMsg("register-msg", ""); });
+route("#register", () => {
+  setMsg("register-msg", "");
+  captureReferralCode(window.location.hash);
+});
 route("#verify", () => {
   setMsg("verify-msg", "");
   document.getElementById("verify-code").value = "";
@@ -1306,6 +1387,10 @@ route("#verify", () => {
   if (grupoUsuario) {
     grupoUsuario.classList.toggle("hidden", hasUsuario);
   }
+});
+route("#affiliates", () => {
+  if (!isLoggedIn()) { navigate("#login"); return; }
+  loadAffiliateData();
 });
 route("#no-address", () => {});
 route("#faq", () => {});
@@ -1320,7 +1405,9 @@ route("#reports", () => {
   document.getElementById("report-start").value = thirtyDaysAgo.toISOString().split("T")[0];
 });
 
-route("#landing", () => {});
+route("#landing", () => {
+  captureReferralCode(window.location.hash);
+});
 
 // ===== Landing page toggle =====
 function setupLandingToggle() {

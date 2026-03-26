@@ -1564,6 +1564,114 @@ textarea:focus {
   color: #a0aec0;
 }
 
+/* ===== Affiliates ===== */
+
+.affiliate-link-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.affiliate-link-row input {
+  flex: 1;
+  font-size: 0.85rem;
+  min-width: 0;
+}
+
+.affiliate-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.affiliate-stat {
+  background: rgba(56, 227, 172, 0.06);
+  border: 1px solid rgba(56, 227, 172, 0.12);
+  border-radius: 12px;
+  padding: 14px;
+  text-align: center;
+}
+
+.affiliate-stat-wide {
+  grid-column: 1 / -1;
+}
+
+.affiliate-stat-label {
+  font-size: 0.75rem;
+  color: #5a6d82;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.affiliate-stat-value {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #38e3ac;
+  display: block;
+  margin-top: 4px;
+}
+
+.icon-btn-sm {
+  background: rgba(56, 227, 172, 0.15);
+  border: none;
+  color: #38e3ac;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: 11px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 1;
+}
+
+.affiliates-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.referral-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.referral-name {
+  font-weight: 500;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.referral-info {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+}
+
+.referral-volume {
+  font-weight: 600;
+  color: #38e3ac;
+  display: block;
+  font-size: 0.9rem;
+}
+
+.referral-date {
+  font-size: 0.75rem;
+  color: #5a6d82;
+}
+
 /* ===== Landing Page ===== */
 /* Visual identity: Space Grotesk (display), DM Sans (body), JetBrains Mono (mono) */
 /* Palette: #0a0f14 deep bg, #111921 card, #38e3ac accent, #8a9bb0 secondary text */
