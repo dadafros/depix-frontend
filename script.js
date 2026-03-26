@@ -91,8 +91,11 @@ document.getElementById("wallet-guide-link")?.addEventListener("click", (e) => {
   e.preventDefault();
   document.getElementById("wallet-guide-modal")?.classList.remove("hidden");
 });
-document.getElementById("close-wallet-guide")?.addEventListener("click", () => {
+document.getElementById("btn-wallet-guide-register")?.addEventListener("click", () => {
   document.getElementById("wallet-guide-modal")?.classList.add("hidden");
+  document.getElementById("new-addr-input").value = "";
+  setMsg("add-addr-msg", "");
+  document.getElementById("add-addr-modal")?.classList.remove("hidden");
 });
 
 // SideSwap link — opens correct store based on device
@@ -1007,9 +1010,7 @@ document.getElementById("menu-add-addr")?.addEventListener("click", () => {
 });
 
 document.getElementById("btn-add-first-address")?.addEventListener("click", () => {
-  document.getElementById("new-addr-input").value = "";
-  setMsg("add-addr-msg", "");
-  document.getElementById("add-addr-modal").classList.remove("hidden");
+  document.getElementById("wallet-guide-modal")?.classList.remove("hidden");
 });
 
 document.getElementById("close-add-addr")?.addEventListener("click", () => {
