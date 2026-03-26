@@ -1224,6 +1224,46 @@ function formatDateShort(isoStr) {
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", timeZone: "America/Sao_Paulo" });
 }
 
+function abbreviateHash(str, prefixLen = 8, suffixLen = 6) {
+  if (!str || str.length <= prefixLen + suffixLen + 3) return str || "";
+  return str.slice(0, prefixLen) + "…" + str.slice(-suffixLen);
+}
+
+function escapeHtml(str) {
+  if (!str) return "";
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function buildTxDetails(tx) {
+  const details = [];
+
+  if (tx.payer_name) {
+    details.push({ label: "Pagador", value: escapeHtml(tx.payer_name), full: tx.payer_name });
+  }
+  if (tx.chave_pix) {
+    details.push({ label: "Chave PIX", value: escapeHtml(abbreviateHash(tx.chave_pix, 10, 4)), full: tx.chave_pix, mono: true });
+  }
+  if (tx.customer_message) {
+    details.push({ label: "Msg", value: escapeHtml(tx.customer_message), full: tx.customer_message });
+  }
+  if (tx.endereco_liquid) {
+    details.push({ label: "Endereço", value: escapeHtml(abbreviateHash(tx.endereco_liquid)), full: tx.endereco_liquid, mono: true });
+  }
+  if (tx.blockchain_tx_id) {
+    details.push({ label: "TXID", value: escapeHtml(abbreviateHash(tx.blockchain_tx_id)), full: tx.blockchain_tx_id, mono: true });
+  }
+
+  if (details.length === 0) return "";
+
+  const copyIcon = '<svg class="copy-icon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  const items = details.map(d => {
+    const monoClass = d.mono ? " mono" : "";
+    return `<span class="transaction-detail copyable${monoClass}" title="Copiar: ${escapeHtml(d.full)}" data-copy="${escapeHtml(d.full)}"><span class="transaction-detail-label">${d.label}:</span> <span class="transaction-detail-value">${d.value}</span>${copyIcon}</span>`;
+  }).join("");
+
+  return `<div class="transaction-details">${items}</div>`;
+}
+
 let allTransactions = [];
 let filteredTransactions = [];
 let displayedCount = 0;
@@ -1282,6 +1322,7 @@ function applyFilters() {
   const status = document.getElementById("filter-status")?.value || "";
   const startDate = document.getElementById("filter-start-date")?.value || "";
   const endDate = document.getElementById("filter-end-date")?.value || "";
+  const search = (document.getElementById("filter-search")?.value || "").trim().toLowerCase();
 
   filteredTransactions = allTransactions.filter(tx => {
     if (type !== "all" && tx.tipo !== type) return false;
@@ -1293,6 +1334,14 @@ function applyFilters() {
     if (endDate) {
       const txDate = (tx.criado_em || "").slice(0, 10);
       if (txDate > endDate) return false;
+    }
+    if (search) {
+      const fields = [
+        tx.blockchain_tx_id, tx.payer_name, tx.customer_message,
+        tx.endereco_liquid, tx.chave_pix
+      ];
+      const match = fields.some(f => f && String(f).toLowerCase().includes(search));
+      if (!match) return false;
     }
     return true;
   });
@@ -1345,6 +1394,7 @@ function renderNextPage() {
         <span class="transaction-date">${formatDateShort(tx.criado_em)}</span>
       </div>
       <span class="transaction-status ${statusColor(st)}">${statusLabel}</span>
+      ${buildTxDetails(tx)}
     </div>`;
   }).join("");
 
@@ -1382,19 +1432,126 @@ document.getElementById("menu-transactions")?.addEventListener("click", () => {
   navigate("#transactions");
 });
 
-// Extrato: pill toggle filters
+// Extrato: pill toggle filters (type)
 document.querySelectorAll(".extrato-pill").forEach(btn => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".extrato-pill").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
     applyFilters();
+    updateFilterBadge();
   });
 });
 
+// Extrato: filter panel toggle
+document.getElementById("extrato-filter-toggle")?.addEventListener("click", () => {
+  const panel = document.getElementById("extrato-filter-panel");
+  const toggle = document.getElementById("extrato-filter-toggle");
+  const isOpen = !panel.classList.contains("hidden");
+  panel.classList.toggle("hidden", isOpen);
+  toggle.classList.toggle("open", !isOpen);
+});
+
+// Extrato: period preset logic
+function getDateFromPeriod(period) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const fmt = d => d.toISOString().slice(0, 10);
+  const todayStr = fmt(today);
+  if (period === "today") return { start: todayStr, end: todayStr };
+  if (period === "7d") { const d = new Date(today); d.setDate(d.getDate() - 6); return { start: fmt(d), end: todayStr }; }
+  if (period === "30d") { const d = new Date(today); d.setDate(d.getDate() - 29); return { start: fmt(d), end: todayStr }; }
+  if (period === "90d") { const d = new Date(today); d.setDate(d.getDate() - 89); return { start: fmt(d), end: todayStr }; }
+  return { start: "", end: "" };
+}
+
+document.querySelectorAll(".extrato-period-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".extrato-period-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    const period = btn.dataset.period;
+    const customRange = document.getElementById("extrato-custom-range");
+    const startInput = document.getElementById("filter-start-date");
+    const endInput = document.getElementById("filter-end-date");
+
+    if (period === "custom") {
+      customRange?.classList.remove("hidden");
+    } else {
+      customRange?.classList.add("hidden");
+      const { start, end } = getDateFromPeriod(period);
+      if (startInput) startInput.value = start;
+      if (endInput) endInput.value = end;
+    }
+    applyFilters();
+    updateFilterBadge();
+  });
+});
+
+// Extrato: update filter badge count
+function updateFilterBadge() {
+  const type = document.querySelector(".extrato-pill.active")?.dataset.filterType || "all";
+  const status = document.getElementById("filter-status")?.value || "";
+  const period = document.querySelector(".extrato-period-btn.active")?.dataset.period || "all";
+  const search = (document.getElementById("filter-search")?.value || "").trim();
+  const count = (type !== "all" ? 1 : 0) + (status ? 1 : 0) + (period !== "all" ? 1 : 0) + (search ? 1 : 0);
+  const badge = document.getElementById("extrato-filter-badge");
+  const toggle = document.getElementById("extrato-filter-toggle");
+  const clearBtn = document.getElementById("extrato-clear-filters");
+  if (badge) {
+    badge.textContent = count;
+    badge.classList.toggle("hidden", count === 0);
+  }
+  if (toggle) toggle.classList.toggle("active", count > 0);
+  if (clearBtn) clearBtn.classList.toggle("hidden", count === 0);
+}
+
+// Extrato: search input with debounce
+let searchTimeout = null;
+document.getElementById("filter-search")?.addEventListener("input", () => {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => { applyFilters(); updateFilterBadge(); }, 200);
+});
+
 // Extrato: auto-filter on change
-document.getElementById("filter-status")?.addEventListener("change", applyFilters);
-document.getElementById("filter-start-date")?.addEventListener("change", applyFilters);
-document.getElementById("filter-end-date")?.addEventListener("change", applyFilters);
+document.getElementById("filter-status")?.addEventListener("change", () => { applyFilters(); updateFilterBadge(); });
+document.getElementById("filter-start-date")?.addEventListener("change", () => { applyFilters(); updateFilterBadge(); });
+document.getElementById("filter-end-date")?.addEventListener("change", () => { applyFilters(); updateFilterBadge(); });
+
+// Extrato: copy detail value on click
+document.getElementById("transactions-list")?.addEventListener("click", (e) => {
+  const el = e.target.closest(".transaction-detail.copyable");
+  if (!el) return;
+  const text = el.dataset.copy;
+  if (text && navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => {
+      el.classList.add("copied");
+      showToast("Copiado!");
+      setTimeout(() => el.classList.remove("copied"), 1500);
+    });
+  }
+});
+
+// Extrato: clear filters
+document.getElementById("extrato-clear-filters")?.addEventListener("click", () => {
+  // Reset search
+  const searchInput = document.getElementById("filter-search");
+  if (searchInput) searchInput.value = "";
+  // Reset type
+  document.querySelectorAll(".extrato-pill").forEach(b => b.classList.remove("active"));
+  document.querySelector('.extrato-pill[data-filter-type="all"]')?.classList.add("active");
+  // Reset status
+  const status = document.getElementById("filter-status");
+  if (status) status.value = "";
+  // Reset period
+  document.querySelectorAll(".extrato-period-btn").forEach(b => b.classList.remove("active"));
+  document.querySelector('.extrato-period-btn[data-period="all"]')?.classList.add("active");
+  document.getElementById("extrato-custom-range")?.classList.add("hidden");
+  const startDate = document.getElementById("filter-start-date");
+  const endDate = document.getElementById("filter-end-date");
+  if (startDate) startDate.value = "";
+  if (endDate) endDate.value = "";
+  applyFilters();
+  updateFilterBadge();
+});
 
 // Extrato: load more (client-side pagination)
 document.getElementById("btn-load-more")?.addEventListener("click", renderNextPage);

@@ -1517,18 +1517,24 @@ textarea:focus {
 .transaction-info {
   flex: 1;
   min-width: 0;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center;
+  text-align: center;
 }
 
 .transaction-amount {
   font-weight: 600;
   font-size: 14px;
   color: #e8edf2;
+  white-space: nowrap;
 }
 
 .transaction-date {
   font-size: 11px;
   color: #8a9bb0;
   opacity: 0.7;
+  white-space: nowrap;
 }
 
 .transaction-status {
@@ -1570,10 +1576,156 @@ textarea:focus {
   color: #a0aec0;
 }
 
+/* Transaction item — layout with details */
+.transaction-item {
+  flex-wrap: wrap !important;
+}
+
+.transaction-details {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 8px;
+  margin-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.transaction-detail {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 3px 6px;
+  border-radius: 4px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.transaction-detail.copyable {
+  cursor: pointer;
+}
+
+.transaction-detail.copyable:hover {
+  background: rgba(56, 227, 172, 0.08);
+}
+
+.transaction-detail.copyable:active {
+  background: rgba(56, 227, 172, 0.15);
+}
+
+.transaction-detail.copyable.copied .transaction-detail-value {
+  color: #38e3ac;
+}
+
+.transaction-detail-label {
+  color: #5a6d82;
+  flex-shrink: 0;
+}
+
+.transaction-detail-value {
+  color: #8a9bb0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 0.15s;
+}
+
+
+.transaction-detail.mono .transaction-detail-value {
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+  font-size: 10px;
+}
+
+.transaction-detail.copyable:hover .transaction-detail-value {
+  color: #c0cdd8;
+}
+
+.copy-icon {
+  flex-shrink: 0;
+  color: #3a4a5c;
+  transition: color 0.15s;
+}
+
+.transaction-detail.copyable:hover .copy-icon {
+  color: #38e3ac;
+}
+
+.transaction-detail.copyable.copied .copy-icon {
+  color: #38e3ac;
+}
+
 /* ===== Extrato ===== */
 
 .extrato-filters {
   margin-bottom: 16px;
+}
+
+/* Search + filter toolbar */
+.extrato-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.extrato-search-row {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.extrato-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #5a6d82;
+  pointer-events: none;
+}
+
+.extrato-search-row input[type="text"] {
+  width: 100%;
+  padding: 10px 12px 10px 34px !important;
+  margin-bottom: 0 !important;
+  font-size: 13px;
+  height: 40px !important;
+  box-sizing: border-box;
+  background: #1a2535 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 8px !important;
+  color: #c0cdd8 !important;
+}
+
+.extrato-search-row input[type="text"]::placeholder {
+  color: #5a6d82;
+  opacity: 1;
+}
+
+.extrato-search-row input[type="text"]:focus {
+  border-color: rgba(56, 227, 172, 0.4) !important;
+  outline: none;
+}
+
+.extrato-search-hint {
+  display: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  margin-top: 4px;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: #5a6d82;
+  background: #1a2535;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  z-index: 1;
+}
+
+.extrato-search-row input[type="text"]:focus ~ .extrato-search-hint {
+  display: block;
 }
 
 .extrato-type-toggle {
@@ -1582,7 +1734,7 @@ textarea:focus {
   background: rgba(255, 255, 255, 0.06);
   border-radius: 10px;
   padding: 3px;
-  margin-bottom: 12px;
+  margin-bottom: 0;
   gap: 0;
 }
 
@@ -1607,20 +1759,97 @@ textarea:focus {
   color: #38e3ac;
 }
 
-.extrato-filter-row {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 8px;
+/* Filter toggle button */
+.extrato-filter-toggle {
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+  width: auto !important;
+  height: 40px !important;
+  padding: 0 14px !important;
+  margin: 0 !important;
+  flex-shrink: 0;
+  background: transparent !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 8px !important;
+  color: #5a6d82;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
 }
 
-.extrato-filter-row select,
-.extrato-filter-row input[type="date"] {
-  flex: 1;
-  padding: 10px 12px !important;
+.extrato-filter-toggle:hover {
+  color: #c0cdd8;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+.extrato-filter-toggle.active {
+  color: #38e3ac;
+  border-color: rgba(56, 227, 172, 0.3) !important;
+}
+
+.extrato-filter-chevron {
+  margin-left: auto;
+  transition: transform 0.2s;
+}
+
+.extrato-filter-toggle.open .extrato-filter-chevron {
+  transform: rotate(180deg);
+}
+
+.extrato-filter-badge {
+  background: #38e3ac;
+  color: #0b1a1a;
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 18px;
+  height: 18px;
+  line-height: 18px;
+  text-align: center;
+  border-radius: 9px;
+  padding: 0 5px;
+}
+
+/* Collapsible filter panel */
+.extrato-filter-panel {
+  margin-top: 10px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  animation: extrato-panel-in 0.15s ease-out;
+}
+
+@keyframes extrato-panel-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.extrato-filter-group {
+  margin-bottom: 12px;
+}
+
+.extrato-filter-group:last-of-type {
+  margin-bottom: 0;
+}
+
+.extrato-filter-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #5a6d82;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.extrato-filter-panel select {
+  width: 100%;
+  padding: 9px 32px 9px 12px !important;
   margin-bottom: 0 !important;
   font-size: 13px;
-  min-width: 0;
-  height: 40px !important;
+  height: 38px !important;
   box-sizing: border-box;
   -webkit-appearance: none !important;
   appearance: none !important;
@@ -1628,15 +1857,109 @@ textarea:focus {
   border: 1px solid rgba(255, 255, 255, 0.1) !important;
   border-radius: 8px !important;
   color: #c0cdd8 !important;
-  color-scheme: dark;
-}
-
-.extrato-filter-row select {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235a6d82' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") !important;
   background-repeat: no-repeat !important;
   background-position: right 12px center !important;
   background-color: #1a2535 !important;
-  padding-right: 32px !important;
+}
+
+.extrato-date-row {
+  display: flex;
+  gap: 8px;
+}
+
+.extrato-date-field {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  background: #1a2535;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.extrato-date-prefix {
+  padding: 0 0 0 12px;
+  font-size: 12px;
+  color: #5a6d82;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.extrato-date-field input[type="date"] {
+  flex: 1;
+  padding: 9px 10px 9px 6px !important;
+  margin-bottom: 0 !important;
+  font-size: 13px;
+  min-width: 0;
+  height: 38px !important;
+  box-sizing: border-box;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  background: transparent !important;
+  border: none !important;
+  color: #c0cdd8 !important;
+  color-scheme: dark;
+}
+
+/* Period preset buttons */
+.extrato-period-presets {
+  display: flex !important;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 0;
+}
+
+.extrato-period-btn {
+  flex: 0 0 auto !important;
+  width: auto !important;
+  padding: 6px 12px !important;
+  margin: 0 !important;
+  margin-bottom: 0 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 16px !important;
+  background: transparent !important;
+  color: #5a6d82;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.extrato-period-btn:hover {
+  color: #c0cdd8;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+.extrato-period-btn.active {
+  background: rgba(56, 227, 172, 0.15) !important;
+  color: #38e3ac;
+  border-color: rgba(56, 227, 172, 0.3) !important;
+}
+
+.extrato-date-row {
+  margin-top: 8px;
+}
+
+/* Clear filters button */
+.extrato-clear-filters {
+  width: 100% !important;
+  margin-top: 12px !important;
+  margin-bottom: 0 !important;
+  padding: 8px !important;
+  background: transparent !important;
+  border: 1px solid rgba(255, 107, 107, 0.25) !important;
+  border-radius: 8px !important;
+  color: #ff6b6b !important;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.extrato-clear-filters:hover {
+  background: rgba(255, 107, 107, 0.08) !important;
+  border-color: rgba(255, 107, 107, 0.4) !important;
 }
 
 .extrato-count {
