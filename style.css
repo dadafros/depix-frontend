@@ -419,7 +419,7 @@ button:focus-visible {
   height: 22px;
   background: #3B82F6;
   border-radius: 50%;
-  vertical-align: -5px;
+  vertical-align: middle;
 }
 
 .converter-loading {
