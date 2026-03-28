@@ -2706,6 +2706,16 @@ textarea:focus {
   letter-spacing: 0.02em;
 }
 
+.landing-footer-link {
+  color: #38e3ac;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.landing-footer-link:hover {
+  text-decoration: underline;
+}
+
 /* PWA: hide landing page in standalone mode */
 @media (display-mode: standalone) {
   section[data-view="landing"] {
