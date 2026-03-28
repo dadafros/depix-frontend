@@ -379,7 +379,9 @@ button:focus-visible {
 .converter-container {
   display: flex;
   justify-content: center;
-  width: 100%;
+  width: calc(100% + 40px);
+  margin-left: -20px;
+  margin-right: -20px;
 }
 
 .brswap-iframe-wrapper {

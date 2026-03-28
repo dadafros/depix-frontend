@@ -658,7 +658,7 @@ function loadBrswapWidget() {
   const iframe = document.createElement("iframe");
   iframe.src = src;
   iframe.width = "420";
-  iframe.height = "1050";
+  iframe.height = "3000";
   iframe.frameBorder = "0";
   iframe.setAttribute("scrolling", "yes");
   iframe.setAttribute("allow", "clipboard-write");
@@ -748,13 +748,16 @@ document.getElementById("valorModeTrack")?.addEventListener("click", () => {
   valorModeIsPix = !valorModeIsPix;
   const track = document.getElementById("valorModeTrack");
   const text = document.getElementById("valorModeText");
+  const valorInput = document.getElementById("valorSaque");
 
   if (valorModeIsPix) {
     track.classList.add("active");
     text.innerText = "Valor que você recebe";
+    if (valorInput) valorInput.placeholder = "R$ 0,00";
   } else {
     track.classList.remove("active");
     text.innerText = "Valor que você envia";
+    if (valorInput) valorInput.placeholder = "0,00 DePix";
   }
 });
 
