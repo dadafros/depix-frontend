@@ -3,7 +3,9 @@
 import { getToken, getRefreshToken, setAuth, clearAuth } from "./auth.js";
 import { navigate } from "./router.js";
 
-const API_BASE = "https://depix-backend.vercel.app";
+const API_BASE = (typeof window !== "undefined" && window.location.hostname === "localhost" && window.location.port === "2323")
+  ? ""
+  : "https://depix-backend.vercel.app";
 
 /**
  * Authenticated fetch wrapper.
