@@ -1617,10 +1617,7 @@ function abbreviateHash(str, prefixLen = 8, suffixLen = 6) {
   return str.slice(0, prefixLen) + "…" + str.slice(-suffixLen);
 }
 
-function escapeHtml(str) {
-  if (!str) return "";
-  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
+// escapeHtml imported from utils.js
 
 function buildTxDetails(tx) {
   const details = [];
