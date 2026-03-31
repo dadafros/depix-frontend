@@ -134,6 +134,18 @@ Requires Node.js >= 22.
 - **Success messages**: Green (#68d391)
 - **Toast notifications**: Bottom center, auto-dismiss after 2s
 
+## Local Dev Environment
+
+A Docker-based dev environment exists at `../depix-dev/`. Use it to test changes locally before pushing to production.
+
+```bash
+cd ../depix-dev && docker compose up -d
+# Frontend + API: http://localhost:2323
+# Blog: http://localhost:2324
+```
+
+Frontend changes reflect immediately (volume mount). See `../depix-dev/CLAUDE.md` for full instructions.
+
 ## Git
 
 - Remote: `git@github-personal:dadafros/depix.git`
