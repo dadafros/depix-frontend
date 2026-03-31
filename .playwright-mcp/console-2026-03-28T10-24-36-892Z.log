@@ -1,6 +1,0 @@
-[    5819ms] TypeError: Cannot read properties of null (reading 'style')
-    at changeText (https://brswap.me/index.php?widget=1:812:33)
-[    9818ms] TypeError: Cannot read properties of null (reading 'style')
-    at changeText (https://brswap.me/index.php?widget=1:812:33)
-[   13818ms] TypeError: Cannot read properties of null (reading 'style')
-    at changeText (https://brswap.me/index.php?widget=1:812:33)

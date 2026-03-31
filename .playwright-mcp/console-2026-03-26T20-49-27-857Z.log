@@ -1,2 +1,0 @@
-[    1127ms] [ERROR] Access to fetch at 'https://secure.adnxs.com/getuidp?callback=func' from origin 'https://www.kast.xyz' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ https://www.kast.xyz/download?source_caller=api_v2&shortlink=TWUQMOLG&af_sub1=0195cfe2-dde7-76cf-8500-c4c78f3b727e&referral-code=TWUQMOLG&pid=referral&af_channel=app_referral:0
-[    1128ms] [ERROR] Failed to load resource: net::ERR_FAILED @ https://secure.adnxs.com/getuidp?callback=func:0

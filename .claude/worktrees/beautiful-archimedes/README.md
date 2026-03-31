@@ -1,2 +1,0 @@
-# depix
-generating depix deposits
