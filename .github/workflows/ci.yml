@@ -7,8 +7,26 @@ on:
     branches: [main]
 
 jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Run ESLint
+        run: npx --yes eslint@9 .
+
   test:
     name: Test
+    needs: lint
     runs-on: ubuntu-latest
 
     steps:
