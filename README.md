@@ -90,6 +90,7 @@ No build step required. Open `index.html` in a browser or deploy to any static h
 ## Testing
 
 ```bash
+npx --yes eslint@9 .
 npm test
 ```
 

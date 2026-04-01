@@ -115,6 +115,7 @@ Each view is a `<section data-view="name">` in index.html, shown/hidden by the r
 ## Commands
 
 ```bash
+npx --yes eslint@9 .               # Run lint checks
 npm test                           # Run all tests (vitest)
 npm run test:watch                 # Watch mode
 npm run test:coverage              # Tests with coverage report
@@ -152,7 +153,7 @@ Frontend changes reflect immediately (volume mount). See `../depix-dev/CLAUDE.md
 - SSH key alias `github-personal` maps to `~/.ssh/id_ed25519_outlook`
 - Commit as: `dadafros <davi_bf@outlook.com>`
 - Branch naming: `feat/*` for features, `claude/*` for Claude Code branches
-- CI: GitHub Actions runs `npm test` on push to `main`/`feat/*` and PRs to `main`
+- CI: GitHub Actions runs ESLint + `npm test` on push to `main`/`feat/*` and PRs to `main`
 - Deploy: GitHub Pages from main branch
 
 ## Service Worker Cache
