@@ -1,5 +1,4 @@
 User-agent: *
 Allow: /
-Disallow: /tests/
 
 Sitemap: https://depixapp.com/sitemap.xml
