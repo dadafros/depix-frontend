@@ -153,7 +153,7 @@ Frontend changes reflect immediately (volume mount). See `../depix-dev/CLAUDE.md
 - SSH key alias `github-personal` maps to `~/.ssh/id_ed25519_outlook`
 - Commit as: `dadafros <davi_bf@outlook.com>`
 - Branch naming: `feat/*` for features, `claude/*` for Claude Code branches
-- CI: GitHub Actions runs ESLint + `npm test` on push to `main`/`feat/*` and PRs to `main`
+- CI: GitHub Actions runs ESLint + `npm test` on push to `main` and on PRs to `main`
 - Deploy: GitHub Pages from main branch
 
 ## Service Worker Cache
@@ -165,5 +165,7 @@ The service worker caches all static files on install. On activate, it deletes a
 ## Workflow Rules
 
 - **Always start from latest main**: Before starting any task, pull the latest `main` from remote (`git pull origin main`) to ensure you're working with the most recent code.
-- **Commit directly to main**: When finished, commit and push directly to the `main` branch — do not create separate branches unless explicitly asked.
-- **Sync before branching**: If the user requests work on a separate branch with multiple commits, always sync with `main` first (`git pull origin main`) to incorporate any parallel work before starting.
+- **Default for simple or urgent fixes**: Small fixes, hotfixes, and urgent production issues should be committed and pushed directly to `main`.
+- **Use PRs for large or complex work**: Large refactors, high-risk changes, or substantial multi-file work should go on a separate branch and be opened as a PR for review.
+- **User instruction wins**: If the user explicitly asks for a different flow, follow the user's instruction.
+- **Sync before branching**: If the work should go through a PR, always sync with `main` first (`git pull origin main`) before creating or updating the branch.
