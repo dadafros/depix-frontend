@@ -37,12 +37,6 @@ function onHashChange() {
     s.classList.add("hidden");
   });
 
-  // Show/hide landing nav (lives outside section for fixed positioning)
-  const landingNav = document.getElementById("landing-nav");
-  if (landingNav) {
-    landingNav.classList.toggle("hidden", viewName !== "landing");
-  }
-
   // Show target view
   const target = document.querySelector(`section[data-view="${viewName}"]`);
   if (target) {

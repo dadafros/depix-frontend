@@ -2284,7 +2284,7 @@ textarea:focus {
   min-height: 100dvh;
   padding: 0;
   background: #0a0f14;
-  overflow-x: hidden;
+  overflow-x: clip;
   color: #e8edf2;
   font-family: 'DM Sans', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
