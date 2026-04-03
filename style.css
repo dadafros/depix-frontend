@@ -2296,8 +2296,10 @@ textarea:focus {
 
 /* Nav */
 .landing-nav {
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 100;
   background: rgba(10, 15, 20, 0.92);
   backdrop-filter: blur(12px);
@@ -2331,6 +2333,25 @@ textarea:focus {
   flex-shrink: 0;
 }
 
+.landing-nav-right {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.landing-nav-link {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.65);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.landing-nav-link:hover {
+  color: #fff;
+}
+
 .landing-nav-cta {
   display: inline-flex;
   align-items: center;
@@ -2354,7 +2375,7 @@ textarea:focus {
 /* Hero */
 .landing-hero {
   text-align: center;
-  padding: 72px 20px 56px;
+  padding: 128px 20px 56px;
   width: 100%;
   max-width: 700px;
   margin: 0 auto;
