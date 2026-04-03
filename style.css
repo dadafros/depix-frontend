@@ -2354,7 +2354,7 @@ textarea:focus {
 /* Hero */
 .landing-hero {
   text-align: center;
-  padding: 64px 20px 48px;
+  padding: 72px 20px 56px;
   width: 100%;
   max-width: 700px;
   margin: 0 auto;
@@ -2448,15 +2448,16 @@ textarea:focus {
 
 .landing-section {
   max-width: 960px;
-  margin: 0 auto 56px;
-  padding: 0 20px;
+  margin: 0 auto;
+  padding: 64px 20px;
+  border-top: 1px solid rgba(56, 227, 172, 0.06);
 }
 
 .landing-section h2 {
   font-family: 'Space Grotesk', system-ui, sans-serif;
   font-size: 1.6rem;
   font-weight: 700;
-  margin: 0 0 28px;
+  margin: 0 0 32px;
   text-align: center;
   letter-spacing: -0.01em;
   color: #e8edf2;
@@ -2703,7 +2704,7 @@ textarea:focus {
 .landing-affiliates-subtitle {
   color: #8a9bb0;
   font-size: 15px;
-  margin-bottom: 28px;
+  margin-bottom: 32px;
   max-width: 480px;
   margin-left: auto;
   margin-right: auto;
@@ -2711,16 +2712,47 @@ textarea:focus {
 
 .landing-affiliates-section .landing-benefits {
   text-align: left;
-  margin-bottom: 28px;
+  margin-bottom: 32px;
 }
 
 .landing-affiliates-section .landing-cta-btn {
   display: inline-block;
 }
 
+/* Blog section */
+.landing-blog-section {
+  text-align: center;
+}
+
+.landing-blog-icon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 18px;
+  background: rgba(56, 227, 172, 0.1);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #38e3ac;
+}
+
+.landing-blog-icon svg {
+  width: 26px;
+  height: 26px;
+}
+
+.landing-blog-section p {
+  color: #8a9bb0;
+  font-size: 1rem;
+  margin: 0 0 28px;
+  max-width: 480px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .landing-final-cta {
   text-align: center;
-  padding: 52px 20px;
+  padding: 72px 20px;
   max-width: none;
   width: 100vw;
   margin-left: calc(50% - 50vw);
@@ -2730,19 +2762,19 @@ textarea:focus {
 }
 
 .landing-final-cta h2 {
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .landing-final-cta p {
   color: #8a9bb0;
   font-size: 1rem;
-  margin: 0 0 28px;
+  margin: 0 0 32px;
 }
 
 /* Footer */
 .landing-footer {
   text-align: center;
-  padding: 36px 20px;
+  padding: 48px 20px;
   max-width: 960px;
   margin: 0 auto;
 }
@@ -2792,7 +2824,7 @@ textarea:focus {
 /* Landing responsive */
 @media (min-width: 768px) {
   .landing-hero {
-    padding: 88px 20px 60px;
+    padding: 96px 20px 72px;
   }
 
   .landing-hero-title {
@@ -2803,8 +2835,21 @@ textarea:focus {
     font-size: 1.15rem;
   }
 
+  .landing-section {
+    padding: 80px 20px;
+  }
+
   .landing-section h2 {
     font-size: 1.8rem;
+    margin-bottom: 40px;
+  }
+
+  .landing-final-cta {
+    padding: 88px 20px;
+  }
+
+  .landing-footer {
+    padding: 56px 20px;
   }
 }
 

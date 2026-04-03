@@ -1604,10 +1604,22 @@ function statusColor(status) {
   return "status-gray";
 }
 
+// Parse database timestamp (stored as UTC without Z suffix) into a Date
+function parseUTC(isoStr) {
+  const s = String(isoStr).trim();
+  if (s.includes("Z") || s.includes("+")) return new Date(s);
+  return new Date(s.replace(" ", "T") + "Z");
+}
+
 function formatDateShort(isoStr) {
   if (!isoStr) return "";
-  const d = new Date(isoStr);
-  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", timeZone: "America/Sao_Paulo" });
+  return parseUTC(isoStr).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", timeZone: "America/Sao_Paulo" });
+}
+
+// Convert UTC ISO string to YYYY-MM-DD in São Paulo timezone
+function toBRDate(isoStr) {
+  if (!isoStr) return "";
+  return parseUTC(isoStr).toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
 }
 
 function abbreviateHash(str, prefixLen = 8, suffixLen = 6) {
@@ -1710,13 +1722,10 @@ function applyFilters() {
   filteredTransactions = allTransactions.filter(tx => {
     if (type !== "all" && tx.tipo !== type) return false;
     if (status && tx.status !== status) return false;
-    if (startDate) {
-      const txDate = (tx.criado_em || "").slice(0, 10);
-      if (txDate < startDate) return false;
-    }
-    if (endDate) {
-      const txDate = (tx.criado_em || "").slice(0, 10);
-      if (txDate > endDate) return false;
+    if (startDate || endDate) {
+      const txDate = toBRDate(tx.criado_em);
+      if (startDate && txDate < startDate) return false;
+      if (endDate && txDate > endDate) return false;
     }
     if (search) {
       const fields = [
@@ -1836,14 +1845,15 @@ document.getElementById("extrato-filter-toggle")?.addEventListener("click", () =
 
 // Extrato: period preset logic
 function getDateFromPeriod(period) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const fmt = d => d.toISOString().slice(0, 10);
-  const todayStr = fmt(today);
+  const fmt = d => d.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+  const todayStr = fmt(new Date());
   if (period === "today") return { start: todayStr, end: todayStr };
-  if (period === "7d") { const d = new Date(today); d.setDate(d.getDate() - 6); return { start: fmt(d), end: todayStr }; }
-  if (period === "30d") { const d = new Date(today); d.setDate(d.getDate() - 29); return { start: fmt(d), end: todayStr }; }
-  if (period === "90d") { const d = new Date(today); d.setDate(d.getDate() - 89); return { start: fmt(d), end: todayStr }; }
+  const offsets = { "7d": 6, "30d": 29, "90d": 89 };
+  if (offsets[period]) {
+    const d = new Date();
+    d.setDate(d.getDate() - offsets[period]);
+    return { start: fmt(d), end: todayStr };
+  }
   return { start: "", end: "" };
 }
 
@@ -2024,10 +2034,11 @@ route("#forgot-password", () => { setMsg("forgot-msg", ""); });
 route("#reset-password", () => { setMsg("reset-msg", ""); });
 
 route("#reports", () => {
+  const fmt = d => d.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000);
-  document.getElementById("report-end").value = now.toISOString().split("T")[0];
-  document.getElementById("report-start").value = thirtyDaysAgo.toISOString().split("T")[0];
+  document.getElementById("report-end").value = fmt(now);
+  document.getElementById("report-start").value = fmt(thirtyDaysAgo);
 });
 
 route("#landing", () => {
