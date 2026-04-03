@@ -2339,7 +2339,8 @@ textarea:focus {
   gap: 1.25rem;
 }
 
-.landing-nav-link {
+.landing-nav a.landing-nav-link,
+.landing-nav a.landing-nav-link:visited {
   font-family: 'Space Grotesk', system-ui, sans-serif;
   font-size: 0.9rem;
   font-weight: 500;
@@ -2348,7 +2349,7 @@ textarea:focus {
   transition: color 0.15s;
 }
 
-.landing-nav-link:hover {
+.landing-nav a.landing-nav-link:hover {
   color: #fff;
 }
 

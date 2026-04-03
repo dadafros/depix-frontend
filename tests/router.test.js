@@ -33,7 +33,8 @@ Object.defineProperty(global, "document", {
       const match = selector.match(/section\[data-view="(\w+)"\]/);
       if (match) return sections[match[1]] || null;
       return null;
-    }
+    },
+    getElementById: () => null
   },
   writable: true
 });
