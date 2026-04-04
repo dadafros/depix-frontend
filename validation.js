@@ -431,7 +431,7 @@ export function validatePixKey(key, disambigType) {
   }
 
   // 4. Strip formatting for numeric/alphanumeric detection
-  const stripped = trimmed.replace(/[.\-/]/g, "");
+  const stripped = trimmed.replace(/[.\-/\s]/g, "");
   const hasLetters = /[a-zA-Z]/.test(stripped);
   const isAlphanumeric = /^[0-9a-zA-Z]+$/.test(stripped);
 
@@ -567,4 +567,35 @@ export function validatePixKey(key, disambigType) {
   }
 
   return { ...empty, error: "Chave PIX inválida. Use CPF, CNPJ, e-mail, telefone ou chave aleatória." };
+}
+
+/**
+ * Prepare a PIX key for sending to the API.
+ * Handles stripping formatting for CPF/CNPJ, adding +55 for phones,
+ * and preserving email/UUID characters that would be destroyed by naive stripping.
+ * @param {string} key - The PIX key as entered by the user (possibly formatted)
+ * @param {string} [disambigType] - "cpf" or "phone" when user chose via pills
+ * @returns {string|null} The API-ready key, or null if invalid
+ */
+export function preparePixKeyForApi(key, disambigType) {
+  const result = validatePixKey(key, disambigType);
+  if (!result.valid) return null;
+
+  if (result.type === "email") {
+    return result.formatted;
+  }
+
+  if (result.type === "random") {
+    return result.formatted;
+  }
+
+  if (result.type === "phone") {
+    // Extract digits and ensure +55 prefix
+    const digits = key.replace(/\D/g, "");
+    const local = digits.startsWith("55") && digits.length > 11 ? digits.slice(2) : digits;
+    return "+55" + local;
+  }
+
+  // CPF, CNPJ: strip formatting, return raw alphanumeric
+  return key.replace(/[.\-/\s()+]/g, "");
 }

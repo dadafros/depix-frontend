@@ -9,7 +9,7 @@ import {
   abbreviateAddress, hasAddresses
 } from "./addresses.js";
 import { toCents, formatBRL, formatDePix, escapeHtml } from "./utils.js";
-import { validateLiquidAddress, validatePhone, validatePixKey, validateCPF, formatPixKey } from "./validation.js";
+import { validateLiquidAddress, validatePhone, validatePixKey, validateCPF, formatPixKey, preparePixKeyForApi } from "./validation.js";
 import { showToast, setMsg, goToAppropriateScreen as _goToAppropriateScreen } from "./script-helpers.js";
 import { captureReferralCode, buildRegistrationBody, clearReferralCode, buildAffiliateLink, renderReferralsHTML, generateFingerprint } from "./affiliates.js";
 import { renderBrandedQr } from "./qr.js";
@@ -1000,7 +1000,6 @@ document.getElementById("btnSacar")?.addEventListener("click", async () => {
   }
 
   // Validate PIX key
-  const pixRaw = stripPixFormatting(pixKeyInput.value);
   const pixResult = validatePixKey(pixKeyInput.value.trim(), pixKeyDisambigChoice);
 
   if (pixResult.type === "ambiguous") {
@@ -1024,13 +1023,8 @@ document.getElementById("btnSacar")?.addEventListener("click", async () => {
     return;
   }
 
-  // Determine the raw PIX key to send to API (no formatting, phone with +55)
-  let pixKeyForApi = pixRaw;
-  if (pixResult.type === "phone") {
-    const d = pixRaw.replace(/\D/g, "");
-    const local = d.startsWith("55") && d.length > 11 ? d.slice(2) : d;
-    pixKeyForApi = "+55" + local;
-  }
+  // Determine the raw PIX key to send to API
+  const pixKeyForApi = preparePixKeyForApi(pixKeyInput.value.trim(), pixKeyDisambigChoice);
 
   // Save PIX key for convenience
   localStorage.setItem("depix-pixkey", pixKeyInput.value.trim());

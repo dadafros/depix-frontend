@@ -9,6 +9,7 @@ import {
   validateRandomKey,
   validatePixKey,
   formatPixKey,
+  preparePixKeyForApi,
 } from "../validation.js";
 
 describe("validateLiquidAddress", () => {
@@ -570,6 +571,29 @@ describe("validatePixKey", () => {
     });
   });
 
+  // --- Phone formatted with spaces (as UI disambiguation applies) ---
+  describe("phone formatted with spaces (no + prefix)", () => {
+    it("should accept 'DDD XXXXX-XXXX' with phone disambig", () => {
+      const result = validatePixKey("31 99999-9999", "phone");
+      expect(result.valid).toBe(true);
+      expect(result.type).toBe("phone");
+    });
+
+    it("should accept 'DDD XXXX-XXXX' as landline", () => {
+      const result = validatePixKey("31 3200-0068");
+      expect(result.valid).toBe(true);
+      expect(result.type).toBe("phone");
+    });
+
+    it("should accept CPF formatted with spaces and dots", () => {
+      // Spaces should be stripped, leaving 11 digits
+      const result = validatePixKey("123 456 789 09");
+      // After stripping spaces: "12345678909" (11 digits, valid CPF)
+      expect(result.valid).toBe(true);
+      expect(result.type).toBe("cpf");
+    });
+  });
+
   // --- Edge cases ---
   describe("edge cases", () => {
     it("should reject empty input", () => {
@@ -757,5 +781,154 @@ describe("validatePixKey edge cases (additional)", () => {
     // If CPF invalid but phone valid → phone
     expect(result.type).toBe("phone");
     expect(result.valid).toBe(true);
+  });
+});
+
+// ===== preparePixKeyForApi =====
+
+describe("preparePixKeyForApi", () => {
+  describe("email keys", () => {
+    it("should preserve dots in email domain", () => {
+      expect(preparePixKeyForApi("user@example.com")).toBe("user@example.com");
+    });
+
+    it("should preserve dots in complex email", () => {
+      expect(preparePixKeyForApi("nome.sobrenome@dominio.com.br")).toBe("nome.sobrenome@dominio.com.br");
+    });
+
+    it("should lowercase email", () => {
+      expect(preparePixKeyForApi("User@Example.COM")).toBe("user@example.com");
+    });
+
+    it("should preserve hyphens in email domain", () => {
+      expect(preparePixKeyForApi("user@my-domain.com")).toBe("user@my-domain.com");
+    });
+
+    it("should preserve + in email local part", () => {
+      expect(preparePixKeyForApi("user+tag@gmail.com")).toBe("user+tag@gmail.com");
+    });
+  });
+
+  describe("random/UUID keys", () => {
+    it("should preserve hyphens in UUID", () => {
+      expect(preparePixKeyForApi("dbbf965d-677c-49ff-b9da-5131da1505f3")).toBe("dbbf965d-677c-49ff-b9da-5131da1505f3");
+    });
+
+    it("should lowercase UUID", () => {
+      expect(preparePixKeyForApi("550E8400-E29B-41D4-A716-446655440000")).toBe("550e8400-e29b-41d4-a716-446655440000");
+    });
+  });
+
+  describe("phone keys", () => {
+    // --- Com DDD, sem código do país ---
+    it("should add +55 to 11-digit mobile (DDD + 9 + number)", () => {
+      expect(preparePixKeyForApi("31999999999", "phone")).toBe("+5531999999999");
+    });
+
+    it("should add +55 to 10-digit landline (DDD + number)", () => {
+      expect(preparePixKeyForApi("3132000068")).toBe("+553132000068");
+    });
+
+    it("should add +55 to 11-digit mobile without disambig (auto-detected as phone)", () => {
+      // 11900000000: invalid CPF, 3rd digit=9 → auto-detects as phone
+      expect(preparePixKeyForApi("11900000000")).toBe("+5511900000000");
+    });
+
+    // --- Sem DDD (8 ou 9 dígitos) → deve ser inválido ---
+    it("should return null for 8 digits (missing DDD)", () => {
+      expect(preparePixKeyForApi("32000068")).toBeNull();
+    });
+
+    it("should return null for 9 digits (missing DDD)", () => {
+      expect(preparePixKeyForApi("999999999")).toBeNull();
+    });
+
+    // --- Com 55, sem + ---
+    it("should handle 12-digit with 55 prefix (landline)", () => {
+      expect(preparePixKeyForApi("553132000068")).toBe("+553132000068");
+    });
+
+    it("should handle 13-digit with 55 prefix (mobile)", () => {
+      expect(preparePixKeyForApi("5531999999999")).toBe("+5531999999999");
+    });
+
+    // --- Com +55 ---
+    it("should normalize +55 with spaces and dashes", () => {
+      expect(preparePixKeyForApi("+55 31 99999-9999")).toBe("+5531999999999");
+    });
+
+    it("should normalize +55 compact (no spaces)", () => {
+      expect(preparePixKeyForApi("+5531999999999")).toBe("+5531999999999");
+    });
+
+    it("should normalize +55 landline with spaces", () => {
+      expect(preparePixKeyForApi("+55 31 3200-0068")).toBe("+553132000068");
+    });
+
+    it("should normalize +55 with parentheses around DDD", () => {
+      expect(preparePixKeyForApi("+55 (31) 99999-9999")).toBe("+5531999999999");
+    });
+
+    // --- Com +, sem 55 → deve rejeitar ---
+    it("should return null for +49 (non-Brazilian)", () => {
+      expect(preparePixKeyForApi("+4911999999999")).toBeNull();
+    });
+
+    it("should return null for +1 (US)", () => {
+      expect(preparePixKeyForApi("+15551234567")).toBeNull();
+    });
+
+    // --- Formatado pelo real-time formatter do input ---
+    it("should handle phone formatted as 'DDD XXXXX-XXXX' (no +55)", () => {
+      // This is how the UI formats a disambiguated phone
+      expect(preparePixKeyForApi("31 99999-9999", "phone")).toBe("+5531999999999");
+    });
+
+    it("should handle phone formatted as 'DDD XXXX-XXXX' (landline, no +55)", () => {
+      expect(preparePixKeyForApi("31 3200-0068")).toBe("+553132000068");
+    });
+
+    // --- 10 dígitos com 3o dígito = 9 → inválido (celular incompleto) ---
+    it("should return null for 10 digits where 3rd digit is 9 (incomplete mobile)", () => {
+      expect(preparePixKeyForApi("3192000068")).toBeNull();
+    });
+  });
+
+  describe("CPF keys", () => {
+    it("should strip formatting from CPF", () => {
+      expect(preparePixKeyForApi("123.456.789-09")).toBe("12345678909");
+    });
+
+    it("should pass through unformatted CPF", () => {
+      expect(preparePixKeyForApi("12345678909")).toBe("12345678909");
+    });
+
+    it("should strip formatting from CPF with disambig", () => {
+      expect(preparePixKeyForApi("119.111.111-32", "cpf")).toBe("11911111132");
+    });
+  });
+
+  describe("CNPJ keys", () => {
+    it("should strip formatting from CNPJ", () => {
+      expect(preparePixKeyForApi("11.222.333/0001-81")).toBe("11222333000181");
+    });
+
+    it("should pass through unformatted CNPJ", () => {
+      expect(preparePixKeyForApi("11222333000181")).toBe("11222333000181");
+    });
+
+    it("should handle alphanumeric CNPJ with formatting", () => {
+      expect(preparePixKeyForApi("12.ABC.345/01DE-45")).toBe("12ABC34501DE45");
+    });
+  });
+
+  describe("invalid keys", () => {
+    it("should return null for invalid input", () => {
+      expect(preparePixKeyForApi("invalid")).toBeNull();
+    });
+
+    it("should return null for empty input", () => {
+      expect(preparePixKeyForApi("")).toBeNull();
+    });
   });
 });
