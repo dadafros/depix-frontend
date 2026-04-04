@@ -708,6 +708,14 @@
         <label for="pixKey">Chave PIX</label>
         <input id="pixKey" placeholder="CPF, e-mail, celular ou chave aleatória" />
 
+        <div id="pixKeyDisambig" class="pix-disambig hidden">
+          <span class="pix-disambig-label">Essa chave é um:</span>
+          <div class="pix-disambig-pills">
+            <button type="button" class="pix-disambig-pill" data-type="cpf">CPF</button>
+            <button type="button" class="pix-disambig-pill" data-type="phone">Telefone</button>
+          </div>
+        </div>
+
         <div class="valor-mode-switch">
           <label class="switch-label small-switch">
             <span class="switch-track" id="valorModeTrack">
@@ -721,7 +729,7 @@
           <strong>Você recebe:</strong> valor que chega na sua conta bancária (já descontadas as taxas).
         </p>
 
-        <button id="btnSacar">Solicitar transferência</button>
+        <button id="btnSacar">Solicitar saque</button>
       </div>
 
       <div id="loadingSaque" class="hidden"><span class="spinner"></span> Processando transferência…</div>

@@ -9,7 +9,7 @@ import {
   abbreviateAddress, hasAddresses
 } from "./addresses.js";
 import { toCents, formatBRL, formatDePix, escapeHtml } from "./utils.js";
-import { validateLiquidAddress, validatePhone } from "./validation.js";
+import { validateLiquidAddress, validatePhone, validatePixKey, validateCPF, formatPixKey } from "./validation.js";
 import { showToast, setMsg, goToAppropriateScreen as _goToAppropriateScreen } from "./script-helpers.js";
 import { captureReferralCode, buildRegistrationBody, clearReferralCode, buildAffiliateLink, renderReferralsHTML, generateFingerprint } from "./affiliates.js";
 import { renderBrandedQr } from "./qr.js";
@@ -839,6 +839,149 @@ if (savedPixKey) {
   if (pixKeyEl) pixKeyEl.value = savedPixKey;
 }
 
+// PIX key input: real-time formatting + disambiguation
+let pixKeyDisambigChoice = null;
+let pixKeyLastRaw = "";
+
+function stripPixFormatting(val) {
+  return val.replace(/[.\-/\s()+]/g, "");
+}
+
+document.getElementById("pixKey")?.addEventListener("input", () => {
+  const input = document.getElementById("pixKey");
+  const disambig = document.getElementById("pixKeyDisambig");
+  const btnSacar = document.getElementById("btnSacar");
+  if (!input || !disambig) return;
+
+  // Get raw digits/chars (strip all formatting)
+  const raw = stripPixFormatting(input.value);
+
+  // Reset disambiguation if raw value changed
+  if (raw !== pixKeyLastRaw) {
+    pixKeyDisambigChoice = null;
+    disambig.querySelectorAll(".pix-disambig-pill").forEach((p) => p.classList.remove("active"));
+  }
+  pixKeyLastRaw = raw;
+
+  const trimmed = input.value.trim();
+  const digits = raw.replace(/\D/g, "");
+  const isAllDigits = digits.length === raw.length;
+  const hasAt = trimmed.includes("@");
+  const startsPlus = trimmed.startsWith("+");
+  const isUuid = /^[0-9a-fA-F]{8}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{12}$/.test(trimmed);
+
+  // Determine if we should format in real-time
+  let detectedType = null;
+
+  if (startsPlus) {
+    // Phone with + prefix
+    if (digits.startsWith("55") && digits.length >= 12) detectedType = "phone";
+  } else if (hasAt || isUuid) {
+    // No formatting for email/UUID
+    detectedType = null;
+  } else if (isAllDigits) {
+    if (digits.length === 10 && digits[2] !== "9") detectedType = "phone";
+    else if (digits.length === 12 && digits.startsWith("55")) detectedType = "phone";
+    else if (digits.length === 13 && digits.startsWith("55")) detectedType = "phone";
+    else if (digits.length === 14) detectedType = "cnpj";
+  } else if (/^[0-9a-zA-Z]+$/.test(raw) && raw.length === 14) {
+    detectedType = "cnpj";
+  }
+
+  // Apply real-time formatting (preserve cursor position)
+  // For phone: format locally without +55 prefix to avoid corrupting the raw value
+  if (detectedType && !hasAt && !isUuid) {
+    const cursorPos = input.selectionStart;
+    let formatted;
+    if (detectedType === "phone") {
+      // Extract local digits (strip leading 55 if user typed country code)
+      const d = raw.replace(/\D/g, "");
+      const has55 = d.startsWith("55") && d.length > 11;
+      const local = has55 ? d.slice(2) : d;
+      // Keep the prefix the user typed to avoid changing raw value on re-edit
+      const prefix = startsPlus ? "+55 " : has55 ? "55 " : "";
+      if (local.length === 10) {
+        formatted = `${prefix}${local.slice(0, 2)} ${local.slice(2, 6)}-${local.slice(6)}`;
+      } else if (local.length === 11) {
+        formatted = `${prefix}${local.slice(0, 2)} ${local.slice(2, 7)}-${local.slice(7)}`;
+      } else {
+        formatted = input.value;
+      }
+    } else {
+      formatted = formatPixKey(raw, detectedType);
+    }
+    if (formatted !== input.value) {
+      input.value = formatted;
+      // Estimate new cursor position
+      const diff = formatted.length - (trimmed.length || 0);
+      input.setSelectionRange(cursorPos + diff, cursorPos + diff);
+    }
+  }
+
+  // Show/hide disambiguation pills (only for exactly 11 digits)
+  if (isAllDigits && digits.length === 11 && !startsPlus) {
+    const cpfValid = validateCPF(digits).valid;
+    const phoneValid = digits[2] === "9";
+    if (cpfValid && phoneValid) {
+      disambig.classList.remove("hidden");
+      // Disable submit until user picks
+      if (!pixKeyDisambigChoice && btnSacar) {
+        btnSacar.disabled = true;
+      }
+    } else {
+      disambig.classList.add("hidden");
+      if (btnSacar) btnSacar.disabled = false;
+
+      // Auto-format if type is certain
+      if (cpfValid && !phoneValid) {
+        const formatted = formatPixKey(digits, "cpf");
+        if (formatted !== input.value) input.value = formatted;
+      } else if (!cpfValid && phoneValid) {
+        // Format phone locally without +55 prefix
+        const formatted = `${digits.slice(0, 2)} ${digits.slice(2, 7)}-${digits.slice(7)}`;
+        if (formatted !== input.value) input.value = formatted;
+      }
+    }
+  } else {
+    disambig.classList.add("hidden");
+    if (btnSacar) btnSacar.disabled = false;
+  }
+});
+
+// Disambiguation pill click handlers
+document.getElementById("pixKeyDisambig")?.addEventListener("click", (e) => {
+  const pill = e.target.closest(".pix-disambig-pill");
+  if (!pill) return;
+
+  const disambig = document.getElementById("pixKeyDisambig");
+  const input = document.getElementById("pixKey");
+  const btnSacar = document.getElementById("btnSacar");
+
+  disambig.querySelectorAll(".pix-disambig-pill").forEach((p) => p.classList.remove("active"));
+  pill.classList.add("active");
+  pixKeyDisambigChoice = pill.dataset.type;
+
+  if (btnSacar) btnSacar.disabled = false;
+
+  // Format according to choice
+  if (input) {
+    const raw = stripPixFormatting(input.value);
+    let formatted;
+    if (pixKeyDisambigChoice === "phone") {
+      // Format phone locally without +55 prefix
+      const d = raw.replace(/\D/g, "");
+      if (d.length === 11) {
+        formatted = `${d.slice(0, 2)} ${d.slice(2, 7)}-${d.slice(7)}`;
+      } else {
+        formatted = input.value;
+      }
+    } else {
+      formatted = formatPixKey(raw, pixKeyDisambigChoice);
+    }
+    if (formatted !== input.value) input.value = formatted;
+  }
+});
+
 document.getElementById("btnSacar")?.addEventListener("click", async () => {
   setMsg("mensagemSaque", "");
 
@@ -856,6 +999,20 @@ document.getElementById("btnSacar")?.addEventListener("click", async () => {
     return;
   }
 
+  // Validate PIX key
+  const pixRaw = stripPixFormatting(pixKeyInput.value);
+  const pixResult = validatePixKey(pixKeyInput.value.trim(), pixKeyDisambigChoice);
+
+  if (pixResult.type === "ambiguous") {
+    setMsg("mensagemSaque", "Selecione se a chave é CPF ou Telefone.");
+    return;
+  }
+
+  if (!pixResult.valid) {
+    setMsg("mensagemSaque", pixResult.error);
+    return;
+  }
+
   const valorCents = toCents(valorSaqueInput.value);
 
   if (valorCents < MIN_VALOR_CENTS) {
@@ -865,6 +1022,14 @@ document.getElementById("btnSacar")?.addEventListener("click", async () => {
   if (valorCents > MAX_VALOR_CENTS) {
     showLimitModal();
     return;
+  }
+
+  // Determine the raw PIX key to send to API (no formatting, phone with +55)
+  let pixKeyForApi = pixRaw;
+  if (pixResult.type === "phone") {
+    const d = pixRaw.replace(/\D/g, "");
+    const local = d.startsWith("55") && d.length > 11 ? d.slice(2) : d;
+    pixKeyForApi = "+55" + local;
   }
 
   // Save PIX key for convenience
@@ -877,7 +1042,7 @@ document.getElementById("btnSacar")?.addEventListener("click", async () => {
 
   try {
     const body = {
-      pixKey: pixKeyInput.value.trim(),
+      pixKey: pixKeyForApi,
       depixAddress: addr
     };
 
@@ -920,7 +1085,7 @@ document.getElementById("btnSacar")?.addEventListener("click", async () => {
     const warnIcon = '<svg class="saque-warning-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
     const infoEl = document.getElementById("saqueWarningInfo");
     if (infoEl) {
-      infoEl.innerHTML = `${warnIcon} Sacando ${formatBRL(r.payoutAmountInCents)} para a chave Pix <b>${escapeHtml(pixKeyInput.value.trim())}</b>. Confira com cuidado antes de enviar.`;
+      infoEl.innerHTML = `${warnIcon} Sacando ${formatBRL(r.payoutAmountInCents)} para a chave Pix <b>${escapeHtml(pixResult.formatted)}</b>. Confira com cuidado antes de enviar.`;
       infoEl.classList.remove("hidden");
     }
     const amountEl = document.getElementById("saqueWarningAmount");
@@ -937,7 +1102,7 @@ document.getElementById("btnSacar")?.addEventListener("click", async () => {
   } finally {
     document.getElementById("loadingSaque").classList.add("hidden");
     btn.disabled = false;
-    btn.innerText = "Solicitar transferência";
+    btn.innerText = "Solicitar saque";
   }
 });
 

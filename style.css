@@ -516,6 +516,58 @@ button:focus-visible {
 }
 
 /* ===== Valor mode switch (small, for saque) ===== */
+/* PIX key disambiguation pills */
+.pix-disambig {
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transition: max-height 0.3s ease, opacity 0.25s ease, margin 0.3s ease;
+  margin: 0;
+}
+
+.pix-disambig:not(.hidden) {
+  max-height: 80px;
+  opacity: 1;
+  margin: 10px 0 4px;
+}
+
+.pix-disambig-label {
+  display: block;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 8px;
+}
+
+.pix-disambig-pills {
+  display: flex;
+  gap: 10px;
+}
+
+.pix-disambig-pill {
+  flex: 1;
+  padding: 10px 16px;
+  border: 1.5px solid rgba(79, 209, 197, 0.35);
+  border-radius: 10px;
+  background: rgba(79, 209, 197, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.pix-disambig-pill:hover {
+  background: rgba(79, 209, 197, 0.18);
+  border-color: rgba(79, 209, 197, 0.55);
+}
+
+.pix-disambig-pill.active {
+  background: #4fd1c5;
+  color: #0a2626;
+  border-color: #4fd1c5;
+}
+
 .valor-mode-switch {
   display: flex;
   align-items: center;
@@ -1700,6 +1752,7 @@ textarea:focus {
   overflow-y: auto;
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
+  border-radius: 12px;
 }
 
 .transaction-item {
