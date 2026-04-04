@@ -185,6 +185,7 @@ async function handleLogin() {
 
     setAuth(data.token, data.refreshToken, data.user);
     goToAppropriateScreen();
+    document.getElementById("whatsapp-modal")?.classList.remove("hidden");
   } catch (e) {
     setMsg("login-msg", e.message || "Sem conexão. Verifique sua internet e tente novamente.");
   } finally {
@@ -1635,6 +1636,14 @@ function showLimitModal() {
 }
 document.getElementById("close-limit-modal")?.addEventListener("click", () => {
   document.getElementById("limit-modal")?.classList.add("hidden");
+});
+
+document.getElementById("close-whatsapp-modal")?.addEventListener("click", () => {
+  document.getElementById("whatsapp-modal")?.classList.add("hidden");
+});
+
+document.getElementById("whatsapp-modal-join")?.addEventListener("click", () => {
+  document.getElementById("whatsapp-modal")?.classList.add("hidden");
 });
 
 document.getElementById("btn-request-report")?.addEventListener("click", async () => {
