@@ -195,7 +195,7 @@ export function validateCPF(cpf) {
 function cnpjCharValue(ch) {
   const code = ch.charCodeAt(0);
   if (code >= 48 && code <= 57) return code - 48;       // '0'-'9' → 0-9
-  if (code >= 65 && code <= 90) return code - 55;        // 'A'-'Z' → 10-35
+  if (code >= 65 && code <= 90) return code - 48;        // 'A'-'Z' → 17-42 (Receita Federal spec)
   return -1;
 }
 

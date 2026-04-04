@@ -187,12 +187,18 @@ describe("validateCNPJ", () => {
   });
 
   it("should accept valid alphanumeric CNPJ", () => {
-    // 12ABC34501DE with check digits 45
-    expect(validateCNPJ("12ABC34501DE45").valid).toBe(true);
+    expect(validateCNPJ("12ABC34501DE35").valid).toBe(true);
   });
 
   it("should accept valid alphanumeric CNPJ with formatting", () => {
-    expect(validateCNPJ("12.ABC.345/01DE-45").valid).toBe(true);
+    expect(validateCNPJ("12.ABC.345/01DE-35").valid).toBe(true);
+  });
+
+  it("should accept real-world alphanumeric CNPJs (Receita Federal)", () => {
+    expect(validateCNPJ("G7.SZ6.1EY/0001-30").valid).toBe(true);
+    expect(validateCNPJ("JX.LJE.G7T/0001-13").valid).toBe(true);
+    expect(validateCNPJ("WD.NCH.88G/0001-18").valid).toBe(true);
+    expect(validateCNPJ("87.L4W.7K5/0001-46").valid).toBe(true);
   });
 
   it("should reject CNPJ with wrong check digits", () => {
@@ -218,11 +224,11 @@ describe("validateCNPJ", () => {
   });
 
   it("should accept uppercase letters in alphanumeric CNPJ", () => {
-    expect(validateCNPJ("12ABC34501DE45").valid).toBe(true);
+    expect(validateCNPJ("12ABC34501DE35").valid).toBe(true);
   });
 
   it("should accept lowercase letters and treat as uppercase", () => {
-    expect(validateCNPJ("12abc34501de45").valid).toBe(true);
+    expect(validateCNPJ("12abc34501de35").valid).toBe(true);
   });
 
   it("should reject CNPJ with invalid characters", () => {
@@ -438,7 +444,7 @@ describe("validatePixKey", () => {
     });
 
     it("should detect valid alphanumeric CNPJ", () => {
-      const result = validatePixKey("12ABC34501DE45");
+      const result = validatePixKey("12ABC34501DE35");
       expect(result.valid).toBe(true);
       expect(result.type).toBe("cnpj");
     });
@@ -648,8 +654,8 @@ describe("validatePixKey", () => {
     });
 
     it("should return formatted alphanumeric CNPJ", () => {
-      const result = validatePixKey("12ABC34501DE45");
-      expect(result.formatted).toBe("12.ABC.345/01DE-45");
+      const result = validatePixKey("12ABC34501DE35");
+      expect(result.formatted).toBe("12.ABC.345/01DE-35");
     });
 
     it("should return formatted landline phone", () => {
@@ -697,7 +703,7 @@ describe("formatPixKey", () => {
   });
 
   it("should format alphanumeric CNPJ", () => {
-    expect(formatPixKey("12ABC34501DE45", "cnpj")).toBe("12.ABC.345/01DE-45");
+    expect(formatPixKey("12ABC34501DE35", "cnpj")).toBe("12.ABC.345/01DE-35");
   });
 
   it("should format landline phone (10 digits)", () => {
@@ -760,10 +766,10 @@ describe("validatePixKey edge cases (additional)", () => {
   });
 
   it("should handle alphanumeric CNPJ via validatePixKey", () => {
-    const result = validatePixKey("12.ABC.345/01DE-45");
+    const result = validatePixKey("12.ABC.345/01DE-35");
     expect(result.valid).toBe(true);
     expect(result.type).toBe("cnpj");
-    expect(result.formatted).toBe("12.ABC.345/01DE-45");
+    expect(result.formatted).toBe("12.ABC.345/01DE-35");
   });
 
   it("should detect 11-digit number only valid as CPF (3rd digit not 9)", () => {
@@ -918,7 +924,7 @@ describe("preparePixKeyForApi", () => {
     });
 
     it("should handle alphanumeric CNPJ with formatting", () => {
-      expect(preparePixKeyForApi("12.ABC.345/01DE-45")).toBe("12ABC34501DE45");
+      expect(preparePixKeyForApi("12.ABC.345/01DE-35")).toBe("12ABC34501DE35");
     });
   });
 
