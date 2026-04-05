@@ -6,7 +6,7 @@ import { describe, it, expect } from "vitest";
 const DEPOSIT_STATUS_LABELS = {
   pending: "Pendente", depix_sent: "Concluído", under_review: "Em análise",
   canceled: "Cancelado", error: "Erro", refunded: "Reembolsado",
-  expired: "Expirado", pending_pix2fa: "Aguardando 2FA", delayed: "Atrasado"
+  expired: "Expirado", pending_pix2fa: "Aguardando 2FA", delayed: "Processando (D+1)"
 };
 
 const WITHDRAW_STATUS_LABELS = {
@@ -20,8 +20,8 @@ const NON_TERMINAL_STATUSES = new Set([
 
 function statusColor(status) {
   if (["depix_sent", "sent"].includes(status)) return "status-green";
-  if (["pending", "sending", "pending_pix2fa"].includes(status)) return "status-yellow";
-  if (["under_review", "delayed"].includes(status)) return "status-orange";
+  if (["pending", "sending", "pending_pix2fa", "delayed"].includes(status)) return "status-yellow";
+  if (["under_review"].includes(status)) return "status-orange";
   if (["canceled", "cancelled", "error"].includes(status)) return "status-red";
   if (status === "refunded") return "status-blue";
   return "status-gray";
@@ -78,9 +78,12 @@ describe("Status color mapping", () => {
     expect(statusColor("pending_pix2fa")).toBe("status-yellow");
   });
 
-  it("should return orange for review/delayed statuses", () => {
+  it("should return orange for review statuses", () => {
     expect(statusColor("under_review")).toBe("status-orange");
-    expect(statusColor("delayed")).toBe("status-orange");
+  });
+
+  it("should return yellow for delayed status", () => {
+    expect(statusColor("delayed")).toBe("status-yellow");
   });
 
   it("should return red for error/canceled statuses", () => {

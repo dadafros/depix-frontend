@@ -171,6 +171,11 @@ async function handleLogin() {
     });
     const data = await res.json();
 
+    if (data?.blocked === true) {
+      document.getElementById("blocked-modal")?.classList.remove("hidden");
+      return;
+    }
+
     if (!res.ok) {
       const errorMsg = data?.response?.errorMessage || "Erro ao fazer login";
       setMsg("login-msg", errorMsg);
@@ -1705,7 +1710,7 @@ document.getElementById("btn-request-report")?.addEventListener("click", async (
 const DEPOSIT_STATUS_LABELS = {
   pending: "Pendente", depix_sent: "Concluído", under_review: "Em análise",
   canceled: "Cancelado", error: "Erro", refunded: "Reembolsado",
-  expired: "Expirado", pending_pix2fa: "Aguardando 2FA", delayed: "Atrasado"
+  expired: "Expirado", pending_pix2fa: "Aguardando 2FA", delayed: "Processando (D+1)"
 };
 
 const WITHDRAW_STATUS_LABELS = {
@@ -1719,8 +1724,8 @@ const NON_TERMINAL_STATUSES = new Set([
 
 function statusColor(status) {
   if (["depix_sent", "sent"].includes(status)) return "status-green";
-  if (["pending", "sending", "pending_pix2fa"].includes(status)) return "status-yellow";
-  if (["under_review", "delayed"].includes(status)) return "status-orange";
+  if (["pending", "sending", "pending_pix2fa", "delayed"].includes(status)) return "status-yellow";
+  if (["under_review"].includes(status)) return "status-orange";
   if (["canceled", "cancelled", "error"].includes(status)) return "status-red";
   if (status === "refunded") return "status-blue";
   return "status-gray";
