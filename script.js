@@ -60,6 +60,11 @@ function isAppInstalled() {
   );
 }
 
+// ===== Blocked account =====
+window.addEventListener("user-blocked", () => {
+  document.getElementById("blocked-modal")?.classList.remove("hidden");
+});
+
 // ===== PWA Install =====
 window.addEventListener("beforeinstallprompt", e => {
   e.preventDefault();
@@ -171,11 +176,6 @@ async function handleLogin() {
     });
     const data = await res.json();
 
-    if (data?.blocked === true) {
-      document.getElementById("blocked-modal")?.classList.remove("hidden");
-      return;
-    }
-
     if (!res.ok) {
       const errorMsg = data?.response?.errorMessage || "Erro ao fazer login";
       setMsg("login-msg", errorMsg);
@@ -192,6 +192,7 @@ async function handleLogin() {
     goToAppropriateScreen();
     document.getElementById("whatsapp-modal")?.classList.remove("hidden");
   } catch (e) {
+    if (e.blocked) return; // Modal already shown via user-blocked event
     setMsg("login-msg", e.message || "Sem conexão. Verifique sua internet e tente novamente.");
   } finally {
     btn.disabled = false;

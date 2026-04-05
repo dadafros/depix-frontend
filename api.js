@@ -41,6 +41,22 @@ export async function apiFetch(path, options = {}) {
     headers
   });
 
+  // If 403 with blocked flag, handle blocking and halt
+  if (res.status === 403) {
+    let data;
+    try {
+      data = await res.clone().json();
+    } catch (_) {
+      // Response body is not valid JSON — not a blocking response
+    }
+    if (data?.blocked === true) {
+      handleUserBlocked();
+      const err = new Error("Conta suspensa.");
+      err.blocked = true;
+      throw err;
+    }
+  }
+
   // If 401, try to refresh token
   if (res.status === 401 && token) {
     const refreshed = await tryRefresh();
@@ -59,6 +75,15 @@ export async function apiFetch(path, options = {}) {
   }
 
   return res;
+}
+
+/** Central handler for user blocked — runs once even if multiple requests fire concurrently. */
+function handleUserBlocked() {
+  if (window.__userBlocked) return;
+  window.__userBlocked = true;
+  clearAuth();
+  navigate("#login");
+  window.dispatchEvent(new CustomEvent("user-blocked"));
 }
 
 /**

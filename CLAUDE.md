@@ -147,6 +147,8 @@ cd ../depix-dev && docker compose up -d
 
 Frontend changes reflect immediately (volume mount). See `../depix-dev/CLAUDE.md` for full instructions.
 
+**E2E tests**: End-to-end tests live in `../depix-dev/tests/`. They run against the local dev environment and test full user flows (registration, login, blocking, webhooks, Telegram commands). See `../depix-dev/CLAUDE.md` for instructions on running and creating E2E tests.
+
 ## Git
 
 - Remote: `git@github-personal:dadafros/depix.git`
