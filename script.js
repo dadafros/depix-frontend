@@ -1752,7 +1752,8 @@ const DEPOSIT_STATUS_LABELS = {
 
 const WITHDRAW_STATUS_LABELS = {
   unsent: "Aguardando", sending: "Enviando", sent: "Enviado",
-  error: "Erro", cancelled: "Cancelado", refunded: "Reembolsado"
+  error: "Erro", cancelled: "Cancelado", refunded: "Reembolsado",
+  expired: "Expirado"
 };
 
 const NON_TERMINAL_STATUSES = new Set([

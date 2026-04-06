@@ -11,7 +11,8 @@ const DEPOSIT_STATUS_LABELS = {
 
 const WITHDRAW_STATUS_LABELS = {
   unsent: "Aguardando", sending: "Enviando", sent: "Enviado",
-  error: "Erro", cancelled: "Cancelado", refunded: "Reembolsado"
+  error: "Erro", cancelled: "Cancelado", refunded: "Reembolsado",
+  expired: "Expirado"
 };
 
 const NON_TERMINAL_STATUSES = new Set([
@@ -49,7 +50,7 @@ describe("Transaction status labels", () => {
 
   describe("Withdraw statuses", () => {
     it("should have labels for all withdraw statuses", () => {
-      const statuses = ["unsent", "sending", "sent", "error", "cancelled", "refunded"];
+      const statuses = ["unsent", "sending", "sent", "error", "cancelled", "refunded", "expired"];
       for (const s of statuses) {
         expect(WITHDRAW_STATUS_LABELS[s]).toBeDefined();
         expect(typeof WITHDRAW_STATUS_LABELS[s]).toBe("string");
