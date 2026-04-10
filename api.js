@@ -57,8 +57,10 @@ export async function apiFetch(path, options = {}) {
     }
   }
 
-  // If 401, try to refresh token
-  if (res.status === 401 && token) {
+  // If 401, try to refresh token (skip for auth endpoints — 401 there means
+  // wrong credentials, not expired JWT, so refresh would be wasteful)
+  const isAuthEndpoint = path.startsWith("/api/auth/");
+  if (res.status === 401 && token && !isAuthEndpoint) {
     const refreshed = await tryRefresh();
     if (refreshed) {
       // Retry with new token
