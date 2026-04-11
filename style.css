@@ -2931,6 +2931,89 @@ textarea:focus {
   display: inline-block;
 }
 
+/* What is DePix section */
+.landing-what-section {
+  text-align: center;
+}
+
+.landing-what-lead {
+  font-size: 1.25rem;
+  color: #e8edf2;
+  line-height: 1.6;
+  max-width: 600px;
+  margin: 0 auto 12px;
+}
+
+.landing-what-lead strong {
+  color: #38e3ac;
+}
+
+.landing-what-sub {
+  font-size: 1rem;
+  color: #94a3b8;
+  line-height: 1.7;
+  max-width: 600px;
+  margin: 0 auto 32px;
+}
+
+.landing-what-sub strong {
+  color: #e8edf2;
+}
+
+.landing-what-cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.landing-what-card {
+  background: rgba(56, 227, 172, 0.04);
+  border: 1px solid rgba(56, 227, 172, 0.1);
+  border-radius: 14px;
+  padding: 24px 20px;
+  text-align: left;
+}
+
+.landing-what-card-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(56, 227, 172, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+
+.landing-what-card-icon svg {
+  width: 20px;
+  height: 20px;
+  stroke: #38e3ac;
+}
+
+.landing-what-card h3 {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #e8edf2;
+  margin: 0 0 8px;
+}
+
+.landing-what-card p {
+  font-size: 0.9rem;
+  color: #8a9bb0;
+  line-height: 1.6;
+  margin: 0;
+}
+
+@media (min-width: 600px) {
+  .landing-what-cards {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
 /* Inclusion section */
 .landing-inclusion-section {
   text-align: center;
