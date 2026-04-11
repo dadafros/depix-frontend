@@ -2936,6 +2936,23 @@ textarea:focus {
   text-align: center;
 }
 
+.landing-inclusion-icon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 18px;
+  background: rgba(56, 227, 172, 0.1);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #38e3ac;
+}
+
+.landing-inclusion-icon svg {
+  width: 26px;
+  height: 26px;
+}
+
 .landing-inclusion-text {
   color: #94a3b8;
   font-size: 1.05rem;
