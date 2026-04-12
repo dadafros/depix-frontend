@@ -2335,6 +2335,7 @@ let allSalesCheckouts = [];
 const SALES_PAGE_SIZE = 50;
 let pendingMerchantAction = null;
 let pendingRevokeKeyId = null;
+let pendingLiquidPassword = null;
 
 const CHECKOUT_STATUS_LABELS = {
   pending: "Pendente", processing: "Processando", completed: "Concluído",
@@ -2443,22 +2444,18 @@ async function loadMerchantDispatcher() {
       return;
     }
 
-    const merchant = await merchantRes.json();
     if (!merchantRes.ok) {
-      setMsg("merchant-msg", merchant?.errorMessage || "Erro ao carregar dados");
+      const errBody = await merchantRes.json().catch(() => ({}));
+      setMsg("merchant-msg", errBody?.errorMessage || "Erro ao carregar dados");
       return;
     }
+    const merchant = await merchantRes.json();
 
     merchantData = merchant.merchant || merchant;
     // Sync verified in localStorage
     const u = getUser();
     if (u && !u.verified) { u.verified = 1; localStorage.setItem("depix-user", JSON.stringify(u)); }
     showMerchantMenu();
-
-    if (merchant.deactivated) {
-      document.getElementById("merchant-deactivated").classList.remove("hidden");
-      return;
-    }
 
     navigate("#merchant-charge");
   } catch (e) {
@@ -2547,16 +2544,16 @@ async function loadAccountView() {
 async function loadApiView() {
   showMerchantMenu();
   try {
-    // Always fresh fetch merchant data
-    const mRes = await apiFetch("/api/merchants/me");
+    // Fetch merchant data and API keys in parallel
+    const [mRes, res] = await Promise.all([
+      apiFetch("/api/merchants/me"),
+      apiFetch("/api/api-keys"),
+    ]);
     if (mRes.ok) { const d = await mRes.json(); merchantData = d.merchant || d; }
     if (merchantData) {
       document.getElementById("merchant-webhook-secret").textContent =
         merchantData.webhook_secret_prefix ? `${merchantData.webhook_secret_prefix}••••••••` : "—";
     }
-
-    // Load API keys
-    const res = await apiFetch("/api/api-keys");
     const data = await res.json();
     if (!res.ok) return;
     const keys = data.api_keys || [];
@@ -2578,7 +2575,7 @@ async function loadApiView() {
           : `expira em ${Math.ceil((new Date(k.expires_at) - new Date()) / 86400000)}d`;
         const expiresClass = expired ? "text-danger" : "";
         const lastUsed = k.last_used_at ? formatDateShort(k.last_used_at) : "nunca";
-        const keyDisplay = k.key_plain || (k.prefix + "...");
+        const keyDisplay = k.prefix + "...";
         const labelText = k.label && k.label !== "Produção" && k.label !== "Teste" ? k.label : null;
         const copyIcon = '<svg class="copy-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
         return `<div class="api-key-card">
@@ -2778,7 +2775,6 @@ async function merchantGuard(loadFn) {
       { const d = await res.json(); merchantData = d.merchant || d; }
     } catch { navigate("#merchant"); return; }
   }
-  if (merchantData.deactivated) { navigate("#merchant"); return; }
   loadFn();
 }
 
@@ -2872,7 +2868,7 @@ document.getElementById("close-checkout-image-modal")?.addEventListener("click",
 });
 document.getElementById("btn-copy-checkout-link")?.addEventListener("click", () => {
   const link = document.getElementById("checkout-link")?.value;
-  if (link) { navigator.clipboard.writeText(link); showToast("Link copiado!"); }
+  if (link) { navigator.clipboard.writeText(link).then(() => showToast("Link copiado!")).catch(() => showToast("Erro ao copiar")); }
 });
 
 // Copy key buttons (delegated)
@@ -2880,7 +2876,7 @@ document.addEventListener("click", (e) => {
   const copyBtn = e.target.closest(".btn-copy-key");
   if (!copyBtn) return;
   const input = document.getElementById(copyBtn.dataset.target);
-  if (input?.value) { navigator.clipboard.writeText(input.value); showToast("Copiado!"); }
+  if (input?.value) { navigator.clipboard.writeText(input.value).then(() => showToast("Copiado!")).catch(() => showToast("Erro ao copiar")); }
 });
 
 // Modal close handlers
@@ -2957,28 +2953,6 @@ document.getElementById("btn-rotate-webhook")?.addEventListener("click", () => {
   document.getElementById("merchant-password-modal")?.classList.remove("hidden");
 });
 
-// Edit buttons
-document.querySelectorAll(".merchant-edit-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    const field = btn.dataset.field;
-    const labels = { business_name: "Nome do negócio", liquid_address: "Endereço Liquid", cnpj: "CNPJ", website: "Website" };
-    if (field === "liquid_address") {
-      pendingMerchantAction = { type: "edit_liquid" };
-      document.getElementById("merchant-password-title").textContent = "Confirmar alteração";
-      document.getElementById("merchant-password-desc").textContent = "Para alterar o endereço Liquid, confirme sua senha.";
-      document.getElementById("merchant-password-input").value = "";
-      setMsg("merchant-password-msg", "");
-      document.getElementById("merchant-password-modal")?.classList.remove("hidden");
-      return;
-    }
-    document.getElementById("merchant-edit-title").textContent = `Editar ${labels[field] || field}`;
-    document.getElementById("merchant-edit-input").value = merchantData?.[field] || "";
-    document.getElementById("merchant-edit-input").dataset.field = field;
-    setMsg("merchant-edit-modal-msg", "");
-    document.getElementById("merchant-edit-modal")?.classList.remove("hidden");
-  });
-});
-
 // Save edit (simple fields)
 document.getElementById("btn-merchant-edit-save")?.addEventListener("click", async () => {
   const input = document.getElementById("merchant-edit-input");
@@ -2988,9 +2962,9 @@ document.getElementById("btn-merchant-edit-save")?.addEventListener("click", asy
   btn.disabled = true; btn.textContent = "Salvando..."; setMsg("merchant-edit-modal-msg", "");
   try {
     const body = { [field]: value || null };
-    if (field === "liquid_address" && input.dataset.password) {
-      body.password = input.dataset.password;
-      delete input.dataset.password;
+    if (field === "liquid_address" && pendingLiquidPassword) {
+      body.password = pendingLiquidPassword;
+      pendingLiquidPassword = null;
     }
     const res = await apiFetch("/api/merchants/me", { method: "PATCH", body: JSON.stringify(body) });
     const data = await res.json();
@@ -3015,7 +2989,7 @@ document.getElementById("btn-merchant-password-confirm")?.addEventListener("clic
       document.getElementById("merchant-edit-title").textContent = "Editar Endereço Liquid";
       document.getElementById("merchant-edit-input").value = merchantData?.liquid_address || "";
       document.getElementById("merchant-edit-input").dataset.field = "liquid_address";
-      document.getElementById("merchant-edit-input").dataset.password = password;
+      pendingLiquidPassword = password;
       document.getElementById("merchant-edit-modal")?.classList.remove("hidden");
     } else if (pendingMerchantAction?.type === "rotate_webhook") {
       const res = await apiFetch("/api/merchants/me/rotate-webhook-secret", {
