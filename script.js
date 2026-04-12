@@ -2289,7 +2289,7 @@ route("#commissions", () => {
   if (!isLoggedIn()) { navigate("#login"); return; }
   loadCommissionsData();
 });
-route("#reports", () => { navigate("#transactions"); }); // legacy redirect
+route("#reports", () => { navigate("#transactions"); });
 route("#no-address", () => {});
 route("#faq", () => {});
 route("#transactions", () => { loadTransactions(); });
