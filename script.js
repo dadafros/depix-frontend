@@ -21,7 +21,6 @@ let qrCopyPaste = "";
 let deferredPrompt = null;
 let pendingAddressChange = "";
 let pendingAddressDelete = "";
-let reportType = "";
 let modoSaque = false;
 let modoConvert = false;
 let brswapConfig = null;
@@ -1454,31 +1453,100 @@ document.getElementById("btn-save-addr")?.addEventListener("click", () => {
 });
 
 // =========================================
-// REPORTS
+// REPORT POPOVER (shared logic)
 // =========================================
 
-document.getElementById("menu-report-depositos")?.addEventListener("click", () => {
-  closeMenu();
-  reportType = "deposito";
-  document.getElementById("report-title").innerText = "Relatório de Depósitos";
-  setMsg("report-msg", "");
-  navigate("#reports");
-});
+function initReportPopover(btnId, popoverId, startId, endId, submitId, msgId, tipo) {
+  const btn = document.getElementById(btnId);
+  const popover = document.getElementById(popoverId);
+  if (!btn || !popover) return;
 
-document.getElementById("menu-report-saques")?.addEventListener("click", () => {
-  closeMenu();
-  reportType = "saque";
-  document.getElementById("report-title").innerText = "Relatório de Saques";
-  setMsg("report-msg", "");
-  navigate("#reports");
-});
+  // Toggle popover on button click
+  btn.addEventListener("click", () => {
+    const isOpen = !popover.classList.contains("hidden");
+    // Close all other popovers first
+    document.querySelectorAll(".report-popover").forEach(p => p.classList.add("hidden"));
+    if (isOpen) return;
+    // Set default dates: last 30 days
+    const fmt = d => d.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000);
+    const startInput = document.getElementById(startId);
+    const endInput = document.getElementById(endId);
+    if (startInput && !startInput.value) startInput.value = fmt(thirtyDaysAgo);
+    if (endInput && !endInput.value) endInput.value = fmt(now);
+    setMsg(msgId, "");
+    popover.classList.remove("hidden");
+  });
 
-document.getElementById("menu-report-comissoes")?.addEventListener("click", () => {
-  closeMenu();
-  reportType = "comissao";
-  document.getElementById("report-title").innerText = "Relatório de Comissões";
-  setMsg("report-msg", "");
-  navigate("#reports");
+  // Popover close-on-outside-click is handled by the delegated listener below
+
+  // Submit handler
+  document.getElementById(submitId)?.addEventListener("click", async () => {
+    const dataInicio = document.getElementById(startId)?.value;
+    const dataFim = document.getElementById(endId)?.value;
+    setMsg(msgId, "");
+
+    if (!dataInicio || !dataFim) {
+      setMsg(msgId, "Selecione as datas de início e fim");
+      return;
+    }
+    const start = new Date(dataInicio);
+    const end = new Date(dataFim);
+    if (end < start) {
+      setMsg(msgId, "A data final deve ser posterior à data inicial");
+      return;
+    }
+    if ((end - start) / (1000 * 60 * 60 * 24) > 366) {
+      setMsg(msgId, "O intervalo máximo é de 1 ano");
+      return;
+    }
+
+    const submitBtn = document.getElementById(submitId);
+    submitBtn.disabled = true;
+    submitBtn.innerText = "Solicitando…";
+
+    try {
+      const res = await apiFetch("/api/reports", {
+        method: "POST",
+        body: JSON.stringify({ tipo, dataInicio, dataFim })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg(msgId, data?.response?.errorMessage || "Erro ao solicitar relatório");
+        return;
+      }
+      const user = getUser();
+      setMsg(msgId, `Será enviado para ${user?.email || "seu e-mail"}.`, true);
+    } catch (e) {
+      setMsg(msgId, e.message || "Sem conexão. Verifique sua internet.");
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.innerText = "Enviar por e-mail";
+    }
+  });
+}
+
+initReportPopover(
+  "extrato-download-report", "extrato-report-popover",
+  "extrato-report-start", "extrato-report-end",
+  "extrato-report-submit", "extrato-report-msg", "extrato"
+);
+
+initReportPopover(
+  "commission-download-report", "commission-report-popover",
+  "commission-report-start", "commission-report-end",
+  "commission-report-submit", "commission-report-msg", "comissao"
+);
+
+// Single delegated close-on-outside-click for all popovers
+document.addEventListener("click", (e) => {
+  document.querySelectorAll(".report-popover-wrap").forEach(wrap => {
+    const popover = wrap.querySelector(".report-popover");
+    if (popover && !popover.classList.contains("hidden") && !wrap.contains(e.target)) {
+      popover.classList.add("hidden");
+    }
+  });
 });
 
 // ===== AFILIADOS =====
@@ -1486,6 +1554,11 @@ document.getElementById("menu-report-comissoes")?.addEventListener("click", () =
 document.getElementById("menu-affiliates")?.addEventListener("click", () => {
   closeMenu();
   navigate("#affiliates");
+});
+
+document.getElementById("menu-commissions")?.addEventListener("click", () => {
+  closeMenu();
+  navigate("#commissions");
 });
 
 async function loadAffiliateData() {
@@ -1506,12 +1579,23 @@ async function loadAffiliateData() {
     }
 
     document.getElementById("affiliate-link").value = buildAffiliateLink(data.referralCode);
-    document.getElementById("affiliate-commission-rate").innerText = `${data.commissionRate}%`;
+    const sharePercent = data.platformFeePercent ? Math.round(data.commissionRate / data.platformFeePercent * 100) : data.commissionRate;
+    document.getElementById("affiliate-commission-rate").innerText = `${sharePercent}%`;
+
+    // Update commission modal with actual values
+    const rateModal = document.getElementById("rate-info-modal");
+    if (rateModal) {
+      rateModal.querySelector(".info-text-fee").innerText = `${data.platformFeePercent}%`;
+      rateModal.querySelector(".info-text-share").innerText = `${sharePercent}%`;
+      const exDeposit = 1000;
+      const exFee = exDeposit * data.platformFeePercent / 100;
+      const exComm = exFee * sharePercent / 100;
+      rateModal.querySelector(".info-text-ex-fee").innerText = formatDePix(exFee * 100);
+      rateModal.querySelector(".info-text-ex-comm").innerText = formatDePix(exComm * 100);
+    }
     document.getElementById("affiliate-volume").innerText = formatBRL(data.totalVolumeCents);
     document.getElementById("affiliate-commission-value").innerText = formatDePix(data.pendingCommissionCents);
-
-    renderReferrals(data.referrals);
-    renderPayments(data.payments);
+    document.getElementById("affiliate-paid-value").innerText = formatDePix(data.totalPaidCents);
 
     // Show/hide payment request button
     const paySection = document.getElementById("payment-request-section");
@@ -1522,6 +1606,32 @@ async function loadAffiliateData() {
     setMsg("affiliates-msg", e.message || "Sem conexão. Verifique sua internet.");
   } finally {
     loading.classList.add("hidden");
+  }
+}
+
+async function loadCommissionsData() {
+  const loading = document.getElementById("commissions-loading");
+  const content = document.getElementById("commissions-content");
+  if (!loading || !content) return;
+
+  loading.classList.remove("hidden");
+  content.classList.add("hidden");
+
+  try {
+    const res = await apiFetch("/api/status?type=affiliates");
+    const data = await res.json();
+    if (!res.ok) {
+      loading.classList.add("hidden");
+      showToast("Erro ao carregar comissões. Tente novamente.");
+      return;
+    }
+    renderReferrals(data.referrals);
+    renderPayments(data.payments);
+    content.classList.remove("hidden");
+    loading.classList.add("hidden");
+  } catch {
+    loading.classList.add("hidden");
+    showToast("Erro ao carregar comissões. Tente novamente.");
   }
 }
 
@@ -1584,6 +1694,22 @@ function renderPayments(payments) {
   }).join("");
 }
 
+// Commission rate info modal
+document.getElementById("affiliate-rate-info")?.addEventListener("click", () => {
+  document.getElementById("rate-info-modal")?.classList.remove("hidden");
+});
+document.getElementById("close-rate-info")?.addEventListener("click", () => {
+  document.getElementById("rate-info-modal")?.classList.add("hidden");
+});
+
+// Total paid info modal
+document.getElementById("affiliate-paid-info")?.addEventListener("click", () => {
+  document.getElementById("paid-info-modal")?.classList.remove("hidden");
+});
+document.getElementById("close-paid-info")?.addEventListener("click", () => {
+  document.getElementById("paid-info-modal")?.classList.add("hidden");
+});
+
 document.getElementById("affiliate-volume-info")?.addEventListener("click", () => {
   document.getElementById("volume-info-modal")?.classList.remove("hidden");
 });
@@ -1600,13 +1726,6 @@ document.getElementById("close-commission-info")?.addEventListener("click", () =
   document.getElementById("commission-info-modal")?.classList.add("hidden");
 });
 
-// Payments info modal
-document.getElementById("affiliate-payments-info")?.addEventListener("click", () => {
-  document.getElementById("payments-info-modal")?.classList.remove("hidden");
-});
-document.getElementById("close-payments-info")?.addEventListener("click", () => {
-  document.getElementById("payments-info-modal")?.classList.add("hidden");
-});
 
 // ===== Payment request flow =====
 document.getElementById("btn-request-payment")?.addEventListener("click", () => {
@@ -1686,58 +1805,6 @@ document.getElementById("close-whatsapp-modal")?.addEventListener("click", () =>
 
 document.getElementById("whatsapp-modal-join")?.addEventListener("click", () => {
   document.getElementById("whatsapp-modal")?.classList.add("hidden");
-});
-
-document.getElementById("btn-request-report")?.addEventListener("click", async () => {
-  const dataInicio = document.getElementById("report-start").value;
-  const dataFim = document.getElementById("report-end").value;
-
-  setMsg("report-msg", "");
-
-  if (!dataInicio || !dataFim) {
-    setMsg("report-msg", "Selecione as datas de início e fim");
-    return;
-  }
-
-  const start = new Date(dataInicio);
-  const end = new Date(dataFim);
-
-  if (end < start) {
-    setMsg("report-msg", "A data final deve ser posterior à data inicial");
-    return;
-  }
-
-  const diffDays = (end - start) / (1000 * 60 * 60 * 24);
-  if (diffDays > 366) {
-    setMsg("report-msg", "O intervalo máximo é de 1 ano");
-    return;
-  }
-
-  const btn = document.getElementById("btn-request-report");
-  btn.disabled = true;
-  btn.innerText = "Solicitando…";
-
-  try {
-    const res = await apiFetch("/api/reports", {
-      method: "POST",
-      body: JSON.stringify({ tipo: reportType, dataInicio, dataFim })
-    });
-    const data = await res.json();
-
-    if (!res.ok) {
-      setMsg("report-msg", data?.response?.errorMessage || "Erro ao solicitar relatório");
-      return;
-    }
-
-    const user = getUser();
-    const email = user?.email || "seu email";
-    setMsg("report-msg", `Relatório será enviado para ${email}. Pode levar alguns minutos.`, true);
-  } catch (e) {
-    setMsg("report-msg", e.message || "Sem conexão. Verifique sua internet e tente novamente.");
-  } finally {
-    btn.disabled = false;
-    btn.innerText = "Solicitar relatório";
-  }
 });
 
 // =========================================
@@ -2218,19 +2285,16 @@ route("#affiliates", () => {
   if (!isLoggedIn()) { navigate("#login"); return; }
   loadAffiliateData();
 });
+route("#commissions", () => {
+  if (!isLoggedIn()) { navigate("#login"); return; }
+  loadCommissionsData();
+});
+route("#reports", () => { navigate("#transactions"); });
 route("#no-address", () => {});
 route("#faq", () => {});
 route("#transactions", () => { loadTransactions(); });
 route("#forgot-password", () => { setMsg("forgot-msg", ""); });
 route("#reset-password", () => { setMsg("reset-msg", ""); });
-
-route("#reports", () => {
-  const fmt = d => d.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
-  const now = new Date();
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000);
-  document.getElementById("report-end").value = fmt(now);
-  document.getElementById("report-start").value = fmt(thirtyDaysAgo);
-});
 
 route("#landing", () => {
   captureReferralCode(window.location.hash);

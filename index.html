@@ -843,13 +843,7 @@
     <div class="menu-section">
       <h3>Afiliados</h3>
       <button id="menu-affiliates" class="menu-item">Programa de Afiliados</button>
-    </div>
-
-    <div class="menu-section">
-      <h3>Relatórios</h3>
-      <button id="menu-report-depositos" class="menu-item">Depósitos</button>
-      <button id="menu-report-saques" class="menu-item">Saques</button>
-      <button id="menu-report-comissoes" class="menu-item">Comissões</button>
+      <button id="menu-commissions" class="menu-item">Minhas Comissões</button>
     </div>
 
     <div class="menu-section">
@@ -899,26 +893,6 @@
   </div>
 </div>
 
-<!-- ===== RELATÓRIOS ===== -->
-<section data-view="reports" class="page hidden">
-  <div class="card">
-    <h1 id="report-title">Relatório</h1>
-    <div id="report-msg" class="mensagem"></div>
-
-    <label for="report-start">Data inicial</label>
-    <input id="report-start" type="date" />
-
-    <label for="report-end">Data final</label>
-    <input id="report-end" type="date" />
-
-    <button id="btn-request-report">Solicitar relatório</button>
-
-    <p class="link-text">
-      <a href="#home" class="link">← Voltar</a>
-    </p>
-  </div>
-</section>
-
 <!-- ===== AFILIADOS ===== -->
 <section data-view="affiliates" class="page hidden">
   <div class="card">
@@ -935,7 +909,10 @@
 
       <div class="affiliate-stats">
         <div class="affiliate-stat">
-          <span class="affiliate-stat-label">Sua comissão</span>
+          <span class="affiliate-stat-label">
+            Sua comissão
+            <button id="affiliate-rate-info" class="icon-btn-sm" aria-label="Como funciona?">?</button>
+          </span>
           <span class="affiliate-stat-value" id="affiliate-commission-rate">1%</span>
         </div>
         <div class="affiliate-stat">
@@ -945,33 +922,84 @@
           </span>
           <span class="affiliate-stat-value" id="affiliate-volume">R$ 0,00</span>
         </div>
-        <div class="affiliate-stat affiliate-stat-wide">
+        <div class="affiliate-stat">
           <span class="affiliate-stat-label">
             Comissões a receber
             <button id="affiliate-commission-info" class="icon-btn-sm" aria-label="Como funciona?">?</button>
           </span>
-          <span class="affiliate-stat-value" id="affiliate-commission-value">R$ 0,00</span>
+          <span class="affiliate-stat-value" id="affiliate-commission-value">0,00 DePix</span>
+        </div>
+        <div class="affiliate-stat">
+          <span class="affiliate-stat-label">
+            Comissões recebidas
+            <button id="affiliate-paid-info" class="icon-btn-sm" aria-label="O que é isso?">?</button>
+          </span>
+          <span class="affiliate-stat-value" id="affiliate-paid-value">0,00 DePix</span>
         </div>
       </div>
 
+      <div class="affiliate-section">
+        <div class="payment-info-banners">
+          <div class="payment-info-banner">
+            <span>Suas comissões são pagas em DePix.<br>Quando o saldo a receber atingir <strong>R$ 100,00</strong><br>você poderá solicitar o pagamento aqui.</span>
+          </div>
+          <div class="payment-info-banner">
+            <span>O pagamento é processado em até <strong>30 dias</strong>.<br>Limite de <strong>1 solicitação por mês</strong>.</span>
+          </div>
+        </div>
+      </div>
       <div id="payment-request-section" class="hidden affiliate-section">
         <button id="btn-request-payment" class="primary" style="width:100%">Solicitar pagamento de comissão</button>
       </div>
+    </div>
 
+    <p class="link-text">
+      <a href="#home" class="link">← Voltar</a>
+    </p>
+  </div>
+</section>
+
+<!-- ===== MINHAS COMISSÕES ===== -->
+<section data-view="commissions" class="page hidden">
+  <div class="card">
+    <div class="commissions-header">
+      <h1>Minhas Comissões</h1>
+      <div class="report-popover-wrap">
+        <button id="commission-download-report" class="extrato-report-btn" type="button" title="Baixar relatório por e-mail">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Baixar
+        </button>
+        <div id="commission-report-popover" class="report-popover hidden">
+          <div class="report-popover-dates">
+            <div class="report-popover-field">
+              <label for="commission-report-start">De</label>
+              <input id="commission-report-start" type="date" />
+            </div>
+            <div class="report-popover-field">
+              <label for="commission-report-end">Até</label>
+              <input id="commission-report-end" type="date" />
+            </div>
+          </div>
+          <button id="commission-report-submit" class="report-popover-submit">Enviar por e-mail</button>
+          <div id="commission-report-msg" class="mensagem"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="commissions-loading" class="hidden"><span class="spinner"></span> Carregando…</div>
+
+    <div id="commissions-content" class="hidden">
       <div class="affiliate-section">
         <h2 class="affiliate-section-title">Suas indicações</h2>
-        <div id="affiliates-list" class="affiliates-list"></div>
+        <div id="affiliates-list" class="commissions-list affiliates-list"></div>
         <div id="affiliates-empty" class="hidden">
           <p class="info-text">Nenhuma indicação ainda. Compartilhe seu link!</p>
         </div>
       </div>
 
       <div class="affiliate-section">
-        <h2 class="affiliate-section-title">
-          Comissões Recebidas
-          <button id="affiliate-payments-info" class="icon-btn-sm" aria-label="Como funciona?">?</button>
-        </h2>
-        <div id="affiliate-payments-list" class="affiliates-list"></div>
+        <h2 class="affiliate-section-title">Comissões Recebidas</h2>
+        <div id="affiliate-payments-list" class="commissions-list affiliates-list"></div>
         <div id="affiliate-payments-empty" class="hidden">
           <p class="info-text">Nenhum pagamento recebido ainda.</p>
         </div>
@@ -984,13 +1012,21 @@
   </div>
 </section>
 
+<!-- ===== MODAL: COMO FUNCIONA A COMISSÃO ===== -->
+<div id="rate-info-modal" class="modal hidden">
+  <div class="modal-box">
+    <h2>Como funciona a comissão?</h2>
+    <p class="info-text">A cada depósito dos seus indicados, o DePix App cobra uma taxa de <strong class="info-text-fee">2%</strong>. Você receberá <strong class="info-text-share">50%</strong> dessa taxa como comissão.</p>
+    <p class="info-text"><strong>Exemplo:</strong> um indicado deposita R$ 1.000 → taxa DePix App: <strong class="info-text-ex-fee">20,00 DePix</strong> → sua comissão: <strong class="info-text-ex-comm">10,00 DePix</strong>.</p>
+    <button id="close-rate-info" class="secondary">Entendi</button>
+  </div>
+</div>
+
 <!-- ===== MODAL: O QUE É VOLUME ===== -->
 <div id="volume-info-modal" class="modal hidden">
   <div class="modal-box">
     <h2>O que é Volume Total?</h2>
     <p class="info-text">O <strong>Volume Total</strong> é a soma de todos os depósitos PIX realizados pelos usuários que você indicou desde o início.</p>
-    <p class="info-text">Sua comissão é calculada como uma porcentagem desse volume. Por exemplo, se seus indicados fizeram R$ 10.000 em depósitos e sua comissão é de 1%, você recebe R$ 100.</p>
-    <p class="info-text">Dados históricos detalhados podem ser consultados no menu Relatórios > Comissões.</p>
     <button id="close-volume-info" class="secondary">Entendi</button>
   </div>
 </div>
@@ -1000,20 +1036,21 @@
   <div class="modal-box">
     <h2>Comissões a receber</h2>
     <p class="info-text"><strong>Comissões a receber</strong> é o total acumulado de todas as suas comissões, menos os valores já pagos.</p>
-    <p class="info-text">Esse valor cresce conforme seus indicados fazem depósitos PIX. Dados históricos detalhados podem ser consultados no menu Relatórios > Comissões.</p>
+    <p class="info-text">Esse valor cresce conforme seus indicados fazem depósitos PIX.</p>
     <button id="close-commission-info" class="secondary">Entendi</button>
   </div>
 </div>
 
-<!-- ===== MODAL: COMISSÕES RECEBIDAS ===== -->
-<div id="payments-info-modal" class="modal hidden">
+<!-- ===== MODAL: TOTAL COMISSÕES RECEBIDAS ===== -->
+<div id="paid-info-modal" class="modal hidden">
   <div class="modal-box">
-    <h2>Comissões Recebidas</h2>
-    <p class="info-text">Você pode solicitar o pagamento das suas comissões diretamente nesta tela, desde que o valor acumulado seja de pelo menos <strong>R$ 100,00</strong>.</p>
-    <p class="info-text">Após a solicitação, o pagamento é processado em até 30 dias. Você pode solicitar pagamento apenas uma vez por mês.</p>
-    <button id="close-payments-info" class="secondary">Entendi</button>
+    <h2>Comissões recebidas</h2>
+    <p class="info-text">Este é o total de comissões que já foram pagas a você desde o início do programa.</p>
+    <p class="info-text">Os pagamentos são feitos em DePix, diretamente para o endereço Liquid que você informar ao solicitar. Você pode acompanhar cada pagamento na tela <strong>Minhas Comissões</strong>.</p>
+    <button id="close-paid-info" class="secondary">Entendi</button>
   </div>
 </div>
+
 
 <!-- ===== MODAL: AVISO PRÉ-SOLICITAÇÃO ===== -->
 <div id="payment-warning-modal" class="modal hidden">
@@ -1114,6 +1151,26 @@
           <svg class="extrato-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
           <input id="filter-search" type="text" placeholder="Buscar…" autocomplete="off" />
         <span id="search-hint" class="extrato-search-hint">Nome, chave PIX, mensagem, endereço ou TXID</span>
+        </div>
+        <div class="report-popover-wrap">
+          <button id="extrato-download-report" class="extrato-report-btn" type="button" title="Solicitar extrato por e-mail">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Baixar
+          </button>
+          <div id="extrato-report-popover" class="report-popover hidden">
+            <div class="report-popover-dates">
+              <div class="report-popover-field">
+                <label for="extrato-report-start">De</label>
+                <input id="extrato-report-start" type="date" />
+              </div>
+              <div class="report-popover-field">
+                <label for="extrato-report-end">Até</label>
+                <input id="extrato-report-end" type="date" />
+              </div>
+            </div>
+            <button id="extrato-report-submit" class="report-popover-submit">Enviar por e-mail</button>
+            <div id="extrato-report-msg" class="mensagem"></div>
+          </div>
         </div>
         <button id="extrato-filter-toggle" class="extrato-filter-toggle" type="button">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>

@@ -2144,6 +2144,162 @@ textarea:focus {
   padding: 0 5px;
 }
 
+/* Extrato download button */
+.extrato-report-btn {
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+  width: auto !important;
+  height: 40px !important;
+  padding: 0 14px !important;
+  margin: 0 !important;
+  flex-shrink: 0;
+  background: transparent !important;
+  border: 1px solid rgba(56, 227, 172, 0.3) !important;
+  border-radius: 8px !important;
+  color: #38e3ac;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.extrato-report-btn:hover {
+  background: rgba(56, 227, 172, 0.08) !important;
+  border-color: rgba(56, 227, 172, 0.5) !important;
+}
+
+.extrato-report-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Report download popover */
+.report-popover-wrap {
+  position: relative;
+}
+
+/* Payment info banners */
+.payment-info-banners {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.payment-info-banner {
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 3px solid rgba(56, 227, 172, 0.3);
+  border-radius: 0 6px 6px 0;
+  font-size: 12px;
+  color: #5a6d82;
+  line-height: 1.4;
+}
+
+.payment-info-banner strong {
+  color: #8a9bb0;
+}
+
+/* Commissions view: scrollable layout matching transactions */
+[data-view="commissions"].page {
+  align-items: flex-start;
+  padding-top: 24px;
+  min-height: auto;
+}
+
+[data-view="commissions"] .card {
+  display: flex;
+  flex-direction: column;
+}
+
+.commissions-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.commissions-header h1 {
+  margin: 0;
+}
+
+.commissions-list {
+  max-height: 30vh;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 8px;
+}
+
+.report-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 100;
+  width: 220px;
+  padding: 10px;
+  background: #0f1920;
+  border: 1px solid rgba(56, 227, 172, 0.15);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+
+.report-popover-dates {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.report-popover-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.report-popover-field label {
+  display: block;
+  font-size: 10px;
+  color: #5a6d82;
+  margin-bottom: 2px;
+}
+
+.report-popover-field input[type="date"] {
+  width: 100%;
+  padding: 5px 4px !important;
+  font-size: 11px !important;
+  margin: 0 !important;
+  min-width: 0;
+}
+
+.report-popover-submit {
+  width: 100%;
+  padding: 7px !important;
+  font-size: 12px;
+  font-weight: 500;
+  background: rgba(56, 227, 172, 0.1) !important;
+  border: 1px solid rgba(56, 227, 172, 0.25) !important;
+  border-radius: 6px !important;
+  color: #38e3ac;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.report-popover-submit:hover {
+  background: rgba(56, 227, 172, 0.18) !important;
+}
+
+.report-popover-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.report-popover .mensagem {
+  margin-top: 6px;
+  font-size: 11px;
+}
+
 /* Collapsible filter panel */
 .extrato-filter-panel {
   margin-top: 10px;
@@ -2341,6 +2497,7 @@ textarea:focus {
 }
 
 .affiliate-stat {
+  position: relative;
   background: rgba(56, 227, 172, 0.06);
   border: 1px solid rgba(56, 227, 172, 0.12);
   border-radius: 12px;
@@ -2352,15 +2509,19 @@ textarea:focus {
   grid-column: 1 / -1;
 }
 
+.affiliate-stat .icon-btn-sm {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}
+
 .affiliate-stat-label {
   font-size: 0.75rem;
   color: #5a6d82;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
+  display: block;
+  text-align: center;
 }
 
 .affiliate-stat-value {
