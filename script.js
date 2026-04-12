@@ -2289,6 +2289,7 @@ route("#commissions", () => {
   if (!isLoggedIn()) { navigate("#login"); return; }
   loadCommissionsData();
 });
+route("#reports", () => { navigate("#transactions"); }); // legacy redirect
 route("#no-address", () => {});
 route("#faq", () => {});
 route("#transactions", () => { loadTransactions(); });
