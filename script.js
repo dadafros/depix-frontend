@@ -1479,12 +1479,7 @@ function initReportPopover(btnId, popoverId, startId, endId, submitId, msgId, ti
     popover.classList.remove("hidden");
   });
 
-  // Close popover on outside click
-  document.addEventListener("click", (e) => {
-    if (!popover.classList.contains("hidden") && !popover.contains(e.target) && !btn.contains(e.target)) {
-      popover.classList.add("hidden");
-    }
-  });
+  // Popover close-on-outside-click is handled by the delegated listener below
 
   // Submit handler
   document.getElementById(submitId)?.addEventListener("click", async () => {
@@ -1527,7 +1522,7 @@ function initReportPopover(btnId, popoverId, startId, endId, submitId, msgId, ti
       setMsg(msgId, e.message || "Sem conexão. Verifique sua internet.");
     } finally {
       submitBtn.disabled = false;
-      submitBtn.innerText = tipo === "extrato" ? "Solicitar extrato" : "Solicitar relatório";
+      submitBtn.innerText = "Enviar por e-mail";
     }
   });
 }
@@ -1543,6 +1538,16 @@ initReportPopover(
   "commission-report-start", "commission-report-end",
   "commission-report-submit", "commission-report-msg", "comissao"
 );
+
+// Single delegated close-on-outside-click for all popovers
+document.addEventListener("click", (e) => {
+  document.querySelectorAll(".report-popover-wrap").forEach(wrap => {
+    const popover = wrap.querySelector(".report-popover");
+    if (popover && !popover.classList.contains("hidden") && !wrap.contains(e.target)) {
+      popover.classList.add("hidden");
+    }
+  });
+});
 
 // ===== AFILIADOS =====
 
@@ -1615,13 +1620,16 @@ async function loadCommissionsData() {
   try {
     const res = await apiFetch("/api/status?type=affiliates");
     const data = await res.json();
-    if (!res.ok) return;
-
+    if (!res.ok) {
+      loading.textContent = "Erro ao carregar. Tente novamente.";
+      return;
+    }
     renderReferrals(data.referrals);
     renderPayments(data.payments);
     content.classList.remove("hidden");
-  } catch { /* silent */ } finally {
     loading.classList.add("hidden");
+  } catch {
+    loading.textContent = "Erro ao carregar. Tente novamente.";
   }
 }
 

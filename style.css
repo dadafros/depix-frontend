@@ -2179,12 +2179,6 @@ textarea:focus {
   position: relative;
 }
 
-.report-popover-wrap--inline {
-  display: inline-flex;
-  vertical-align: middle;
-  margin-left: 6px;
-}
-
 /* Payment info banners */
 .payment-info-banners {
   display: flex;
@@ -2304,17 +2298,6 @@ textarea:focus {
 .report-popover .mensagem {
   margin-top: 6px;
   font-size: 11px;
-}
-
-/* Spinner small (inline) */
-.spinner-small {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(56, 227, 172, 0.3);
-  border-top-color: #38e3ac;
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
 }
 
 /* Collapsible filter panel */
