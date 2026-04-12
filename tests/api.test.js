@@ -33,7 +33,7 @@ vi.mock("../router.js", () => ({
 global.fetch = vi.fn();
 
 import { apiFetch } from "../api.js";
-import { getToken, getRefreshToken, clearAuth } from "../auth.js";
+import { getToken, getRefreshToken, setAuth, clearAuth } from "../auth.js";
 import { navigate } from "../router.js";
 
 describe("apiFetch", () => {
@@ -225,5 +225,77 @@ describe("apiFetch", () => {
       expect(clearAuth).toHaveBeenCalled();
       expect(navigate).toHaveBeenCalledWith("#login");
     });
+  });
+});
+
+describe("tryRefresh merges verified field", () => {
+  beforeEach(() => {
+    localStorageMock.clear();
+    vi.resetAllMocks();
+    fetch.mockResolvedValue({ status: 200, ok: true, json: async () => ({}) });
+  });
+
+  // Helper: triggers tryRefresh by making apiFetch hit a 401 with valid tokens.
+  // fetch calls: 1) original 401, 2) refresh response, 3) retry response
+  function setupRefreshScenario(refreshData) {
+    getToken.mockReturnValue("expired-token");
+    getRefreshToken.mockReturnValue("valid-refresh");
+
+    fetch
+      .mockResolvedValueOnce({ status: 401, ok: false })                  // original request
+      .mockResolvedValueOnce({ status: 200, ok: true, json: async () => refreshData }) // refresh
+      .mockResolvedValueOnce({ status: 200, ok: true, json: async () => ({}) });       // retry
+  }
+
+  it("should update user.verified to 1 when refresh returns verified=1", async () => {
+    store["depix-user"] = JSON.stringify({ username: "alice", verified: 0 });
+    setupRefreshScenario({ token: "new-t", refreshToken: "new-rt", user: { verified: 1 } });
+
+    await apiFetch("/api/test");
+
+    expect(setAuth).toHaveBeenCalledWith(
+      "new-t",
+      "new-rt",
+      expect.objectContaining({ username: "alice", verified: 1 })
+    );
+  });
+
+  it("should update user.verified to 0 when refresh returns verified=0", async () => {
+    store["depix-user"] = JSON.stringify({ username: "bob", verified: 1 });
+    setupRefreshScenario({ token: "new-t", refreshToken: "new-rt", user: { verified: 0 } });
+
+    await apiFetch("/api/test");
+
+    expect(setAuth).toHaveBeenCalledWith(
+      "new-t",
+      "new-rt",
+      expect.objectContaining({ username: "bob", verified: 0 })
+    );
+  });
+
+  it("should preserve existing verified when refresh has no user field", async () => {
+    store["depix-user"] = JSON.stringify({ username: "carol", verified: 1 });
+    setupRefreshScenario({ token: "new-t", refreshToken: "new-rt" });
+
+    await apiFetch("/api/test");
+
+    expect(setAuth).toHaveBeenCalledWith(
+      "new-t",
+      "new-rt",
+      expect.objectContaining({ username: "carol", verified: 1 })
+    );
+  });
+
+  it("should preserve existing verified when refresh has user but no verified field", async () => {
+    store["depix-user"] = JSON.stringify({ username: "dave", verified: 1 });
+    setupRefreshScenario({ token: "new-t", refreshToken: "new-rt", user: { email: "d@e.com" } });
+
+    await apiFetch("/api/test");
+
+    expect(setAuth).toHaveBeenCalledWith(
+      "new-t",
+      "new-rt",
+      expect.objectContaining({ username: "dave", verified: 1 })
+    );
   });
 });
