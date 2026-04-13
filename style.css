@@ -3321,6 +3321,28 @@ textarea:focus {
   text-decoration: underline;
 }
 
+.landing-section-link {
+  margin-top: 1rem;
+  text-align: center;
+  font-size: 0.95rem;
+}
+.landing-section-link a {
+  color: #38e3ac;
+  text-decoration: none;
+}
+.landing-section-link a:hover {
+  text-decoration: underline;
+}
+
+.eco-card-link {
+  color: #38e3ac;
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+.eco-card-link:hover {
+  text-decoration: underline;
+}
+
 /* PWA: hide landing page in standalone mode */
 @media (display-mode: standalone) {
   section[data-view="landing"] {
