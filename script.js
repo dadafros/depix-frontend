@@ -2480,8 +2480,8 @@ async function loadChargeView() {
 
   try {
     const res = await apiFetch("/api/checkouts?limit=10");
-    const data = await res.json();
     if (!res.ok) return;
+    const data = await res.json();
     const checkouts = data.checkouts || [];
     const list = document.getElementById("merchant-checkouts-list");
     const empty = document.getElementById("merchant-checkouts-empty");
@@ -2560,8 +2560,8 @@ async function loadApiView() {
       document.getElementById("merchant-webhook-secret").textContent =
         merchantData.webhook_secret_prefix ? `${merchantData.webhook_secret_prefix}••••••••` : "—";
     }
+    if (!res.ok) { showToast("Erro ao carregar chaves."); return; }
     const data = await res.json();
-    if (!res.ok) return;
     const keys = data.api_keys || [];
     const list = document.getElementById("api-keys-list");
     const empty = document.getElementById("api-keys-empty");
@@ -2601,7 +2601,7 @@ async function loadApiView() {
         expAlert.classList.add("hidden");
       }
     }
-  } catch { /* ignore */ }
+  } catch (e) { if (!e.blocked) showToast("Erro ao carregar painel."); }
 }
 
 // === Minhas Vendas ===
@@ -2641,8 +2641,8 @@ async function loadSalesView() {
   try {
     const params = buildSalesFilterParams();
     const res = await apiFetch(`/api/checkouts?${params.toString()}`);
+    if (!res.ok) { const e = await res.json().catch(() => ({})); setMsg("sales-msg", e?.errorMessage || "Erro ao carregar vendas."); return; }
     const data = await res.json();
-    if (!res.ok) { setMsg("sales-msg", data?.errorMessage || "Erro ao carregar vendas."); return; }
 
     allSalesCheckouts = data.checkouts || [];
     const stats = data.stats || {};
@@ -2727,8 +2727,8 @@ async function loadWebhookLogs() {
 
   try {
     const res = await apiFetch("/api/webhook-logs");
+    if (!res.ok) { const e = await res.json().catch(() => ({})); setMsg("webhook-logs-msg", e?.errorMessage || "Erro ao carregar logs."); return; }
     const data = await res.json();
-    if (!res.ok) { setMsg("webhook-logs-msg", data?.errorMessage || "Erro ao carregar logs."); return; }
 
     const logs = data.logs || [];
     const list = document.getElementById("webhook-logs-list");
@@ -2976,11 +2976,11 @@ document.getElementById("btn-merchant-edit-save")?.addEventListener("click", asy
     const body = { [field]: sendValue };
     if (field === "liquid_address" && pendingLiquidPassword) {
       body.password = pendingLiquidPassword;
-      pendingLiquidPassword = null;
     }
     const res = await apiFetch("/api/merchants/me", { method: "PATCH", body: JSON.stringify(body) });
     const data = await res.json();
     if (!res.ok) { setMsg("merchant-edit-modal-msg", data?.errorMessage || "Erro ao salvar."); return; }
+    pendingLiquidPassword = null;
     document.getElementById("merchant-edit-modal")?.classList.add("hidden");
     merchantData = null; // Force reload
     showToast("Dados atualizados");
