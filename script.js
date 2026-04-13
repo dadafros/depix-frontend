@@ -2359,7 +2359,7 @@ function checkoutStatusColor(status) {
 const CHECKOUT_NON_TERMINAL = new Set(["pending", "processing"]);
 
 function renderCheckoutItem(c) {
-  const statusLabel = CHECKOUT_STATUS_LABELS[c.status] || c.status;
+  const statusLabel = CHECKOUT_STATUS_LABELS[c.status] || escapeHtml(c.status);
   const colorClass = checkoutStatusColor(c.status);
   const amount = formatBRL(c.amount);
   const desc = c.description ? `<span class="checkout-desc">${escapeHtml(c.description)}</span>` : '<span class="checkout-desc text-muted">(sem descrição)</span>';
@@ -2543,7 +2543,7 @@ async function loadAccountView() {
         });
       });
     }
-  } catch { /* ignore */ }
+  } catch (e) { if (!e.blocked) showToast("Erro ao carregar conta."); }
 }
 
 // === API e Webhooks ===
@@ -2631,6 +2631,7 @@ function buildSalesFilterParams() {
 }
 
 async function loadSalesView() {
+  stopSalesPolling();
   showMerchantMenu();
   document.getElementById("sales-loading")?.classList.remove("hidden");
   document.getElementById("sales-empty")?.classList.add("hidden");
@@ -2660,8 +2661,9 @@ async function loadSalesView() {
         try {
           const p = buildSalesFilterParams();
           const r = await apiFetch(`/api/checkouts?${p.toString()}`);
+          if (!r.ok) return;
           const d = await r.json();
-          if (r.ok) {
+          {
             allSalesCheckouts = d.checkouts || [];
             const st = d.stats || {};
             document.getElementById("sales-stat-completed").textContent = st.completed || 0;
@@ -2743,8 +2745,8 @@ async function loadWebhookLogs() {
       return `<div class="webhook-log-item">
         <div class="webhook-log-header">
           <span class="webhook-log-event">${escapeHtml(log.event || "")}</span>
-          <span class="webhook-log-status ${statusClass}">${log.status_code || "—"}</span>
-          <span class="webhook-log-attempt">${log.attempt || 1}/3</span>
+          <span class="webhook-log-status ${statusClass}">${escapeHtml(String(log.status_code || "—"))}</span>
+          <span class="webhook-log-attempt">${escapeHtml(String(log.attempt || 1))}/3</span>
           <span class="webhook-log-date">${formatDateShort(log.sent_at)}</span>
         </div>
         <div class="webhook-log-url">${escapeHtml(abbreviateHash(log.url || "", 35, 10))}</div>
