@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>DePix App para BTCPay Server</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="description" content="Aceite Pix no seu BTCPay Server e receba em DePix. Instale o plugin, cole sua API key e comece a receber pagamentos em minutos." />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'none'" />
+  <meta name="theme-color" content="#0a0f14" />
+
+  <link rel="canonical" href="https://depixapp.com/btcpay" />
+  <link rel="icon" href="../icon-192.png" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://depixapp.com/btcpay" />
+  <meta property="og:title" content="DePix App para BTCPay Server" />
+  <meta property="og:description" content="Aceite Pix no seu BTCPay Server e receba em DePix. Sem estorno, sem surpresa." />
+  <meta property="og:image" content="https://depixapp.com/social-preview.png" />
+  <meta property="og:locale" content="pt_BR" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Space+Grotesk:wght@600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0f14;
+      --surface: #111921;
+      --accent: #38e3ac;
+      --accent-dim: rgba(56, 227, 172, 0.12);
+      --border: rgba(56, 227, 172, 0.1);
+      --text: #e8edf2;
+      --muted: #8a9bb0;
+      --dim: #5a6d82;
+    }
+
+    html, body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      line-height: 1.6;
+    }
+
+    /* ── Nav ── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      background: rgba(10, 15, 20, 0.92);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(56, 227, 172, 0.12);
+      padding: 0 20px;
+    }
+    .nav-inner {
+      max-width: 960px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 56px;
+    }
+    .nav-logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: -0.03em;
+    }
+    .nav-logo img { flex-shrink: 0; border-radius: 6px; }
+    .nav-right { display: flex; align-items: center; gap: 1.25rem; }
+    .nav-link {
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: rgba(255, 255, 255, 0.65);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .nav-link:hover { color: #fff; }
+    .nav-cta {
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 22px;
+      border-radius: 10px;
+      background: var(--accent);
+      color: var(--bg);
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-weight: 600;
+      font-size: 0.9rem;
+      text-decoration: none;
+      transition: opacity 0.15s;
+    }
+    .nav-cta:hover { opacity: 0.9; }
+
+    /* ── Layout ── */
+    main { padding-top: 56px; }
+    .section {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 64px 24px;
+    }
+    .section + .section {
+      border-top: 1px solid rgba(56, 227, 172, 0.06);
+    }
+    .section-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 10px;
+      text-align: center;
+    }
+    .section-title {
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: var(--text);
+      text-align: center;
+      margin-bottom: 12px;
+    }
+    .section-sub {
+      font-size: 1rem;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.6;
+      max-width: 600px;
+      margin: 0 auto 40px;
+    }
+
+    /* ── Hero ── */
+    .hero {
+      text-align: center;
+      padding: 96px 24px 64px;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--accent-dim);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 6px 14px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--accent);
+      letter-spacing: 0.05em;
+      margin-bottom: 28px;
+    }
+    .hero h1 {
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-size: clamp(2rem, 5vw, 3rem);
+      font-weight: 700;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+      margin-bottom: 20px;
+    }
+    .hero h1 em {
+      color: var(--accent);
+      font-style: normal;
+    }
+    .hero p {
+      font-size: 1.1rem;
+      color: var(--muted);
+      line-height: 1.6;
+      max-width: 560px;
+      margin: 0 auto 36px;
+    }
+    .hero-cta {
+      display: inline-block;
+      padding: 15px 44px;
+      border-radius: 12px;
+      background: var(--accent);
+      color: var(--bg);
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-weight: 700;
+      font-size: 1.05rem;
+      text-decoration: none;
+      transition: opacity 0.15s, transform 0.15s;
+    }
+    .hero-cta:hover { opacity: 0.9; }
+    .hero-cta:active { opacity: 0.85; transform: scale(0.98); }
+    .hero-note {
+      margin-top: 14px;
+      font-size: 0.82rem;
+      color: var(--dim);
+    }
+
+    /* ── MED banner ── */
+    .med-banner {
+      background: linear-gradient(135deg, rgba(56, 227, 172, 0.08), rgba(56, 227, 172, 0.04));
+      border: 1px solid rgba(56, 227, 172, 0.2);
+      border-radius: 16px;
+      padding: 28px 32px;
+      text-align: center;
+      max-width: 640px;
+      margin: 0 auto 48px;
+    }
+    .med-banner-icon {
+      font-size: 2rem;
+      margin-bottom: 10px;
+    }
+    .med-banner h2 {
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+    .med-banner p {
+      font-size: 0.92rem;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    /* ── Steps ── */
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 14px;
+    }
+    .step {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px 22px;
+      text-align: center;
+    }
+    .step-num {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #38e3ac, #2bb88a);
+      color: var(--bg);
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-weight: 700;
+      font-size: 1.1rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+    .step h3 {
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+    .step p {
+      font-size: 0.875rem;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+    .step code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      background: rgba(56, 227, 172, 0.1);
+      color: var(--accent);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    /* ── Benefits ── */
+    .benefits {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+    }
+    .benefit {
+      background: var(--surface);
+      border: 1px solid rgba(56, 227, 172, 0.08);
+      border-radius: 14px;
+      padding: 22px 18px;
+    }
+    .benefit-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: var(--accent-dim);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 14px;
+    }
+    .benefit-icon svg {
+      width: 18px;
+      height: 18px;
+      stroke: var(--accent);
+    }
+    .benefit h3 {
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .benefit p {
+      font-size: 0.85rem;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    /* ── FAQ ── */
+    .faq { max-width: 700px; margin: 0 auto; }
+    .faq-item {
+      background: var(--surface);
+      border: 1px solid rgba(56, 227, 172, 0.08);
+      border-radius: 12px;
+      margin-bottom: 10px;
+      overflow: hidden;
+    }
+    .faq-item summary {
+      padding: 16px 20px;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .faq-item summary::-webkit-details-marker { display: none; }
+    .faq-item summary::after {
+      content: '+';
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.2rem;
+      color: var(--accent);
+      flex-shrink: 0;
+      margin-left: 16px;
+    }
+    .faq-item[open] summary::after { content: '−'; }
+    .faq-item[open] summary { border-bottom: 1px solid rgba(56, 227, 172, 0.08); }
+    .faq-item div {
+      padding: 14px 20px 18px;
+    }
+    .faq-item p {
+      font-size: 0.875rem;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+    .faq-item a { color: var(--accent); }
+
+    /* ── Final CTA ── */
+    .final-cta {
+      text-align: center;
+    }
+    .final-cta p {
+      font-size: 1rem;
+      color: var(--muted);
+      margin-bottom: 28px;
+      max-width: 480px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid rgba(56, 227, 172, 0.06);
+      padding: 28px 24px;
+      text-align: center;
+      font-size: 0.82rem;
+      color: var(--dim);
+    }
+    footer a { color: var(--muted); text-decoration: none; }
+    footer a:hover { color: var(--text); }
+    .footer-links { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; }
+
+    @media (hover: hover) {
+      .nav-cta:hover { filter: brightness(1.05); }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="https://depixapp.com/" class="nav-logo">
+      <img src="../icon-192.png" alt="DePix App" width="28" height="28">
+      DePix App
+    </a>
+    <div class="nav-right">
+      <a href="https://depixapp.com/docs" class="nav-link">Documentação</a>
+      <a href="https://blog.depixapp.com/" class="nav-link">Blog</a>
+      <a href="https://depixapp.com/#register" class="nav-cta">Criar conta</a>
+    </div>
+  </div>
+</nav>
+
+<main>
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-badge">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      Plugin para BTCPay Server
+    </div>
+    <h1>Aceite Pix no seu BTCPay Server.<br>Receba em <em>DePix</em>.</h1>
+    <p>Seu cliente paga com Pix normal. Você recebe DePix — um real digital na sua carteira. Sem estorno, sem banco no meio, sem surpresa.</p>
+    <a href="https://depixapp.com/#register" class="hero-cta">Criar conta grátis</a>
+    <p class="hero-note">Sem taxa de adesão. Sem mensalidade.</p>
+  </div>
+
+  <!-- MED Banner -->
+  <div class="section" style="padding-top: 0; padding-bottom: 48px;">
+    <div class="med-banner">
+      <div class="med-banner-icon">🔒</div>
+      <h2>Recebeu? É seu.</h2>
+      <p>Pix tradicional pode ser estornado pelo banco do pagador por até 80 dias — é o MED. Com DePix, quando o status chega em "Concluído", os tokens estão na sua carteira e a transação é irreversível. <strong style="color: #e8edf2;">Sem estorno. Sem surpresa.</strong></p>
+    </div>
+  </div>
+
+  <!-- 3 passos -->
+  <div class="section">
+    <div class="section-label">Configuração</div>
+    <h2 class="section-title">Pronto em 3 passos</h2>
+    <p class="section-sub">Não precisa de servidor, contrato ou aprovação. Só uma conta e um plugin.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <h3>Crie sua conta</h3>
+        <p>Cadastro em 1 minuto. Só e-mail — sem documentos, sem burocracia. Depois ative sua conta de lojista na Área do Lojista.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <h3>Copie sua API key</h3>
+        <p>Na Área do Lojista, gere uma chave de API. Ela começa com <code>sk_live_...</code>. Guarde — você vai usar no próximo passo.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <h3>Cole no plugin</h3>
+        <p>No seu BTCPay Server, instale o plugin DePix App. Cole a API key nas configurações. Pronto — Pix ativo.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Benefícios -->
+  <div class="section">
+    <div class="section-label">Por que DePix</div>
+    <h2 class="section-title">O Pix que não volta atrás</h2>
+    <p class="section-sub">Para quem vende online, a segurança do recebimento vale mais do que qualquer outra coisa.</p>
+    <div class="benefits">
+      <div class="benefit">
+        <div class="benefit-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+        </div>
+        <h3>Sem estorno</h3>
+        <p>Pagamento confirmado é pagamento seu. Nenhum banco pode cancelar depois que a transação foi concluída.</p>
+      </div>
+      <div class="benefit">
+        <div class="benefit-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        </div>
+        <h3>Webhook automático</h3>
+        <p>Quando o pagamento é confirmado, o BTCPay recebe um evento em tempo real e atualiza o status do pedido automaticamente.</p>
+      </div>
+      <div class="benefit">
+        <div class="benefit-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <h3>Expiração configurável</h3>
+        <p>Cada pedido tem um prazo de pagamento. Se não for pago a tempo, o checkout expira automaticamente.</p>
+      </div>
+      <div class="benefit">
+        <div class="benefit-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        </div>
+        <h3>Sandbox incluso</h3>
+        <p>Teste tudo antes de ir para produção. Nenhum dinheiro real é movimentado no modo de teste.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- FAQ -->
+  <div class="section">
+    <div class="section-label">Dúvidas</div>
+    <h2 class="section-title">Perguntas frequentes</h2>
+    <div class="faq">
+      <details class="faq-item">
+        <summary>Meu cliente precisa saber que é criptomoeda?</summary>
+        <div>
+          <p>Não. Para o seu cliente, é um Pix normal — ele abre o app do banco, escaneia o QR code e paga. Não aparece nada de criptomoeda na tela dele. A conversão para DePix acontece automaticamente na plataforma.</p>
+        </div>
+      </details>
+      <details class="faq-item">
+        <summary>O que é BTCPay Server?</summary>
+        <div>
+          <p>BTCPay Server é um sistema de pagamentos open-source para quem vende online. Ele permite receber criptomoedas sem depender de nenhuma empresa. Nosso plugin conecta o BTCPay à API do DePix App, adicionando Pix como método de pagamento no checkout da sua loja.</p>
+        </div>
+      </details>
+      <details class="faq-item">
+        <summary>Como o status do pedido é atualizado no BTCPay?</summary>
+        <div>
+          <p>Assim que o pagamento é confirmado, a API do DePix App envia um webhook para o seu servidor BTCPay com o evento <code style="font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; background: rgba(56,227,172,0.1); color: #38e3ac; padding: 2px 6px; border-radius: 4px;">checkout.completed</code>. O plugin processa o evento e marca o pedido como pago automaticamente. Você não precisa verificar manualmente.</p>
+        </div>
+      </details>
+      <details class="faq-item">
+        <summary>Posso testar antes de usar em produção?</summary>
+        <div>
+          <p>Sim. Ao criar uma API key do tipo "test" (<code style="font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; background: rgba(56,227,172,0.1); color: #38e3ac; padding: 2px 6px; border-radius: 4px;">sk_test_...</code>), todos os checkouts criados são de teste. Você pode simular um pagamento pela API sem movimentar dinheiro real. Quando estiver satisfeito, troque para uma chave live. Veja a <a href="https://depixapp.com/docs#sandbox">documentação do sandbox</a> para detalhes.</p>
+        </div>
+      </details>
+    </div>
+  </div>
+
+  <!-- Final CTA -->
+  <div class="section final-cta">
+    <div class="section-label">Comece agora</div>
+    <h2 class="section-title">Pronto para ativar?</h2>
+    <p>Crie sua conta, gere a API key e instale o plugin. Menos de 5 minutos até o primeiro Pix.</p>
+    <a href="https://depixapp.com/#register" class="hero-cta">Criar conta grátis</a>
+  </div>
+
+</main>
+
+<footer>
+  <div class="footer-links">
+    <a href="https://depixapp.com/">DePix App</a>
+    <a href="https://depixapp.com/docs">Documentação da API</a>
+    <a href="https://blog.depixapp.com/">Blog</a>
+    <a href="https://depixapp.com/#login">Entrar</a>
+  </div>
+  <p style="margin-top: 16px;">© 2025 DePix App. Todos os direitos reservados.</p>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Documentação da API — DePix App</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="description" content="Documentação completa da API do DePix App. Autenticação, checkouts, webhooks e sandbox." />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'none'; script-src 'unsafe-inline'" />
+  <meta name="theme-color" content="#0a0f14" />
+
+  <link rel="canonical" href="https://depixapp.com/docs" />
+  <link rel="icon" href="../icon-192.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Space+Grotesk:wght@600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0f14;
+      --surface: #111921;
+      --surface2: #0e1620;
+      --accent: #38e3ac;
+      --accent-dim: rgba(56, 227, 172, 0.12);
+      --border: rgba(56, 227, 172, 0.1);
+      --border-dim: rgba(255, 255, 255, 0.06);
+      --text: #e8edf2;
+      --muted: #8a9bb0;
+      --dim: #5a6d82;
+      --code-bg: #0d1b2a;
+      --method-get: #38bdf8;
+      --method-post: #34d399;
+      --method-delete: #f87171;
+    }
+
+    html, body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      line-height: 1.6;
+    }
+
+    /* ── Nav ── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      background: rgba(10, 15, 20, 0.95);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-dim);
+      padding: 0 20px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+    }
+    .nav-inner {
+      width: 100%;
+      max-width: 1280px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .nav-logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: -0.03em;
+    }
+    .nav-logo img { flex-shrink: 0; border-radius: 5px; }
+    .nav-logo span { color: var(--muted); font-weight: 500; font-size: 0.9rem; margin-left: 4px; }
+    .nav-right { display: flex; align-items: center; gap: 1.25rem; }
+    .nav-link {
+      font-size: 0.88rem;
+      color: var(--muted);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .nav-link:hover { color: var(--text); }
+
+    /* ── Layout ── */
+    .layout {
+      display: flex;
+      min-height: 100dvh;
+      padding-top: 56px;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 240px;
+      flex-shrink: 0;
+      position: sticky;
+      top: 56px;
+      height: calc(100dvh - 56px);
+      overflow-y: auto;
+      border-right: 1px solid var(--border-dim);
+      padding: 28px 0;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(56, 227, 172, 0.2) transparent;
+    }
+    .sidebar-section {
+      margin-bottom: 24px;
+    }
+    .sidebar-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--dim);
+      padding: 0 20px 8px;
+    }
+    .sidebar-link {
+      display: block;
+      padding: 7px 20px;
+      font-size: 0.875rem;
+      color: var(--muted);
+      text-decoration: none;
+      transition: color 0.12s, background 0.12s;
+      border-left: 2px solid transparent;
+    }
+    .sidebar-link:hover {
+      color: var(--text);
+      background: rgba(255,255,255,0.03);
+    }
+    .sidebar-link.active {
+      color: var(--accent);
+      border-left-color: var(--accent);
+      background: var(--accent-dim);
+    }
+    .sidebar-link .method-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.62rem;
+      font-weight: 600;
+      padding: 1px 5px;
+      border-radius: 4px;
+      margin-right: 6px;
+      vertical-align: 1px;
+    }
+    .get { color: var(--method-get); background: rgba(56, 189, 248, 0.1); }
+    .post { color: var(--method-post); background: rgba(52, 211, 153, 0.1); }
+    .del { color: var(--method-delete); background: rgba(248, 113, 113, 0.1); }
+
+    /* ── Content ── */
+    .content {
+      flex: 1;
+      min-width: 0;
+      padding: 40px 24px 80px;
+      max-width: 860px;
+    }
+
+    /* ── Section headings ── */
+    .doc-section {
+      margin-bottom: 56px;
+      scroll-margin-top: 72px;
+    }
+    .doc-section h2 {
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: var(--text);
+      margin-bottom: 8px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border-dim);
+    }
+    .doc-section h3 {
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+      margin: 28px 0 10px;
+    }
+    .doc-section p {
+      font-size: 0.925rem;
+      color: var(--muted);
+      line-height: 1.7;
+      margin-bottom: 14px;
+    }
+    .doc-section p strong { color: var(--text); }
+    .doc-section ul {
+      list-style: none;
+      padding: 0;
+      margin-bottom: 14px;
+    }
+    .doc-section ul li {
+      font-size: 0.9rem;
+      color: var(--muted);
+      line-height: 1.7;
+      padding-left: 16px;
+      position: relative;
+    }
+    .doc-section ul li::before {
+      content: '–';
+      position: absolute;
+      left: 0;
+      color: var(--dim);
+    }
+    .doc-section ul li strong { color: var(--text); }
+    .doc-section a { color: var(--accent); }
+
+    /* ── Endpoint header ── */
+    .endpoint {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .endpoint .method {
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 5px;
+      flex-shrink: 0;
+    }
+    .endpoint .path {
+      font-size: 0.9rem;
+      color: var(--text);
+    }
+    .endpoint .path em {
+      color: var(--accent);
+      font-style: normal;
+    }
+
+    /* ── Code block ── */
+    .code-wrap {
+      position: relative;
+      margin-bottom: 20px;
+    }
+    .code-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--dim);
+      margin-bottom: 6px;
+    }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border-dim);
+      border-radius: 10px;
+      padding: 18px 20px;
+      overflow-x: auto;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      line-height: 1.6;
+      color: #c9d1d9;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(56, 227, 172, 0.15) transparent;
+    }
+    .copy-btn {
+      position: absolute;
+      top: 28px;
+      right: 10px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      cursor: pointer;
+      transition: color 0.15s, background 0.15s;
+    }
+    .copy-btn:hover { color: var(--text); background: rgba(56,227,172,0.08); }
+    .copy-btn.copied { color: var(--accent); }
+    .hl-key { color: #79c0ff; }       /* JSON key */
+    .hl-str { color: #a5d6ff; }       /* string value */
+    .hl-num { color: #f0883e; }        /* number */
+    .hl-kw  { color: var(--accent); } /* keyword / special */
+    .hl-cm  { color: var(--dim); font-style: italic; } /* comment */
+    .hl-cmd { color: var(--accent); } /* curl keyword */
+    .hl-flag{ color: #f0883e; }        /* curl flag */
+    .hl-url { color: #a5d6ff; }        /* URL */
+
+    /* ── Param table ── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+      margin-bottom: 20px;
+    }
+    th {
+      text-align: left;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.68rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--dim);
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border-dim);
+    }
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      color: var(--muted);
+      vertical-align: top;
+      line-height: 1.5;
+    }
+    td:first-child {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--text);
+      white-space: nowrap;
+    }
+    .req { color: var(--accent); font-size: 0.7rem; font-weight: 600; }
+    .opt { color: var(--dim); font-size: 0.7rem; }
+
+    /* ── Alert box ── */
+    .alert {
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-size: 0.875rem;
+      line-height: 1.6;
+      margin-bottom: 16px;
+      display: flex;
+      gap: 10px;
+    }
+    .alert-icon { flex-shrink: 0; }
+    .alert.info {
+      background: rgba(56, 189, 248, 0.07);
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      color: #93c5fd;
+    }
+    .alert.warning {
+      background: rgba(251, 191, 36, 0.07);
+      border: 1px solid rgba(251, 191, 36, 0.2);
+      color: #fcd34d;
+    }
+    .alert.success {
+      background: var(--accent-dim);
+      border: 1px solid var(--border);
+      color: var(--accent);
+    }
+    .alert strong { font-weight: 600; }
+    .alert code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      background: rgba(255,255,255,0.08);
+      padding: 1px 5px;
+      border-radius: 4px;
+      color: inherit;
+    }
+
+    /* ── Inline code ── */
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82em;
+      background: rgba(56, 227, 172, 0.08);
+      color: var(--accent);
+      padding: 2px 6px;
+      border-radius: 5px;
+    }
+
+    /* ── Mobile: hide sidebar, show toggle ── */
+    .sidebar-toggle {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 0.85rem;
+      cursor: pointer;
+      margin-bottom: 24px;
+    }
+    .sidebar-toggle svg { stroke: var(--muted); }
+
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .sidebar.open {
+        display: block;
+        position: fixed;
+        top: 56px; left: 0; right: 0; bottom: 0;
+        width: 100%;
+        z-index: 50;
+        background: var(--bg);
+        height: calc(100dvh - 56px);
+      }
+      .sidebar-toggle { display: inline-flex; }
+      .content { padding: 24px 16px 60px; }
+      .nav-link { display: none; }
+    }
+
+    @media (min-width: 1100px) {
+      .content { padding: 40px 48px 80px; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="https://depixapp.com/" class="nav-logo">
+      <img src="../icon-192.png" alt="DePix App" width="24" height="24">
+      DePix App <span>/ API</span>
+    </a>
+    <div class="nav-right">
+      <a href="https://depixapp.com/btcpay" class="nav-link">Plugin BTCPay</a>
+      <a href="https://depixapp.com/#register" class="nav-link" style="color: var(--accent);">Criar conta</a>
+    </div>
+  </div>
+</nav>
+
+<div class="layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-title">Início</div>
+      <a href="#intro" class="sidebar-link active">Introdução</a>
+      <a href="#auth" class="sidebar-link">Autenticação</a>
+      <a href="#errors" class="sidebar-link">Erros</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">Checkouts</div>
+      <a href="#checkout-create" class="sidebar-link"><span class="method-badge post">POST</span>Criar checkout</a>
+      <a href="#checkout-get" class="sidebar-link"><span class="method-badge get">GET</span>Consultar</a>
+      <a href="#checkout-list" class="sidebar-link"><span class="method-badge get">GET</span>Listar</a>
+      <a href="#checkout-cancel" class="sidebar-link"><span class="method-badge post">POST</span>Cancelar</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">Webhooks</div>
+      <a href="#webhooks" class="sidebar-link">Visão geral</a>
+      <a href="#webhook-events" class="sidebar-link">Eventos</a>
+      <a href="#webhook-verify" class="sidebar-link">Verificar assinatura</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">Testes</div>
+      <a href="#sandbox" class="sidebar-link">Sandbox</a>
+      <a href="#simulate" class="sidebar-link">Simular pagamento</a>
+    </div>
+  </aside>
+
+  <!-- Content -->
+  <main class="content">
+
+    <button class="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      Menu
+    </button>
+
+    <!-- Intro -->
+    <section class="doc-section" id="intro">
+      <h2>Introdução</h2>
+      <p>A API do DePix App permite criar e gerenciar checkouts Pix programaticamente. É a mesma API que alimenta o plugin do BTCPay Server e a Área do Lojista.</p>
+
+      <h3>URL base</h3>
+      <div class="code-wrap">
+        <pre><span class="hl-url">https://depix-backend.vercel.app</span></pre>
+      </div>
+
+      <h3>Formato</h3>
+      <p>Todos os requests e responses usam JSON (<code>Content-Type: application/json</code>). Valores monetários são sempre em <strong>centavos</strong> (inteiros). Exemplo: R$ 10,00 = <code>1000</code>.</p>
+
+      <div class="alert info">
+        <span class="alert-icon">ℹ</span>
+        <span>Para começar, <a href="https://depixapp.com/#register" style="color: inherit; font-weight: 600;">crie uma conta</a>, ative sua conta de lojista na Área do Lojista e gere uma API key.</span>
+      </div>
+    </section>
+
+    <!-- Auth -->
+    <section class="doc-section" id="auth">
+      <h2>Autenticação</h2>
+      <p>Use uma API key no header <code>Authorization</code> em todos os requests autenticados.</p>
+
+      <div class="code-wrap">
+        <div class="code-label">Header</div>
+        <pre><span class="hl-key">Authorization</span>: <span class="hl-str">Bearer sk_live_&lt;sua-chave&gt;</span></pre>
+      </div>
+
+      <h3>Tipos de chave</h3>
+      <table>
+        <thead><tr><th>Prefixo</th><th>Tipo</th><th>Comportamento</th></tr></thead>
+        <tbody>
+          <tr><td>sk_live_</td><td>Live</td><td>Checkouts reais. Dinheiro de verdade.</td></tr>
+          <tr><td>sk_test_</td><td>Test</td><td>Checkouts de teste. Nenhum dinheiro real é movimentado.</td></tr>
+        </tbody>
+      </table>
+
+      <p>Para gerenciar suas chaves (criar, listar, revogar), acesse a <strong>Área do Lojista</strong> em <a href="https://depixapp.com/#merchant">depixapp.com/#merchant</a>. Máximo de 5 chaves live e 5 chaves test ativas por conta.</p>
+
+      <div class="alert warning">
+        <span class="alert-icon">⚠</span>
+        <span><strong>Guarde sua chave com segurança.</strong> Ela só é exibida uma vez no momento da criação. Se perdê-la, revogue e gere uma nova.</span>
+      </div>
+    </section>
+
+    <!-- Errors -->
+    <section class="doc-section" id="errors">
+      <h2>Erros</h2>
+      <p>Erros seguem o formato abaixo. O campo <code>errorMessage</code> é sempre legível para humanos.</p>
+
+      <div class="code-wrap">
+        <div class="code-label">Resposta de erro</div>
+        <pre>{
+  <span class="hl-key">"response"</span>: {
+    <span class="hl-key">"errorMessage"</span>: <span class="hl-str">"Dados inválidos."</span>,
+    <span class="hl-key">"errors"</span>: [                         <span class="hl-cm">// presente em erros de validação</span>
+      { <span class="hl-key">"field"</span>: <span class="hl-str">"amount"</span>, <span class="hl-key">"message"</span>: <span class="hl-str">"Obrigatório."</span> }
+    ]
+  }
+}</pre>
+      </div>
+
+      <table>
+        <thead><tr><th>Status</th><th>Significado</th></tr></thead>
+        <tbody>
+          <tr><td>400</td><td>Dados inválidos — verifique os campos.</td></tr>
+          <tr><td>401</td><td>API key ausente, inválida ou revogada.</td></tr>
+          <tr><td>403</td><td>Sem permissão. Conta de lojista não configurada, ou chave sem acesso ao recurso.</td></tr>
+          <tr><td>404</td><td>Recurso não encontrado.</td></tr>
+          <tr><td>409</td><td>Conflito de estado — operação não permitida no status atual.</td></tr>
+          <tr><td>429</td><td>Rate limit excedido. Aguarde e tente novamente.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Create checkout -->
+    <section class="doc-section" id="checkout-create">
+      <h2>Criar checkout</h2>
+      <p>Cria um novo checkout Pix. Retorna o QR code e a URL de pagamento para exibir ao seu cliente.</p>
+
+      <div class="endpoint">
+        <span class="method post">POST</span>
+        <span class="path">/api/checkouts</span>
+      </div>
+
+      <h3>Parâmetros</h3>
+      <table>
+        <thead><tr><th>Campo</th><th>Tipo</th><th></th><th>Descrição</th></tr></thead>
+        <tbody>
+          <tr><td>amount</td><td>integer</td><td><span class="req">obrigatório</span></td><td>Valor em centavos. Mínimo: 500 (R$ 5,00). Máximo: 300000 (R$ 3.000,00).</td></tr>
+          <tr><td>description</td><td>string</td><td><span class="opt">opcional</span></td><td>Descrição do pedido. Máximo 500 caracteres. Exibida na página de pagamento.</td></tr>
+          <tr><td>expires_in</td><td>integer</td><td><span class="opt">opcional</span></td><td>Tempo de expiração em segundos. Padrão: 1800 (30min). Mínimo: 300 (5min). Máximo: 86400 (24h).</td></tr>
+          <tr><td>image_url</td><td>string</td><td><span class="opt">opcional</span></td><td>URL HTTPS da imagem do produto. Exibida na página de pagamento.</td></tr>
+          <tr><td>callback_url</td><td>string</td><td><span class="opt">opcional</span></td><td>URL HTTPS que recebe os webhooks do checkout.</td></tr>
+          <tr><td>redirect_url</td><td>string</td><td><span class="opt">opcional</span></td><td>URL para redirecionar o cliente após o pagamento.</td></tr>
+          <tr><td>metadata</td><td>object</td><td><span class="opt">opcional</span></td><td>Dados adicionais do seu sistema (order_id, user_id, etc.). Máximo 4KB. Devolvido nos webhooks.</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Exemplo</h3>
+      <div class="code-wrap">
+        <div class="code-label">curl</div>
+        <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+        <pre><span class="hl-cmd">curl</span> <span class="hl-flag">-X POST</span> <span class="hl-url">https://depix-backend.vercel.app/api/checkouts</span> \
+  <span class="hl-flag">-H</span> <span class="hl-str">"Authorization: Bearer sk_live_&lt;sua-chave&gt;"</span> \
+  <span class="hl-flag">-H</span> <span class="hl-str">"Content-Type: application/json"</span> \
+  <span class="hl-flag">-d</span> <span class="hl-str">'{
+    "amount": 2990,
+    "description": "Camiseta tamanho M",
+    "expires_in": 900,
+    "callback_url": "https://minha-loja.com/webhook/depix",
+    "metadata": { "order_id": "ORD-123" }
+  }'</span></pre>
+      </div>
+
+      <div class="code-wrap">
+        <div class="code-label">Resposta — 201 Created</div>
+        <pre>{
+  <span class="hl-key">"id"</span>:          <span class="hl-str">"chk_01jxxxxxxxxxxxxxxxxxxxxxx"</span>,
+  <span class="hl-key">"status"</span>:      <span class="hl-str">"pending"</span>,
+  <span class="hl-key">"amount"</span>:      <span class="hl-num">2990</span>,
+  <span class="hl-key">"description"</span>: <span class="hl-str">"Camiseta tamanho M"</span>,
+  <span class="hl-key">"image_url"</span>:   <span class="hl-kw">null</span>,
+  <span class="hl-key">"expires_at"</span>:  <span class="hl-str">"2025-06-01T15:30:00.000Z"</span>,
+  <span class="hl-key">"is_live"</span>:     <span class="hl-kw">true</span>,
+  <span class="hl-key">"payment_url"</span>: <span class="hl-str">"https://pay.depixapp.com/chk_01jxxxxxxxxxxxxxxxxxxxxxx"</span>,
+  <span class="hl-key">"pix"</span>: {
+    <span class="hl-key">"qr_code"</span>: <span class="hl-str">"00020126580014br.gov.bcb.pix..."</span>    <span class="hl-cm">// payload EMV para QR code</span>
+  }
+}</pre>
+      </div>
+
+      <div class="alert success">
+        <span class="alert-icon">💡</span>
+        <span>Exiba o <code>payment_url</code> ao seu cliente ou gere um QR code a partir do <code>pix.qr_code</code>. O QR code é compatível com qualquer app de banco.</span>
+      </div>
+    </section>
+
+    <!-- Get checkout -->
+    <section class="doc-section" id="checkout-get">
+      <h2>Consultar checkout</h2>
+      <p>Retorna os detalhes de um checkout específico.</p>
+
+      <div class="endpoint">
+        <span class="method get">GET</span>
+        <span class="path">/api/checkouts/<em>:id</em></span>
+      </div>
+
+      <div class="code-wrap">
+        <div class="code-label">curl</div>
+        <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+        <pre><span class="hl-cmd">curl</span> <span class="hl-url">https://depix-backend.vercel.app/api/checkouts/chk_01jxxxxxxxxxxxxxxxxxxxxxx</span> \
+  <span class="hl-flag">-H</span> <span class="hl-str">"Authorization: Bearer sk_live_&lt;sua-chave&gt;"</span></pre>
+      </div>
+
+      <div class="code-wrap">
+        <div class="code-label">Resposta — 200 OK</div>
+        <pre>{
+  <span class="hl-key">"checkout"</span>: {
+    <span class="hl-key">"id"</span>:             <span class="hl-str">"chk_01jxxxxxxxxxxxxxxxxxxxxxx"</span>,
+    <span class="hl-key">"status"</span>:         <span class="hl-str">"completed"</span>,     <span class="hl-cm">// pending | processing | completed | cancelled | expired</span>
+    <span class="hl-key">"amount"</span>:         <span class="hl-num">2990</span>,
+    <span class="hl-key">"description"</span>:    <span class="hl-str">"Camiseta tamanho M"</span>,
+    <span class="hl-key">"image_url"</span>:      <span class="hl-kw">null</span>,
+    <span class="hl-key">"callback_url"</span>:   <span class="hl-str">"https://minha-loja.com/webhook/depix"</span>,
+    <span class="hl-key">"redirect_url"</span>:   <span class="hl-kw">null</span>,
+    <span class="hl-key">"metadata"</span>:       { <span class="hl-key">"order_id"</span>: <span class="hl-str">"ORD-123"</span> },
+    <span class="hl-key">"expires_at"</span>:     <span class="hl-str">"2025-06-01T15:30:00.000Z"</span>,
+    <span class="hl-key">"is_live"</span>:        <span class="hl-kw">true</span>,
+    <span class="hl-key">"created_at"</span>:     <span class="hl-str">"2025-06-01T15:00:00.000Z"</span>,
+    <span class="hl-key">"processing_at"</span>:  <span class="hl-str">"2025-06-01T15:02:00.000Z"</span>,
+    <span class="hl-key">"completed_at"</span>:   <span class="hl-str">"2025-06-01T15:22:00.000Z"</span>,
+    <span class="hl-key">"cancelled_at"</span>:   <span class="hl-kw">null</span>
+  }
+}</pre>
+      </div>
+
+      <h3>Status possíveis</h3>
+      <table>
+        <thead><tr><th>Status</th><th>Significado</th></tr></thead>
+        <tbody>
+          <tr><td>pending</td><td>Aguardando pagamento.</td></tr>
+          <tr><td>processing</td><td>Pix recebido, processando conversão para DePix.</td></tr>
+          <tr><td>completed</td><td>Pagamento confirmado. DePix na carteira do merchant.</td></tr>
+          <tr><td>cancelled</td><td>Cancelado pelo merchant.</td></tr>
+          <tr><td>expired</td><td>Prazo de pagamento expirou.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- List checkouts -->
+    <section class="doc-section" id="checkout-list">
+      <h2>Listar checkouts</h2>
+      <p>Lista os checkouts do merchant com filtros e paginação.</p>
+
+      <div class="endpoint">
+        <span class="method get">GET</span>
+        <span class="path">/api/checkouts</span>
+      </div>
+
+      <h3>Query params (todos opcionais)</h3>
+      <table>
+        <thead><tr><th>Parâmetro</th><th>Descrição</th></tr></thead>
+        <tbody>
+          <tr><td>status</td><td>Filtrar por status: <code>pending</code>, <code>completed</code>, <code>cancelled</code>, <code>expired</code>.</td></tr>
+          <tr><td>from</td><td>Data de início (ISO 8601). Ex: <code>2025-06-01T00:00:00Z</code>.</td></tr>
+          <tr><td>to</td><td>Data de fim (ISO 8601).</td></tr>
+          <tr><td>q</td><td>Busca por ID ou descrição.</td></tr>
+          <tr><td>limit</td><td>Número de resultados por página. Padrão: 50. Máximo: 100.</td></tr>
+          <tr><td>offset</td><td>Paginação. Padrão: 0.</td></tr>
+        </tbody>
+      </table>
+
+      <div class="code-wrap">
+        <div class="code-label">curl</div>
+        <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+        <pre><span class="hl-cmd">curl</span> <span class="hl-url">"https://depix-backend.vercel.app/api/checkouts?status=completed&limit=20"</span> \
+  <span class="hl-flag">-H</span> <span class="hl-str">"Authorization: Bearer sk_live_&lt;sua-chave&gt;"</span></pre>
+      </div>
+
+      <div class="code-wrap">
+        <div class="code-label">Resposta — 200 OK</div>
+        <pre>{
+  <span class="hl-key">"checkouts"</span>: [
+    {
+      <span class="hl-key">"id"</span>:           <span class="hl-str">"chk_01jxxxxxxxxxxxxxxxxxxxxxx"</span>,
+      <span class="hl-key">"status"</span>:       <span class="hl-str">"completed"</span>,
+      <span class="hl-key">"amount"</span>:       <span class="hl-num">2990</span>,
+      <span class="hl-key">"description"</span>:  <span class="hl-str">"Camiseta tamanho M"</span>,
+      <span class="hl-key">"created_at"</span>:   <span class="hl-str">"2025-06-01T15:00:00.000Z"</span>,
+      <span class="hl-key">"expires_at"</span>:   <span class="hl-str">"2025-06-01T15:30:00.000Z"</span>,
+      <span class="hl-key">"is_live"</span>:      <span class="hl-kw">true</span>
+    }
+  ],
+  <span class="hl-key">"stats"</span>: {
+    <span class="hl-key">"total"</span>:            <span class="hl-num">47</span>,
+    <span class="hl-key">"pending"</span>:          <span class="hl-num">2</span>,
+    <span class="hl-key">"completed"</span>:        <span class="hl-num">40</span>,
+    <span class="hl-key">"completed_amount"</span>:  <span class="hl-num">189500</span>    <span class="hl-cm">// centavos — R$ 1.895,00</span>
+  },
+  <span class="hl-key">"limit"</span>:  <span class="hl-num">20</span>,
+  <span class="hl-key">"offset"</span>: <span class="hl-num">0</span>
+}</pre>
+      </div>
+    </section>
+
+    <!-- Cancel -->
+    <section class="doc-section" id="checkout-cancel">
+      <h2>Cancelar checkout</h2>
+      <p>Cancela um checkout pendente. Só é possível cancelar checkouts com status <code>pending</code>.</p>
+
+      <div class="endpoint">
+        <span class="method post">POST</span>
+        <span class="path">/api/checkouts/<em>:id</em>/cancel</span>
+      </div>
+
+      <div class="code-wrap">
+        <div class="code-label">curl</div>
+        <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+        <pre><span class="hl-cmd">curl</span> <span class="hl-flag">-X POST</span> <span class="hl-url">https://depix-backend.vercel.app/api/checkouts/chk_01jxxxxxxxxxxxxxxxxxxxxxx/cancel</span> \
+  <span class="hl-flag">-H</span> <span class="hl-str">"Authorization: Bearer sk_live_&lt;sua-chave&gt;"</span></pre>
+      </div>
+
+      <div class="code-wrap">
+        <div class="code-label">Resposta — 200 OK</div>
+        <pre>{ <span class="hl-key">"success"</span>: <span class="hl-kw">true</span> }</pre>
+      </div>
+    </section>
+
+    <!-- Webhooks -->
+    <section class="doc-section" id="webhooks">
+      <h2>Webhooks</h2>
+      <p>Quando o status de um checkout muda, a API envia um POST para o <code>callback_url</code> que você informou ao criar o checkout.</p>
+
+      <h3>Como funciona</h3>
+      <ul>
+        <li>O request é enviado com <strong>timeout de 5 segundos</strong>.</li>
+        <li>Se falhar, a API tenta novamente <strong>3 vezes</strong>: imediatamente, após 1 minuto e após 10 minutos.</li>
+        <li>Sua endpoint deve responder com <strong>status 2xx</strong> para confirmar recebimento.</li>
+        <li>O <code>callback_url</code> precisa ser HTTPS e de acesso público (sem IPs privados).</li>
+      </ul>
+    </section>
+
+    <!-- Events -->
+    <section class="doc-section" id="webhook-events">
+      <h2>Eventos</h2>
+
+      <h3>checkout.completed</h3>
+      <p>Disparado quando o pagamento é confirmado e o DePix chega na carteira do merchant.</p>
+      <div class="code-wrap">
+        <pre>{
+  <span class="hl-key">"event"</span>: <span class="hl-str">"checkout.completed"</span>,
+  <span class="hl-key">"data"</span>: {
+    <span class="hl-key">"id"</span>:           <span class="hl-str">"chk_01jxxxxxxxxxxxxxxxxxxxxxx"</span>,
+    <span class="hl-key">"status"</span>:       <span class="hl-str">"completed"</span>,
+    <span class="hl-key">"amount"</span>:       <span class="hl-num">2990</span>,
+    <span class="hl-key">"completed_at"</span>: <span class="hl-str">"2025-06-01T15:22:00.000Z"</span>,
+    <span class="hl-key">"metadata"</span>:     { <span class="hl-key">"order_id"</span>: <span class="hl-str">"ORD-123"</span> }
+  }
+}</pre>
+      </div>
+
+      <h3>checkout.cancelled</h3>
+      <p>Disparado quando o merchant cancela o checkout via API.</p>
+      <div class="code-wrap">
+        <pre>{
+  <span class="hl-key">"event"</span>: <span class="hl-str">"checkout.cancelled"</span>,
+  <span class="hl-key">"data"</span>: {
+    <span class="hl-key">"id"</span>:       <span class="hl-str">"chk_01jxxxxxxxxxxxxxxxxxxxxxx"</span>,
+    <span class="hl-key">"status"</span>:   <span class="hl-str">"cancelled"</span>,
+    <span class="hl-key">"amount"</span>:   <span class="hl-num">2990</span>,
+    <span class="hl-key">"metadata"</span>: { <span class="hl-key">"order_id"</span>: <span class="hl-str">"ORD-123"</span> }
+  }
+}</pre>
+      </div>
+    </section>
+
+    <!-- Verify signature -->
+    <section class="doc-section" id="webhook-verify">
+      <h2>Verificar assinatura</h2>
+      <p>Cada webhook vem com um header <code>X-DePix-Signature</code>. Sempre valide a assinatura antes de processar o evento — isso garante que o request veio da API do DePix App e não de terceiros.</p>
+
+      <h3>Formato do header</h3>
+      <div class="code-wrap">
+        <pre><span class="hl-key">X-DePix-Signature</span>: <span class="hl-str">t=1717257600,v1=abc123def456...</span></pre>
+      </div>
+
+      <ul>
+        <li><strong>t</strong> — timestamp Unix do envio (segundos).</li>
+        <li><strong>v1</strong> — assinatura HMAC-SHA256 em hexadecimal.</li>
+      </ul>
+
+      <h3>Como validar</h3>
+      <p>A assinatura é calculada sobre a string <code>timestamp.payload</code> usando o <strong>Webhook Secret</strong> da sua conta (disponível na Área do Lojista).</p>
+
+      <div class="code-wrap">
+        <div class="code-label">Node.js</div>
+        <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+        <pre><span class="hl-kw">import</span> crypto <span class="hl-kw">from</span> <span class="hl-str">"node:crypto"</span>;
+
+<span class="hl-kw">function</span> verifyWebhook(rawBody, sigHeader, secret) {
+  <span class="hl-kw">const</span> parts = Object.fromEntries(
+    sigHeader.split(<span class="hl-str">","</span>).map(p => p.split(<span class="hl-str">"="</span>, 2))
+  );
+  <span class="hl-kw">const</span> timestamp = parts[<span class="hl-str">"t"</span>];
+  <span class="hl-kw">const</span> received  = parts[<span class="hl-str">"v1"</span>];
+
+  <span class="hl-kw">const</span> expected = crypto
+    .createHmac(<span class="hl-str">"sha256"</span>, secret)
+    .update(`${timestamp}.${rawBody}`)
+    .digest(<span class="hl-str">"hex"</span>);
+
+  <span class="hl-cm">// Use timingSafeEqual to prevent timing attacks</span>
+  <span class="hl-kw">const</span> a = Buffer.from(expected, <span class="hl-str">"hex"</span>);
+  <span class="hl-kw">const</span> b = Buffer.from(received, <span class="hl-str">"hex"</span>);
+  <span class="hl-kw">if</span> (a.length !== b.length) <span class="hl-kw">return false</span>;
+  <span class="hl-kw">return</span> crypto.timingSafeEqual(a, b);
+}
+
+<span class="hl-cm">// Exemplo com Express</span>
+app.post(<span class="hl-str">"/webhook/depix"</span>, express.raw({ type: <span class="hl-str">"application/json"</span> }), (req, res) => {
+  <span class="hl-kw">const</span> sig = req.headers[<span class="hl-str">"x-depix-signature"</span>];
+  <span class="hl-kw">if</span> (!verifyWebhook(req.body.toString(), sig, process.env.DEPIX_WEBHOOK_SECRET)) {
+    <span class="hl-kw">return</span> res.status(401).send(<span class="hl-str">"Assinatura inválida"</span>);
+  }
+  <span class="hl-kw">const</span> { event, data } = JSON.parse(req.body);
+  <span class="hl-cm">// processa o evento...</span>
+  res.sendStatus(200);
+});</pre>
+      </div>
+
+      <div class="alert warning">
+        <span class="alert-icon">⚠</span>
+        <span>Leia o body como <strong>raw bytes</strong> (antes do parsing JSON). Qualquer reformatação invalida a assinatura.</span>
+      </div>
+    </section>
+
+    <!-- Sandbox -->
+    <section class="doc-section" id="sandbox">
+      <h2>Sandbox</h2>
+      <p>Use chaves do tipo <code>sk_test_...</code> para testar sem movimentar dinheiro real. Checkouts criados com chave test nunca geram Pix real e ficam isolados dos checkouts de produção.</p>
+
+      <h3>Diferenças do modo test</h3>
+      <ul>
+        <li>O campo <code>is_live</code> retorna <code>false</code>.</li>
+        <li>O QR code gerado não é um Pix válido — não pode ser pago num app de banco.</li>
+        <li>Use o endpoint <code>/simulate-payment</code> para marcar o checkout como pago.</li>
+        <li>Webhooks são enviados normalmente — ótimo para testar sua integração de ponta a ponta.</li>
+      </ul>
+
+      <div class="alert success">
+        <span class="alert-icon">✓</span>
+        <span>O sandbox é independente de produção. Você pode criar, simular e cancelar checkouts de teste sem risco.</span>
+      </div>
+    </section>
+
+    <!-- Simulate -->
+    <section class="doc-section" id="simulate">
+      <h2>Simular pagamento</h2>
+      <p>Marca um checkout de teste como pago. Só funciona com chaves <code>sk_test_</code>. Dispara o webhook <code>checkout.completed</code> normalmente.</p>
+
+      <div class="endpoint">
+        <span class="method post">POST</span>
+        <span class="path">/api/checkouts/<em>:id</em>/simulate-payment</span>
+      </div>
+
+      <div class="code-wrap">
+        <div class="code-label">curl</div>
+        <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+        <pre><span class="hl-cm"># 1. Crie um checkout de teste</span>
+<span class="hl-cmd">curl</span> <span class="hl-flag">-X POST</span> <span class="hl-url">https://depix-backend.vercel.app/api/checkouts</span> \
+  <span class="hl-flag">-H</span> <span class="hl-str">"Authorization: Bearer sk_test_&lt;sua-chave&gt;"</span> \
+  <span class="hl-flag">-H</span> <span class="hl-str">"Content-Type: application/json"</span> \
+  <span class="hl-flag">-d</span> <span class="hl-str">'{ "amount": 1000, "callback_url": "https://minha-loja.com/webhook" }'</span>
+
+<span class="hl-cm"># 2. Simule o pagamento</span>
+<span class="hl-cmd">curl</span> <span class="hl-flag">-X POST</span> <span class="hl-url">https://depix-backend.vercel.app/api/checkouts/chk_01jxxxxxxxxxxxxxxxxxxxxxx/simulate-payment</span> \
+  <span class="hl-flag">-H</span> <span class="hl-str">"Authorization: Bearer sk_test_&lt;sua-chave&gt;"</span></pre>
+      </div>
+
+      <div class="code-wrap">
+        <div class="code-label">Resposta — 200 OK</div>
+        <pre>{ <span class="hl-key">"success"</span>: <span class="hl-kw">true</span> }</pre>
+      </div>
+
+      <p>Após a simulação, seu <code>callback_url</code> receberá o evento <code>checkout.completed</code> em alguns segundos — exatamente como num pagamento real.</p>
+    </section>
+
+  </main>
+</div>
+
+<script>
+  function copyCode(btn) {
+    const pre = btn.parentElement.querySelector("pre");
+    navigator.clipboard.writeText(pre.innerText).then(() => {
+      btn.textContent = "copiado!";
+      btn.classList.add("copied");
+      setTimeout(() => {
+        btn.textContent = "copiar";
+        btn.classList.remove("copied");
+      }, 2000);
+    });
+  }
+
+  // Highlight active sidebar link on scroll
+  const sections = document.querySelectorAll(".doc-section");
+  const links = document.querySelectorAll(".sidebar-link");
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        links.forEach(l => l.classList.remove("active"));
+        const active = document.querySelector(`.sidebar-link[href="#${entry.target.id}"]`);
+        if (active) active.classList.add("active");
+      }
+    });
+  }, { rootMargin: "-56px 0px -60% 0px" });
+
+  sections.forEach(s => observer.observe(s));
+
+  // Close sidebar on link click (mobile)
+  links.forEach(link => {
+    link.addEventListener("click", () => {
+      document.getElementById("sidebar").classList.remove("open");
+    });
+  });
+</script>
+
+</body>
+</html>
