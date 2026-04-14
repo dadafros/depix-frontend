@@ -1,6 +1,6 @@
 // Service Worker — DePix PWA
 // Bump APP_VERSION on every release. Keep in sync with ?v= query strings in index.html.
-const APP_VERSION = 97;
+const APP_VERSION = 98;
 const CACHE_NAME = `depix-v${APP_VERSION}`;
 
 const STATIC_FILES = [
