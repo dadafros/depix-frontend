@@ -142,16 +142,16 @@
   }
   </script>
 
-  <link rel="manifest" href="manifest.json?v=98" />
-  <link rel="icon" href="icon-192.png?v=98" />
-  <link rel="apple-touch-icon" href="icon-192.png?v=98" />
+  <link rel="manifest" href="manifest.json?v=99" />
+  <link rel="icon" href="icon-192.png?v=99" />
+  <link rel="apple-touch-icon" href="icon-192.png?v=99" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
   <!-- Asset version must match APP_VERSION in service-worker.js -->
-  <link rel="stylesheet" href="style.css?v=98" />
+  <link rel="stylesheet" href="style.css?v=99" />
 </head>
 <body>
 
@@ -160,7 +160,7 @@
 
   <nav class="landing-nav">
     <div class="landing-nav-inner">
-      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=98" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
+      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=99" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
       <div class="landing-nav-right">
         <a href="https://blog.depixapp.com/" class="landing-nav-link">Blog</a>
         <a href="#login" class="landing-nav-cta">Entrar</a>
@@ -506,6 +506,31 @@
     <p class="landing-section-link"><a href="https://blog.depixapp.com/posts/renda-extra-afiliado-depix/" target="_blank" rel="noopener noreferrer">Saiba mais sobre o programa de afiliados →</a></p>
   </div>
 
+  <!-- API / BTCPay section — merchant mode only -->
+  <div class="landing-section landing-merchant-content">
+    <div class="landing-section-label">Para desenvolvedores</div>
+    <h2>Integre com sua plataforma</h2>
+    <p class="landing-affiliates-subtitle">API pública com webhooks, sandbox e exemplos prontos. Ou use o plugin para BTCPay Server e comece a receber Pix em minutos.</p>
+    <div class="landing-benefits">
+      <div class="landing-benefit">
+        <div class="landing-benefit-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        </div>
+        <h3>API REST</h3>
+        <p>Crie checkouts, receba webhooks e gerencie pagamentos direto do seu sistema. Autenticação via API key, exemplos em curl.</p>
+        <p style="margin-top: 10px;"><a href="/docs" class="landing-section-link-inline">Ver documentação →</a></p>
+      </div>
+      <div class="landing-benefit">
+        <div class="landing-benefit-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        </div>
+        <h3>Plugin BTCPay Server</h3>
+        <p>Aceite Pix no seu BTCPay Server e receba em DePix. Instale o plugin, cole a API key e pronto. Sem estorno, sem surpresa.</p>
+        <p style="margin-top: 10px;"><a href="/btcpay" class="landing-section-link-inline">Saiba mais →</a></p>
+      </div>
+    </div>
+  </div>
+
   <!-- FAQ — shared by both modes, SEO-optimized with schema.org -->
   <div class="landing-section landing-faq-section">
     <h2>Perguntas Frequentes</h2>
@@ -589,7 +614,13 @@
   <footer class="landing-footer">
     <p>DePix — A primeira stablecoin brasileira na Liquid Network</p>
     <p>Transações rápidas, privadas e de baixo custo.</p>
-    <p><a href="https://blog.depixapp.com/" class="landing-footer-link" target="_blank" rel="noopener noreferrer">Blog</a></p>
+    <p class="landing-footer-links">
+      <a href="https://blog.depixapp.com/" class="landing-footer-link" target="_blank" rel="noopener noreferrer">Blog</a>
+      <span class="landing-footer-sep">·</span>
+      <a href="/btcpay" class="landing-footer-link">Plugin BTCPay</a>
+      <span class="landing-footer-sep">·</span>
+      <a href="/docs" class="landing-footer-link">Documentação da API</a>
+    </p>
   </footer>
 
 </section>
@@ -2198,6 +2229,6 @@
 
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 <!-- Asset version must match APP_VERSION in service-worker.js -->
-<script type="module" src="script.js?v=98"></script>
+<script type="module" src="script.js?v=99"></script>
 </body>
 </html>

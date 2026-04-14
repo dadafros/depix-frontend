@@ -3311,6 +3311,28 @@ textarea:focus {
   text-decoration: underline;
 }
 
+.landing-footer-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.landing-footer-sep {
+  color: #2a3a4d;
+}
+
+.landing-section-link-inline {
+  color: #38e3ac;
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+.landing-section-link-inline:hover {
+  text-decoration: underline;
+}
+
 .landing-section-link {
   margin-top: 1rem;
   text-align: center;
