@@ -142,16 +142,16 @@
   }
   </script>
 
-  <link rel="manifest" href="manifest.json?v=98" />
-  <link rel="icon" href="icon-192.png?v=98" />
-  <link rel="apple-touch-icon" href="icon-192.png?v=98" />
+  <link rel="manifest" href="manifest.json?v=99" />
+  <link rel="icon" href="icon-192.png?v=99" />
+  <link rel="apple-touch-icon" href="icon-192.png?v=99" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
   <!-- Asset version must match APP_VERSION in service-worker.js -->
-  <link rel="stylesheet" href="style.css?v=98" />
+  <link rel="stylesheet" href="style.css?v=99" />
 </head>
 <body>
 
@@ -160,7 +160,7 @@
 
   <nav class="landing-nav">
     <div class="landing-nav-inner">
-      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=98" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
+      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=99" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
       <div class="landing-nav-right">
         <a href="https://blog.depixapp.com/" class="landing-nav-link">Blog</a>
         <a href="#login" class="landing-nav-cta">Entrar</a>
@@ -899,6 +899,7 @@
       <div class="menu-section-items hidden">
         <button id="menu-merchant-charge" class="menu-item">Cobrar</button>
         <button id="menu-merchant-sales" class="menu-item">Minhas Vendas</button>
+        <button id="menu-merchant-products" class="menu-item">Meus Produtos</button>
         <button id="menu-merchant-account" class="menu-item">Minha Conta</button>
         <button id="menu-merchant-api" class="menu-item">API e Webhooks</button>
       </div>
@@ -1682,6 +1683,137 @@
   </div>
 </section>
 
+<!-- ===== MEUS PRODUTOS ===== -->
+<section data-view="merchant-products" class="page hidden">
+  <div class="card merchant-products-card">
+    <div class="products-header">
+      <h2 class="view-title" style="margin-bottom:0">Meus Produtos</h2>
+      <button id="btn-new-product" class="merchant-text-btn">+ Novo Produto</button>
+    </div>
+    <div class="products-stats">
+      <div class="products-stat">
+        <span class="products-stat-label">Total</span>
+        <span class="products-stat-value" id="products-stat-total">0</span>
+      </div>
+      <div class="products-stat">
+        <span class="products-stat-label">Ativos</span>
+        <span class="products-stat-value" id="products-stat-active">0</span>
+      </div>
+      <div class="products-stat">
+        <span class="products-stat-label">Checkouts</span>
+        <span class="products-stat-value" id="products-stat-checkouts">0</span>
+      </div>
+    </div>
+    <div id="products-msg" class="mensagem"></div>
+    <div id="products-loading" class="hidden"><span class="spinner"></span> Carregando…</div>
+    <div id="products-empty" class="hidden" style="text-align:center">
+      <p class="info-text">Nenhum produto criado ainda.</p>
+      <button id="btn-products-goto-create" class="secondary">Criar primeiro produto</button>
+    </div>
+    <div id="products-list" class="products-list"></div>
+    <p class="link-text"><a href="#home" class="link">&larr; Voltar</a></p>
+  </div>
+</section>
+
+<!-- ===== CRIAR PRODUTO ===== -->
+<section data-view="merchant-product-create" class="page hidden">
+  <div class="card">
+    <p class="link-text" style="margin-top:0;margin-bottom:12px"><a href="#merchant-products" class="link">&larr; Voltar aos produtos</a></p>
+    <h2 class="view-title">Novo Produto</h2>
+    <label for="product-create-slug">Slug (URL) *</label>
+    <input id="product-create-slug" placeholder="ex: camiseta-preta" autocomplete="off" />
+    <p class="field-hint">Letras minúsculas, números e hifens. 2-60 caracteres.</p>
+    <label for="product-create-amount">Valor (R$) *</label>
+    <input id="product-create-amount" inputmode="numeric" placeholder="R$ 0,00" />
+    <label for="product-create-description">Descrição</label>
+    <textarea id="product-create-description" placeholder="Descrição do produto..." rows="3"></textarea>
+    <label for="product-create-image-url">URL da imagem (HTTPS)</label>
+    <input id="product-create-image-url" placeholder="https://..." />
+    <label for="product-create-callback-url">Callback URL (HTTPS)</label>
+    <input id="product-create-callback-url" placeholder="https://..." />
+    <label for="product-create-redirect-url">Redirect URL (HTTPS)</label>
+    <input id="product-create-redirect-url" placeholder="https://..." />
+    <label for="product-create-expires">Expiração</label>
+    <select id="product-create-expires">
+      <option value="">Padrão (24h)</option>
+      <option value="1800">30 minutos</option>
+      <option value="3600">1 hora</option>
+      <option value="7200">2 horas</option>
+      <option value="21600">6 horas</option>
+      <option value="43200">12 horas</option>
+      <option value="86400">24 horas</option>
+      <option value="259200">3 dias</option>
+      <option value="604800">7 dias</option>
+    </select>
+    <label for="product-create-metadata">Metadata (JSON)</label>
+    <textarea id="product-create-metadata" placeholder='{"sku": "ABC123"}' rows="2"></textarea>
+    <div id="product-create-msg" class="mensagem"></div>
+    <button id="btn-product-create-submit" class="merchant-cta">Criar Produto</button>
+  </div>
+</section>
+
+<!-- ===== EDITAR PRODUTO ===== -->
+<section data-view="merchant-product-edit" class="page hidden">
+  <div class="card">
+    <p class="link-text" style="margin-top:0;margin-bottom:12px"><a href="#merchant-products" class="link">&larr; Voltar aos produtos</a></p>
+    <h2 class="view-title">Editar Produto</h2>
+    <div id="product-edit-url-row" class="product-url-row hidden">
+      <label>URL do produto</label>
+      <div class="checkout-link-row">
+        <input id="product-edit-url" readonly />
+        <button id="btn-copy-product-url" class="secondary" style="width:auto;padding:10px 14px;margin-bottom:0">Copiar</button>
+      </div>
+    </div>
+    <label for="product-edit-slug">Slug (URL) *</label>
+    <input id="product-edit-slug" placeholder="ex: camiseta-preta" autocomplete="off" />
+    <p class="field-hint">Letras minúsculas, números e hifens. 2-60 caracteres.</p>
+    <label for="product-edit-amount">Valor (R$) *</label>
+    <input id="product-edit-amount" inputmode="numeric" placeholder="R$ 0,00" />
+    <label for="product-edit-description">Descrição</label>
+    <textarea id="product-edit-description" placeholder="Descrição do produto..." rows="3"></textarea>
+    <label for="product-edit-image-url">URL da imagem (HTTPS)</label>
+    <input id="product-edit-image-url" placeholder="https://..." />
+    <label for="product-edit-callback-url">Callback URL (HTTPS)</label>
+    <input id="product-edit-callback-url" placeholder="https://..." />
+    <label for="product-edit-redirect-url">Redirect URL (HTTPS)</label>
+    <input id="product-edit-redirect-url" placeholder="https://..." />
+    <label for="product-edit-expires">Expiração</label>
+    <select id="product-edit-expires">
+      <option value="">Padrão (24h)</option>
+      <option value="1800">30 minutos</option>
+      <option value="3600">1 hora</option>
+      <option value="7200">2 horas</option>
+      <option value="21600">6 horas</option>
+      <option value="43200">12 horas</option>
+      <option value="86400">24 horas</option>
+      <option value="259200">3 dias</option>
+      <option value="604800">7 dias</option>
+    </select>
+    <label for="product-edit-metadata">Metadata (JSON)</label>
+    <textarea id="product-edit-metadata" placeholder='{"sku": "ABC123"}' rows="2"></textarea>
+    <div id="product-edit-msg" class="mensagem"></div>
+    <div class="product-edit-actions">
+      <button id="btn-product-edit-save" class="merchant-cta">Salvar</button>
+      <button id="btn-product-edit-toggle" class="secondary">Desativar</button>
+    </div>
+  </div>
+</section>
+
+<!-- ===== CHECKOUTS DO PRODUTO ===== -->
+<section data-view="merchant-product-checkouts" class="page hidden">
+  <div class="card merchant-products-card">
+    <p class="link-text" style="margin-top:0;margin-bottom:12px"><a href="#merchant-products" class="link">&larr; Voltar aos produtos</a></p>
+    <h2 class="view-title" id="product-checkouts-title">Checkouts do Produto</h2>
+    <div id="product-checkouts-info" class="product-checkouts-info"></div>
+    <div id="product-checkouts-msg" class="mensagem"></div>
+    <div id="product-checkouts-loading" class="hidden"><span class="spinner"></span> Carregando…</div>
+    <div id="product-checkouts-empty" class="hidden" style="text-align:center">
+      <p class="info-text">Nenhum checkout para este produto.</p>
+    </div>
+    <div id="product-checkouts-list" class="transactions-list"></div>
+  </div>
+</section>
+
 <!-- ===== WEBHOOK LOGS ===== -->
 <section data-view="webhook-logs" class="page hidden">
   <div class="card">
@@ -2198,6 +2330,6 @@
 
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 <!-- Asset version must match APP_VERSION in service-worker.js -->
-<script type="module" src="script.js?v=98"></script>
+<script type="module" src="script.js?v=99"></script>
 </body>
 </html>

@@ -2552,6 +2552,9 @@ async function loadAccountView() {
         { label: "Endereço Liquid", value: abbreviateHash(merchantData.liquid_address, 12, 8), field: "liquid_address" },
         { label: "CNPJ", value: merchantData.cnpj, field: "cnpj" },
         { label: "Website", value: merchantData.website, field: "website" },
+        { label: "Logo URL", value: merchantData.logo_url, field: "logo_url" },
+        { label: "Callback URL padrão", value: merchantData.default_callback_url, field: "default_callback_url" },
+        { label: "Redirect URL padrão", value: merchantData.default_redirect_url, field: "default_redirect_url" },
       ];
       container.innerHTML = '<div class="account-list">' + fields.map(f => {
         const hasValue = !!f.value;
@@ -2569,7 +2572,7 @@ async function loadAccountView() {
       container.querySelectorAll(".merchant-edit-btn").forEach(btn => {
         btn.addEventListener("click", () => {
           const field = btn.dataset.field;
-          const labels = { business_name: "Nome do negócio", liquid_address: "Endereço Liquid", cnpj: "CNPJ", website: "Website" };
+          const labels = { business_name: "Nome do negócio", liquid_address: "Endereço Liquid", cnpj: "CNPJ", website: "Website", logo_url: "Logo URL", default_callback_url: "Callback URL padrão", default_redirect_url: "Redirect URL padrão" };
           if (field === "liquid_address") {
             pendingMerchantAction = { type: "edit_liquid" };
             document.getElementById("merchant-password-title").textContent = "Confirmar alteração";
@@ -2814,6 +2817,219 @@ async function loadWebhookLogs() {
   }
 }
 
+// === Products ===
+const SLUG_REGEX = /^[a-z0-9][a-z0-9-]*[a-z0-9]$/;
+
+function validateSlug(slug) {
+  if (!slug || slug.length < 2 || slug.length > 60) return "O slug deve ter entre 2 e 60 caracteres.";
+  if (!SLUG_REGEX.test(slug)) return "Slug inválido. Use apenas letras minúsculas, números e hifens.";
+  return null;
+}
+
+function validateHttpsUrl(url, fieldName) {
+  if (!url) return null; // optional
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return `${fieldName} deve usar HTTPS.`;
+  } catch {
+    return `${fieldName} inválido.`;
+  }
+  return null;
+}
+
+function getProductIdFromHash() {
+  const hash = window.location.hash;
+  const params = new URLSearchParams(hash.split("?")[1] || "");
+  return params.get("id") || "";
+}
+
+async function loadProductsView() {
+  showMerchantMenu();
+  document.getElementById("products-loading")?.classList.remove("hidden");
+  document.getElementById("products-empty")?.classList.add("hidden");
+  setMsg("products-msg", "");
+  const list = document.getElementById("products-list");
+  if (list) list.innerHTML = "";
+
+  try {
+    const res = await apiFetch("/api/products");
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      setMsg("products-msg", e?.errorMessage || "Erro ao carregar produtos.");
+      return;
+    }
+    const data = await res.json();
+    const products = data.products || [];
+
+    // Stats
+    const totalCount = products.length;
+    const activeCount = products.filter(p => p.is_active).length;
+    const totalCheckouts = products.reduce((sum, p) => sum + (p.checkout_count || 0), 0);
+    document.getElementById("products-stat-total").textContent = totalCount;
+    document.getElementById("products-stat-active").textContent = activeCount;
+    document.getElementById("products-stat-checkouts").textContent = totalCheckouts;
+
+    if (products.length === 0) {
+      document.getElementById("products-empty")?.classList.remove("hidden");
+      return;
+    }
+
+    list.innerHTML = products.map(p => {
+      const statusBadge = p.is_active
+        ? '<span class="badge badge-green">Ativo</span>'
+        : '<span class="badge badge-gray">Inativo</span>';
+      const amount = formatBRL(p.amount);
+      const desc = p.description
+        ? `<span class="product-card-desc">${escapeHtml(p.description)}</span>`
+        : '';
+      const checkoutCount = p.checkout_count || 0;
+      return `<div class="product-card">
+        <div class="product-card-header">
+          <div class="product-card-name">${escapeHtml(p.slug)}</div>
+          ${statusBadge}
+        </div>
+        <div class="product-card-amount">${amount}</div>
+        ${desc}
+        <div class="product-card-footer">
+          <span class="product-card-checkouts">${checkoutCount} checkout${checkoutCount !== 1 ? 's' : ''}</span>
+          <div class="product-card-actions">
+            <button class="merchant-text-btn btn-product-checkouts" data-product-id="${escapeHtml(p.id)}">Checkouts</button>
+            <button class="merchant-text-btn btn-product-edit" data-product-id="${escapeHtml(p.id)}">Editar</button>
+          </div>
+        </div>
+      </div>`;
+    }).join("");
+
+    // Attach edit/checkout handlers
+    list.querySelectorAll(".btn-product-edit").forEach(btn => {
+      btn.addEventListener("click", () => navigate(`#merchant-product-edit?id=${btn.dataset.productId}`));
+    });
+    list.querySelectorAll(".btn-product-checkouts").forEach(btn => {
+      btn.addEventListener("click", () => navigate(`#merchant-product-checkouts?id=${btn.dataset.productId}`));
+    });
+  } catch (e) {
+    if (!e.blocked) setMsg("products-msg", e.message || "Erro ao carregar produtos.");
+  } finally {
+    document.getElementById("products-loading")?.classList.add("hidden");
+  }
+}
+
+async function loadProductCreateView() {
+  showMerchantMenu();
+  // Reset form
+  document.getElementById("product-create-slug").value = "";
+  document.getElementById("product-create-amount").value = "";
+  document.getElementById("product-create-description").value = "";
+  document.getElementById("product-create-image-url").value = "";
+  document.getElementById("product-create-callback-url").value = "";
+  document.getElementById("product-create-redirect-url").value = "";
+  document.getElementById("product-create-expires").value = "";
+  document.getElementById("product-create-metadata").value = "";
+  setMsg("product-create-msg", "");
+}
+
+async function loadProductEditView() {
+  showMerchantMenu();
+  const productId = getProductIdFromHash();
+  if (!productId) { navigate("#merchant-products"); return; }
+
+  setMsg("product-edit-msg", "");
+  document.getElementById("product-edit-url-row")?.classList.add("hidden");
+
+  try {
+    const res = await apiFetch(`/api/products/${productId}`);
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      setMsg("product-edit-msg", e?.errorMessage || "Erro ao carregar produto.");
+      return;
+    }
+    const data = await res.json();
+    const product = data.product || data;
+
+    document.getElementById("product-edit-slug").value = product.slug || "";
+    document.getElementById("product-edit-amount").value = product.amount ? formatBRL(product.amount) : "";
+    document.getElementById("product-edit-description").value = product.description || "";
+    document.getElementById("product-edit-image-url").value = product.image_url || "";
+    document.getElementById("product-edit-callback-url").value = product.callback_url || "";
+    document.getElementById("product-edit-redirect-url").value = product.redirect_url || "";
+    document.getElementById("product-edit-expires").value = product.expires_in ? String(product.expires_in) : "";
+    document.getElementById("product-edit-metadata").value = product.metadata ? JSON.stringify(product.metadata, null, 2) : "";
+
+    // Product URL
+    if (product.slug && merchantData?.slug) {
+      const productUrl = `https://pay.depixapp.com/${merchantData.slug}/${product.slug}`;
+      document.getElementById("product-edit-url").value = productUrl;
+      document.getElementById("product-edit-url-row")?.classList.remove("hidden");
+    }
+
+    // Toggle button label
+    const toggleBtn = document.getElementById("btn-product-edit-toggle");
+    if (toggleBtn) {
+      toggleBtn.textContent = product.is_active ? "Desativar" : "Ativar";
+      toggleBtn.dataset.productId = productId;
+      toggleBtn.dataset.isActive = product.is_active ? "1" : "0";
+    }
+
+    // Save button
+    const saveBtn = document.getElementById("btn-product-edit-save");
+    if (saveBtn) saveBtn.dataset.productId = productId;
+
+  } catch (e) {
+    if (!e.blocked) setMsg("product-edit-msg", e.message || "Erro ao carregar produto.");
+  }
+}
+
+async function loadProductCheckoutsView() {
+  showMerchantMenu();
+  const productId = getProductIdFromHash();
+  if (!productId) { navigate("#merchant-products"); return; }
+
+  document.getElementById("product-checkouts-loading")?.classList.remove("hidden");
+  document.getElementById("product-checkouts-empty")?.classList.add("hidden");
+  setMsg("product-checkouts-msg", "");
+  const list = document.getElementById("product-checkouts-list");
+  if (list) list.innerHTML = "";
+  document.getElementById("product-checkouts-info").innerHTML = "";
+
+  try {
+    // Fetch product details and checkouts
+    const [prodRes, checkoutsRes] = await Promise.all([
+      apiFetch(`/api/products/${productId}`),
+      apiFetch(`/api/products/${productId}/checkouts`),
+    ]);
+
+    if (prodRes.ok) {
+      const prodData = await prodRes.json();
+      const product = prodData.product || prodData;
+      document.getElementById("product-checkouts-title").textContent = `Checkouts: ${product.slug || ""}`;
+      document.getElementById("product-checkouts-info").innerHTML = `
+        <div class="product-checkouts-summary">
+          <span>${formatBRL(product.amount)}</span>
+          <span class="badge ${product.is_active ? 'badge-green' : 'badge-gray'}">${product.is_active ? 'Ativo' : 'Inativo'}</span>
+        </div>`;
+    }
+
+    if (!checkoutsRes.ok) {
+      const e = await checkoutsRes.json().catch(() => ({}));
+      setMsg("product-checkouts-msg", e?.errorMessage || "Erro ao carregar checkouts.");
+      return;
+    }
+    const data = await checkoutsRes.json();
+    const checkouts = data.checkouts || [];
+
+    if (checkouts.length === 0) {
+      document.getElementById("product-checkouts-empty")?.classList.remove("hidden");
+      return;
+    }
+
+    list.innerHTML = checkouts.map(c => renderCheckoutItem(c)).join("");
+  } catch (e) {
+    if (!e.blocked) setMsg("product-checkouts-msg", e.message || "Erro ao carregar checkouts.");
+  } finally {
+    document.getElementById("product-checkouts-loading")?.classList.add("hidden");
+  }
+}
+
 // Routes
 // Guard: only allow merchant sub-views if user has active merchant (checks via API)
 async function merchantGuard(loadFn) {
@@ -2847,6 +3063,10 @@ route("#merchant-charge", () => { stopSalesPolling(); merchantGuard(loadChargeVi
 route("#merchant-sales", () => { stopSalesPolling(); merchantGuard(loadSalesView); });
 route("#merchant-account", () => { stopSalesPolling(); merchantGuard(loadAccountView); });
 route("#merchant-api", () => { stopSalesPolling(); merchantGuard(loadApiView); });
+route("#merchant-products", () => { stopSalesPolling(); merchantGuard(loadProductsView); });
+route("#merchant-product-create", () => { stopSalesPolling(); merchantGuard(loadProductCreateView); });
+route("#merchant-product-edit", () => { stopSalesPolling(); merchantGuard(loadProductEditView); });
+route("#merchant-product-checkouts", () => { stopSalesPolling(); merchantGuard(loadProductCheckoutsView); });
 route("#webhook-logs", () => { stopSalesPolling(); merchantGuard(loadWebhookLogs); });
 
 // Menu accordion — click section title to expand/collapse, only one open at a time
@@ -2868,6 +3088,7 @@ document.querySelectorAll(".menu-section-toggle").forEach(toggle => {
 // Menu handlers
 document.getElementById("menu-merchant-charge")?.addEventListener("click", () => { closeMenu(); navigate("#merchant-charge"); });
 document.getElementById("menu-merchant-sales")?.addEventListener("click", () => { closeMenu(); navigate("#merchant-sales"); });
+document.getElementById("menu-merchant-products")?.addEventListener("click", () => { closeMenu(); navigate("#merchant-products"); });
 document.getElementById("menu-merchant-account")?.addEventListener("click", () => { closeMenu(); navigate("#merchant-account"); });
 document.getElementById("menu-merchant-api")?.addEventListener("click", () => { closeMenu(); navigate("#merchant-api"); });
 
@@ -3179,7 +3400,156 @@ document.getElementById("sales-clear-filters")?.addEventListener("click", () => 
 // Sales empty CTA
 document.getElementById("btn-sales-goto-create")?.addEventListener("click", () => navigate("#merchant-charge"));
 
+// Products — navigate to create
+document.getElementById("btn-new-product")?.addEventListener("click", () => navigate("#merchant-product-create"));
+document.getElementById("btn-products-goto-create")?.addEventListener("click", () => navigate("#merchant-product-create"));
+
+// Products — create submit
+document.getElementById("btn-product-create-submit")?.addEventListener("click", async () => {
+  const slug = document.getElementById("product-create-slug")?.value.trim();
+  const amountInput = document.getElementById("product-create-amount");
+  const description = document.getElementById("product-create-description")?.value.trim();
+  const imageUrl = document.getElementById("product-create-image-url")?.value.trim();
+  const callbackUrl = document.getElementById("product-create-callback-url")?.value.trim();
+  const redirectUrl = document.getElementById("product-create-redirect-url")?.value.trim();
+  const expiresIn = document.getElementById("product-create-expires")?.value;
+  const metadataStr = document.getElementById("product-create-metadata")?.value.trim();
+  const btn = document.getElementById("btn-product-create-submit");
+  setMsg("product-create-msg", "");
+
+  // Validation
+  const slugErr = validateSlug(slug);
+  if (slugErr) { setMsg("product-create-msg", slugErr); return; }
+  const cents = toCents(amountInput?.value || "");
+  if (!cents || cents < 500) { setMsg("product-create-msg", `Valor mínimo: ${formatBRL(500)}`); return; }
+  const imgErr = validateHttpsUrl(imageUrl, "URL da imagem");
+  if (imgErr) { setMsg("product-create-msg", imgErr); return; }
+  const cbErr = validateHttpsUrl(callbackUrl, "Callback URL");
+  if (cbErr) { setMsg("product-create-msg", cbErr); return; }
+  const rdErr = validateHttpsUrl(redirectUrl, "Redirect URL");
+  if (rdErr) { setMsg("product-create-msg", rdErr); return; }
+
+  let metadata = null;
+  if (metadataStr) {
+    try { metadata = JSON.parse(metadataStr); }
+    catch { setMsg("product-create-msg", "Metadata deve ser um JSON válido."); return; }
+  }
+
+  btn.disabled = true; btn.textContent = "Criando...";
+  try {
+    const body = { slug, amount: cents };
+    if (description) body.description = description;
+    if (imageUrl) body.image_url = imageUrl;
+    if (callbackUrl) body.callback_url = callbackUrl;
+    if (redirectUrl) body.redirect_url = redirectUrl;
+    if (expiresIn) body.expires_in = parseInt(expiresIn, 10);
+    if (metadata) body.metadata = metadata;
+    const res = await apiFetch("/api/products", { method: "POST", body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) { setMsg("product-create-msg", data?.response?.errorMessage || data?.errorMessage || "Erro ao criar produto."); return; }
+    showToast("Produto criado!");
+    navigate("#merchant-products");
+  } catch (e) {
+    if (!e.blocked) setMsg("product-create-msg", e.message || "Erro ao criar produto.");
+  } finally {
+    btn.disabled = false; btn.textContent = "Criar Produto";
+  }
+});
+
+// Products — edit save
+document.getElementById("btn-product-edit-save")?.addEventListener("click", async () => {
+  const productId = document.getElementById("btn-product-edit-save")?.dataset.productId;
+  if (!productId) return;
+  const slug = document.getElementById("product-edit-slug")?.value.trim();
+  const amountInput = document.getElementById("product-edit-amount");
+  const description = document.getElementById("product-edit-description")?.value.trim();
+  const imageUrl = document.getElementById("product-edit-image-url")?.value.trim();
+  const callbackUrl = document.getElementById("product-edit-callback-url")?.value.trim();
+  const redirectUrl = document.getElementById("product-edit-redirect-url")?.value.trim();
+  const expiresIn = document.getElementById("product-edit-expires")?.value;
+  const metadataStr = document.getElementById("product-edit-metadata")?.value.trim();
+  const btn = document.getElementById("btn-product-edit-save");
+  setMsg("product-edit-msg", "");
+
+  // Validation
+  const slugErr = validateSlug(slug);
+  if (slugErr) { setMsg("product-edit-msg", slugErr); return; }
+  const cents = toCents(amountInput?.value || "");
+  if (!cents || cents < 500) { setMsg("product-edit-msg", `Valor mínimo: ${formatBRL(500)}`); return; }
+  const imgErr = validateHttpsUrl(imageUrl, "URL da imagem");
+  if (imgErr) { setMsg("product-edit-msg", imgErr); return; }
+  const cbErr = validateHttpsUrl(callbackUrl, "Callback URL");
+  if (cbErr) { setMsg("product-edit-msg", cbErr); return; }
+  const rdErr = validateHttpsUrl(redirectUrl, "Redirect URL");
+  if (rdErr) { setMsg("product-edit-msg", rdErr); return; }
+
+  let metadata = null;
+  if (metadataStr) {
+    try { metadata = JSON.parse(metadataStr); }
+    catch { setMsg("product-edit-msg", "Metadata deve ser um JSON válido."); return; }
+  }
+
+  btn.disabled = true; btn.textContent = "Salvando...";
+  try {
+    const body = { slug, amount: cents };
+    if (description) body.description = description;
+    else body.description = null;
+    if (imageUrl) body.image_url = imageUrl;
+    else body.image_url = null;
+    if (callbackUrl) body.callback_url = callbackUrl;
+    else body.callback_url = null;
+    if (redirectUrl) body.redirect_url = redirectUrl;
+    else body.redirect_url = null;
+    if (expiresIn) body.expires_in = parseInt(expiresIn, 10);
+    else body.expires_in = null;
+    if (metadata) body.metadata = metadata;
+    else body.metadata = null;
+    const res = await apiFetch(`/api/products/${productId}`, { method: "PATCH", body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) { setMsg("product-edit-msg", data?.response?.errorMessage || data?.errorMessage || "Erro ao salvar."); return; }
+    showToast("Produto atualizado!");
+    loadProductEditView();
+  } catch (e) {
+    if (!e.blocked) setMsg("product-edit-msg", e.message || "Erro ao salvar.");
+  } finally {
+    btn.disabled = false; btn.textContent = "Salvar";
+  }
+});
+
+// Products — toggle active/inactive
+document.getElementById("btn-product-edit-toggle")?.addEventListener("click", async () => {
+  const btn = document.getElementById("btn-product-edit-toggle");
+  const productId = btn?.dataset.productId;
+  if (!productId) return;
+  const isActive = btn.dataset.isActive === "1";
+  const action = isActive ? "deactivate" : "activate";
+  const label = isActive ? "Desativando..." : "Ativando...";
+
+  btn.disabled = true; btn.textContent = label;
+  setMsg("product-edit-msg", "");
+  try {
+    const res = await apiFetch(`/api/products/${productId}/${action}`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) { setMsg("product-edit-msg", data?.response?.errorMessage || data?.errorMessage || "Erro."); return; }
+    showToast(isActive ? "Produto desativado." : "Produto ativado!");
+    loadProductEditView();
+  } catch (e) {
+    if (!e.blocked) setMsg("product-edit-msg", e.message || "Erro.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = isActive ? "Desativar" : "Ativar";
+  }
+});
+
+// Products — copy product URL
+document.getElementById("btn-copy-product-url")?.addEventListener("click", () => {
+  const url = document.getElementById("product-edit-url")?.value;
+  if (url) { navigator.clipboard.writeText(url).then(() => showToast("URL copiada!")).catch(() => showToast("Erro ao copiar")); }
+});
+
 formatCurrencyInput(document.getElementById("checkout-amount"), "deposito");
+formatCurrencyInput(document.getElementById("product-create-amount"), "deposito");
+formatCurrencyInput(document.getElementById("product-edit-amount"), "deposito");
 
 // ===== Initialize =====
 const isPWA = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
