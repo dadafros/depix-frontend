@@ -25,6 +25,7 @@ Thumbs.db
 *.png
 !icon-192.png
 !icon-512.png
+!social-preview.png
 
 # Coverage
 coverage/
