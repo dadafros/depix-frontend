@@ -3781,6 +3781,70 @@ textarea:focus {
 
 .text-danger { color: #ff6b6b !important; }
 
+/* ===== Products ===== */
+.merchant-products-card { max-width: 480px; }
+.products-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px;
+}
+.products-stats {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 16px;
+}
+.products-stat {
+  background: rgba(56, 227, 172, 0.06); border: 1px solid rgba(56, 227, 172, 0.1);
+  border-radius: 10px; padding: 12px; text-align: center;
+}
+.products-stat-label {
+  font-size: 0.6rem; color: #5a6d82; text-transform: uppercase;
+  letter-spacing: 0.05em; display: block; margin-bottom: 2px;
+}
+.products-stat-value {
+  font-size: 1rem; font-weight: 600; color: #38e3ac; display: block;
+}
+.products-list { display: flex; flex-direction: column; gap: 8px; }
+.product-card {
+  background: rgba(255, 255, 255, 0.04); border-radius: 10px;
+  padding: 12px 14px; text-align: left;
+}
+.product-card-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 4px;
+}
+.product-card-name {
+  font-family: 'JetBrains Mono', monospace; font-size: 13px;
+  color: #e8edf2; font-weight: 600;
+}
+.product-card-amount {
+  font-size: 16px; font-weight: 700; color: #38e3ac; margin-bottom: 2px;
+}
+.product-card-desc {
+  font-size: 12px; color: #8a9bb0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  display: block; margin-bottom: 4px;
+}
+.product-card-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 6px; padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+.product-card-checkouts { font-size: 11px; color: #5a6d82; }
+.product-card-actions { display: flex; gap: 10px; }
+.badge-gray { background: rgba(138, 155, 176, 0.15); color: #8a9bb0; }
+
+/* Product edit */
+.product-url-row { margin-bottom: 12px; }
+.product-edit-actions { display: flex; gap: 8px; }
+.product-edit-actions .merchant-cta { flex: 1; }
+.product-edit-actions .secondary { flex: 0 0 auto; }
+.field-hint { font-size: 11px; color: #5a6d82; margin: -8px 0 8px; text-align: left; }
+
+/* Product checkouts */
+.product-checkouts-info { margin-bottom: 12px; }
+.product-checkouts-summary {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14px; font-weight: 600; color: #e8edf2;
+}
+
 @media (min-width: 768px) {
   .sales-stats { grid-template-columns: repeat(4, 1fr); }
 }

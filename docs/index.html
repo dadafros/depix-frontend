@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Documentação da API — DePix App</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="description" content="Documentação completa da API do DePix App. Autenticação, checkouts, webhooks e sandbox." />
+  <meta name="description" content="Documentação completa da API do DePix App. Autenticação, checkouts, produtos, links de pagamento, webhooks e sandbox." />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'none'; script-src 'unsafe-inline'" />
   <meta name="theme-color" content="#0a0f14" />
 
@@ -32,6 +32,7 @@
       --code-bg: #0d1b2a;
       --method-get: #38bdf8;
       --method-post: #34d399;
+      --method-patch: #fb923c;
       --method-delete: #f87171;
     }
 
@@ -43,7 +44,7 @@
       line-height: 1.6;
     }
 
-    /* ── Nav ── */
+    /* -- Nav -- */
     nav {
       position: fixed;
       top: 0; left: 0; right: 0;
@@ -87,16 +88,16 @@
     }
     .nav-link:hover { color: var(--text); }
 
-    /* ── Layout ── */
+    /* -- Layout -- */
     .layout {
       display: flex;
       min-height: 100dvh;
       padding-top: 56px;
     }
 
-    /* ── Sidebar ── */
+    /* -- Sidebar -- */
     .sidebar {
-      width: 240px;
+      width: 260px;
       flex-shrink: 0;
       position: sticky;
       top: 56px;
@@ -148,9 +149,10 @@
     }
     .get { color: var(--method-get); background: rgba(56, 189, 248, 0.1); }
     .post { color: var(--method-post); background: rgba(52, 211, 153, 0.1); }
+    .patch { color: var(--method-patch); background: rgba(251, 146, 60, 0.1); }
     .del { color: var(--method-delete); background: rgba(248, 113, 113, 0.1); }
 
-    /* ── Content ── */
+    /* -- Content -- */
     .content {
       flex: 1;
       min-width: 0;
@@ -158,7 +160,7 @@
       max-width: 860px;
     }
 
-    /* ── Section headings ── */
+    /* -- Section headings -- */
     .doc-section {
       margin-bottom: 56px;
       scroll-margin-top: 72px;
@@ -200,7 +202,7 @@
       position: relative;
     }
     .doc-section ul li::before {
-      content: '–';
+      content: '\2013';
       position: absolute;
       left: 0;
       color: var(--dim);
@@ -208,7 +210,7 @@
     .doc-section ul li strong { color: var(--text); }
     .doc-section a { color: var(--accent); }
 
-    /* ── Endpoint header ── */
+    /* -- Endpoint header -- */
     .endpoint {
       display: flex;
       align-items: center;
@@ -236,7 +238,7 @@
       font-style: normal;
     }
 
-    /* ── Code block ── */
+    /* -- Code block -- */
     .code-wrap {
       position: relative;
       margin-bottom: 20px;
@@ -276,6 +278,7 @@
       font-size: 0.7rem;
       cursor: pointer;
       transition: color 0.15s, background 0.15s;
+      z-index: 2;
     }
     .copy-btn:hover { color: var(--text); background: rgba(56,227,172,0.08); }
     .copy-btn.copied { color: var(--accent); }
@@ -288,7 +291,7 @@
     .hl-flag{ color: #f0883e; }        /* curl flag */
     .hl-url { color: #a5d6ff; }        /* URL */
 
-    /* ── Param table ── */
+    /* -- Param table -- */
     table {
       width: 100%;
       border-collapse: collapse;
@@ -321,7 +324,7 @@
     .req { color: var(--accent); font-size: 0.7rem; font-weight: 600; }
     .opt { color: var(--dim); font-size: 0.7rem; }
 
-    /* ── Alert box ── */
+    /* -- Alert box -- */
     .alert {
       border-radius: 10px;
       padding: 14px 16px;
@@ -357,7 +360,7 @@
       color: inherit;
     }
 
-    /* ── Inline code ── */
+    /* -- Inline code -- */
     code {
       font-family: 'JetBrains Mono', monospace;
       font-size: 0.82em;
@@ -367,7 +370,33 @@
       border-radius: 5px;
     }
 
-    /* ── Mobile: hide sidebar, show toggle ── */
+    /* -- Language tabs -- */
+    .lang-tabs {
+      display: flex;
+      gap: 0;
+      margin-bottom: 0;
+      border-bottom: 1px solid var(--border-dim);
+      overflow-x: auto;
+    }
+    .lang-tab {
+      padding: 8px 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--dim);
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .lang-tab:hover { color: var(--muted); }
+    .lang-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .lang-panel { display: none; }
+    .lang-panel.active { display: block; }
+
+    /* -- Mobile: hide sidebar, show toggle -- */
     .sidebar-toggle {
       display: none;
       align-items: center;
@@ -424,9 +453,9 @@
   <!-- Sidebar -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-section">
-      <div class="sidebar-title">Início</div>
-      <a href="#intro" class="sidebar-link active">Introdução</a>
-      <a href="#auth" class="sidebar-link">Autenticação</a>
+      <div class="sidebar-title">Inicio</div>
+      <a href="#intro" class="sidebar-link active">Introducao</a>
+      <a href="#auth" class="sidebar-link">Autenticacao</a>
       <a href="#errors" class="sidebar-link">Erros</a>
     </div>
     <div class="sidebar-section">
@@ -437,8 +466,25 @@
       <a href="#checkout-cancel" class="sidebar-link"><span class="method-badge post">POST</span>Cancelar</a>
     </div>
     <div class="sidebar-section">
+      <div class="sidebar-title">Produtos</div>
+      <a href="#product-create" class="sidebar-link"><span class="method-badge post">POST</span>Criar produto</a>
+      <a href="#product-list" class="sidebar-link"><span class="method-badge get">GET</span>Listar</a>
+      <a href="#product-get" class="sidebar-link"><span class="method-badge get">GET</span>Consultar</a>
+      <a href="#product-update" class="sidebar-link"><span class="method-badge patch">PATCH</span>Editar</a>
+      <a href="#product-activate" class="sidebar-link"><span class="method-badge post">POST</span>Ativar / Desativar</a>
+      <a href="#product-checkouts" class="sidebar-link"><span class="method-badge get">GET</span>Checkouts do produto</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">Links de pagamento</div>
+      <a href="#payment-links" class="sidebar-link">Visao geral</a>
+      <a href="#public-product" class="sidebar-link"><span class="method-badge get">GET</span>Produto publico</a>
+      <a href="#public-product-checkout" class="sidebar-link"><span class="method-badge post">POST</span>Checkout do produto</a>
+      <a href="#public-merchant" class="sidebar-link"><span class="method-badge get">GET</span>Pagina do merchant</a>
+      <a href="#public-merchant-checkout" class="sidebar-link"><span class="method-badge post">POST</span>Checkout do merchant</a>
+    </div>
+    <div class="sidebar-section">
       <div class="sidebar-title">Webhooks</div>
-      <a href="#webhooks" class="sidebar-link">Visão geral</a>
+      <a href="#webhooks" class="sidebar-link">Visao geral</a>
       <a href="#webhook-events" class="sidebar-link">Eventos</a>
       <a href="#webhook-verify" class="sidebar-link">Verificar assinatura</a>
     </div>
@@ -446,6 +492,11 @@
       <div class="sidebar-title">Testes</div>
       <a href="#sandbox" class="sidebar-link">Sandbox</a>
       <a href="#simulate" class="sidebar-link">Simular pagamento</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">Conta</div>
+      <a href="#me" class="sidebar-link"><span class="method-badge get">GET</span>/api/me</a>
+      <a href="#rate-limits" class="sidebar-link">Rate limits</a>
     </div>
   </aside>
 
@@ -457,10 +508,12 @@
       Menu
     </button>
 
-    <!-- Intro -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- 1. INTRODUCAO                                          -->
+    <!-- ═══════════════════════════════════════════════════════ -->
     <section class="doc-section" id="intro">
-      <h2>Introdução</h2>
-      <p>A API do DePix App permite criar e gerenciar checkouts Pix programaticamente. É a mesma API que alimenta o plugin do BTCPay Server e a Área do Lojista.</p>
+      <h2>Introducao</h2>
+      <p>A API do DePix App permite criar e gerenciar checkouts Pix programaticamente. E a mesma API que alimenta o plugin do BTCPay Server e a Area do Lojista.</p>
 
       <h3>URL base</h3>
       <div class="code-wrap">
@@ -468,17 +521,19 @@
       </div>
 
       <h3>Formato</h3>
-      <p>Todos os requests e responses usam JSON (<code>Content-Type: application/json</code>). Valores monetários são sempre em <strong>centavos</strong> (inteiros). Exemplo: R$ 10,00 = <code>1000</code>.</p>
+      <p>Todos os requests e responses usam JSON (<code>Content-Type: application/json</code>). Valores monetarios sao sempre em <strong>centavos</strong> (inteiros). Exemplo: R$ 10,00 = <code>1000</code>.</p>
 
       <div class="alert info">
-        <span class="alert-icon">ℹ</span>
-        <span>Para começar, <a href="https://depixapp.com/#register" style="color: inherit; font-weight: 600;">crie uma conta</a>, ative sua conta de lojista na Área do Lojista e gere uma API key.</span>
+        <span class="alert-icon">&#x2139;</span>
+        <span>Para comecar, <a href="https://depixapp.com/#register" style="color: inherit; font-weight: 600;">crie uma conta</a>, ative sua conta de lojista na Area do Lojista e gere uma API key.</span>
       </div>
     </section>
 
-    <!-- Auth -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- 2. AUTENTICACAO                                        -->
+    <!-- ═══════════════════════════════════════════════════════ -->
     <section class="doc-section" id="auth">
-      <h2>Autenticação</h2>
+      <h2>Autenticacao</h2>
       <p>Use uma API key no header <code>Authorization</code> em todos os requests autenticados.</p>
 
       <div class="code-wrap">
@@ -491,30 +546,32 @@
         <thead><tr><th>Prefixo</th><th>Tipo</th><th>Comportamento</th></tr></thead>
         <tbody>
           <tr><td>sk_live_</td><td>Live</td><td>Checkouts reais. Dinheiro de verdade.</td></tr>
-          <tr><td>sk_test_</td><td>Test</td><td>Checkouts de teste. Nenhum dinheiro real é movimentado.</td></tr>
+          <tr><td>sk_test_</td><td>Test</td><td>Checkouts de teste. Nenhum dinheiro real e movimentado.</td></tr>
         </tbody>
       </table>
 
-      <p>Para gerenciar suas chaves (criar, listar, revogar), acesse a <strong>Área do Lojista</strong> em <a href="https://depixapp.com/#merchant">depixapp.com/#merchant</a>. Máximo de 5 chaves live e 5 chaves test ativas por conta.</p>
+      <p>Para gerenciar suas chaves (criar, listar, revogar), acesse a <strong>Area do Lojista</strong> em <a href="https://depixapp.com/#merchant">depixapp.com/#merchant</a>. Maximo de 5 chaves live e 5 chaves test ativas por conta.</p>
 
       <div class="alert warning">
-        <span class="alert-icon">⚠</span>
-        <span><strong>Guarde sua chave com segurança.</strong> Ela só é exibida uma vez no momento da criação. Se perdê-la, revogue e gere uma nova.</span>
+        <span class="alert-icon">&#x26A0;</span>
+        <span><strong>Guarde sua chave com seguranca.</strong> Ela so e exibida uma vez no momento da criacao. Se perde-la, revogue e gere uma nova.</span>
       </div>
     </section>
 
-    <!-- Errors -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- 3. ERROS                                               -->
+    <!-- ═══════════════════════════════════════════════════════ -->
     <section class="doc-section" id="errors">
       <h2>Erros</h2>
-      <p>Erros seguem o formato abaixo. O campo <code>errorMessage</code> é sempre legível para humanos.</p>
+      <p>Erros seguem o formato abaixo. O campo <code>errorMessage</code> e sempre legivel para humanos.</p>
 
       <div class="code-wrap">
         <div class="code-label">Resposta de erro</div>
         <pre>{
   <span class="hl-key">"response"</span>: {
-    <span class="hl-key">"errorMessage"</span>: <span class="hl-str">"Dados inválidos."</span>,
-    <span class="hl-key">"errors"</span>: [                         <span class="hl-cm">// presente em erros de validação</span>
-      { <span class="hl-key">"field"</span>: <span class="hl-str">"amount"</span>, <span class="hl-key">"message"</span>: <span class="hl-str">"Obrigatório."</span> }
+    <span class="hl-key">"errorMessage"</span>: <span class="hl-str">"Dados invalidos."</span>,
+    <span class="hl-key">"errors"</span>: [                         <span class="hl-cm">// presente em erros de validacao</span>
+      { <span class="hl-key">"field"</span>: <span class="hl-str">"amount"</span>, <span class="hl-key">"message"</span>: <span class="hl-str">"Obrigatorio."</span> }
     ]
   }
 }</pre>
@@ -523,17 +580,21 @@
       <table>
         <thead><tr><th>Status</th><th>Significado</th></tr></thead>
         <tbody>
-          <tr><td>400</td><td>Dados inválidos — verifique os campos.</td></tr>
-          <tr><td>401</td><td>API key ausente, inválida ou revogada.</td></tr>
-          <tr><td>403</td><td>Sem permissão. Conta de lojista não configurada, ou chave sem acesso ao recurso.</td></tr>
-          <tr><td>404</td><td>Recurso não encontrado.</td></tr>
-          <tr><td>409</td><td>Conflito de estado — operação não permitida no status atual.</td></tr>
+          <tr><td>400</td><td>Dados invalidos -- verifique os campos.</td></tr>
+          <tr><td>401</td><td>API key ausente, invalida ou revogada.</td></tr>
+          <tr><td>403</td><td>Sem permissao. Conta de lojista nao configurada, ou chave sem acesso ao recurso.</td></tr>
+          <tr><td>404</td><td>Recurso nao encontrado.</td></tr>
+          <tr><td>409</td><td>Conflito de estado -- operacao nao permitida no status atual.</td></tr>
           <tr><td>429</td><td>Rate limit excedido. Aguarde e tente novamente.</td></tr>
         </tbody>
       </table>
     </section>
 
-    <!-- Create checkout -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- 4. CHECKOUTS                                           -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <!-- 4a. Create checkout -->
     <section class="doc-section" id="checkout-create">
       <h2>Criar checkout</h2>
       <p>Cria um novo checkout Pix. Retorna o QR code e a URL de pagamento para exibir ao seu cliente.</p>
@@ -543,25 +604,37 @@
         <span class="path">/api/checkouts</span>
       </div>
 
-      <h3>Parâmetros</h3>
+      <h3>Parametros</h3>
       <table>
-        <thead><tr><th>Campo</th><th>Tipo</th><th></th><th>Descrição</th></tr></thead>
+        <thead><tr><th>Campo</th><th>Tipo</th><th></th><th>Descricao</th></tr></thead>
         <tbody>
-          <tr><td>amount</td><td>integer</td><td><span class="req">obrigatório</span></td><td>Valor em centavos. Mínimo: 500 (R$ 5,00). Máximo: 300000 (R$ 3.000,00).</td></tr>
-          <tr><td>description</td><td>string</td><td><span class="opt">opcional</span></td><td>Descrição do pedido. Máximo 500 caracteres. Exibida na página de pagamento.</td></tr>
-          <tr><td>expires_in</td><td>integer</td><td><span class="opt">opcional</span></td><td>Tempo de expiração em segundos. Padrão: 1800 (30min). Mínimo: 300 (5min). Máximo: 86400 (24h).</td></tr>
-          <tr><td>image_url</td><td>string</td><td><span class="opt">opcional</span></td><td>URL HTTPS da imagem do produto. Exibida na página de pagamento.</td></tr>
+          <tr><td>amount</td><td>integer</td><td><span class="req">obrigatorio</span></td><td>Valor em centavos. Minimo: 500 (R$ 5,00). Maximo: 300000 (R$ 3.000,00).</td></tr>
+          <tr><td>description</td><td>string</td><td><span class="opt">opcional</span></td><td>Descricao do pedido. Maximo 500 caracteres. Exibida na pagina de pagamento.</td></tr>
+          <tr><td>expires_in</td><td>integer</td><td><span class="opt">opcional</span></td><td>Tempo de expiracao em segundos. Padrao: 1800 (30min). Minimo: 300 (5min). Maximo: 86400 (24h).</td></tr>
+          <tr><td>image_url</td><td>string</td><td><span class="opt">opcional</span></td><td>URL HTTPS da imagem do produto. Exibida na pagina de pagamento.</td></tr>
           <tr><td>callback_url</td><td>string</td><td><span class="opt">opcional</span></td><td>URL HTTPS que recebe os webhooks do checkout.</td></tr>
-          <tr><td>redirect_url</td><td>string</td><td><span class="opt">opcional</span></td><td>URL para redirecionar o cliente após o pagamento.</td></tr>
-          <tr><td>metadata</td><td>object</td><td><span class="opt">opcional</span></td><td>Dados adicionais do seu sistema (order_id, user_id, etc.). Máximo 4KB. Devolvido nos webhooks.</td></tr>
+          <tr><td>redirect_url</td><td>string</td><td><span class="opt">opcional</span></td><td>URL para redirecionar o cliente apos o pagamento.</td></tr>
+          <tr><td>metadata</td><td>object</td><td><span class="opt">opcional</span></td><td>Dados adicionais do seu sistema (order_id, user_id, etc.). Maximo 4KB. Devolvido nos webhooks.</td></tr>
         </tbody>
       </table>
 
       <h3>Exemplo</h3>
-      <div class="code-wrap">
-        <div class="code-label">curl</div>
-        <button class="copy-btn" onclick="copyCode(this)">copiar</button>
-        <pre><span class="hl-cmd">curl</span> <span class="hl-flag">-X POST</span> <span class="hl-url">https://depix-backend.vercel.app/api/checkouts</span> \
+
+      <div class="lang-tabs">
+        <button class="lang-tab" data-lang="curl" onclick="setLang('curl')">curl</button>
+        <button class="lang-tab" data-lang="javascript" onclick="setLang('javascript')">JavaScript</button>
+        <button class="lang-tab" data-lang="python" onclick="setLang('python')">Python</button>
+        <button class="lang-tab" data-lang="php" onclick="setLang('php')">PHP</button>
+        <button class="lang-tab" data-lang="csharp" onclick="setLang('csharp')">C#</button>
+        <button class="lang-tab" data-lang="go" onclick="setLang('go')">Go</button>
+        <button class="lang-tab" data-lang="ruby" onclick="setLang('ruby')">Ruby</button>
+        <button class="lang-tab" data-lang="java" onclick="setLang('java')">Java</button>
+      </div>
+
+      <div class="lang-panel" data-lang="curl">
+        <div class="code-wrap">
+          <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+          <pre><span class="hl-cmd">curl</span> <span class="hl-flag">-X POST</span> <span class="hl-url">https://depix-backend.vercel.app/api/checkouts</span> \
   <span class="hl-flag">-H</span> <span class="hl-str">"Authorization: Bearer sk_live_&lt;sua-chave&gt;"</span> \
   <span class="hl-flag">-H</span> <span class="hl-str">"Content-Type: application/json"</span> \
   <span class="hl-flag">-d</span> <span class="hl-str">'{
@@ -571,10 +644,158 @@
     "callback_url": "https://minha-loja.com/webhook/depix",
     "metadata": { "order_id": "ORD-123" }
   }'</span></pre>
+        </div>
+      </div>
+
+      <div class="lang-panel" data-lang="javascript">
+        <div class="code-wrap">
+          <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+          <pre><span class="hl-kw">const</span> res = <span class="hl-kw">await</span> fetch(<span class="hl-str">"https://depix-backend.vercel.app/api/checkouts"</span>, {
+  method: <span class="hl-str">"POST"</span>,
+  headers: {
+    <span class="hl-str">"Authorization"</span>: <span class="hl-str">"Bearer sk_live_&lt;sua-chave&gt;"</span>,
+    <span class="hl-str">"Content-Type"</span>: <span class="hl-str">"application/json"</span>,
+  },
+  body: JSON.stringify({
+    amount: <span class="hl-num">2990</span>,
+    description: <span class="hl-str">"Camiseta tamanho M"</span>,
+    expires_in: <span class="hl-num">900</span>,
+    callback_url: <span class="hl-str">"https://minha-loja.com/webhook/depix"</span>,
+    metadata: { order_id: <span class="hl-str">"ORD-123"</span> },
+  }),
+});
+<span class="hl-kw">const</span> data = <span class="hl-kw">await</span> res.json();
+console.log(data.id, data.payment_url);</pre>
+        </div>
+      </div>
+
+      <div class="lang-panel" data-lang="python">
+        <div class="code-wrap">
+          <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+          <pre><span class="hl-kw">import</span> requests
+
+resp = requests.post(
+    <span class="hl-str">"https://depix-backend.vercel.app/api/checkouts"</span>,
+    headers={<span class="hl-str">"Authorization"</span>: <span class="hl-str">"Bearer sk_live_&lt;sua-chave&gt;"</span>},
+    json={
+        <span class="hl-str">"amount"</span>: <span class="hl-num">2990</span>,
+        <span class="hl-str">"description"</span>: <span class="hl-str">"Camiseta tamanho M"</span>,
+        <span class="hl-str">"expires_in"</span>: <span class="hl-num">900</span>,
+        <span class="hl-str">"callback_url"</span>: <span class="hl-str">"https://minha-loja.com/webhook/depix"</span>,
+        <span class="hl-str">"metadata"</span>: {<span class="hl-str">"order_id"</span>: <span class="hl-str">"ORD-123"</span>},
+    },
+)
+data = resp.json()
+print(data[<span class="hl-str">"id"</span>], data[<span class="hl-str">"payment_url"</span>])</pre>
+        </div>
+      </div>
+
+      <div class="lang-panel" data-lang="php">
+        <div class="code-wrap">
+          <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+          <pre>$ch = curl_init(<span class="hl-str">"https://depix-backend.vercel.app/api/checkouts"</span>);
+curl_setopt_array($ch, [
+    CURLOPT_POST =&gt; <span class="hl-kw">true</span>,
+    CURLOPT_RETURNTRANSFER =&gt; <span class="hl-kw">true</span>,
+    CURLOPT_HTTPHEADER =&gt; [
+        <span class="hl-str">"Authorization: Bearer sk_live_&lt;sua-chave&gt;"</span>,
+        <span class="hl-str">"Content-Type: application/json"</span>,
+    ],
+    CURLOPT_POSTFIELDS =&gt; json_encode([
+        <span class="hl-str">"amount"</span> =&gt; <span class="hl-num">2990</span>,
+        <span class="hl-str">"description"</span> =&gt; <span class="hl-str">"Camiseta tamanho M"</span>,
+        <span class="hl-str">"expires_in"</span> =&gt; <span class="hl-num">900</span>,
+        <span class="hl-str">"callback_url"</span> =&gt; <span class="hl-str">"https://minha-loja.com/webhook/depix"</span>,
+        <span class="hl-str">"metadata"</span> =&gt; [<span class="hl-str">"order_id"</span> =&gt; <span class="hl-str">"ORD-123"</span>],
+    ]),
+]);
+$response = curl_exec($ch);
+$data = json_decode($response, <span class="hl-kw">true</span>);
+<span class="hl-kw">echo</span> $data[<span class="hl-str">"id"</span>] . <span class="hl-str">" "</span> . $data[<span class="hl-str">"payment_url"</span>];</pre>
+        </div>
+      </div>
+
+      <div class="lang-panel" data-lang="csharp">
+        <div class="code-wrap">
+          <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+          <pre><span class="hl-kw">using</span> <span class="hl-kw">var</span> client = <span class="hl-kw">new</span> HttpClient();
+client.DefaultRequestHeaders.Add(<span class="hl-str">"Authorization"</span>, <span class="hl-str">"Bearer sk_live_&lt;sua-chave&gt;"</span>);
+
+<span class="hl-kw">var</span> payload = <span class="hl-kw">new</span> {
+    amount = <span class="hl-num">2990</span>,
+    description = <span class="hl-str">"Camiseta tamanho M"</span>,
+    expires_in = <span class="hl-num">900</span>,
+    callback_url = <span class="hl-str">"https://minha-loja.com/webhook/depix"</span>,
+    metadata = <span class="hl-kw">new</span> { order_id = <span class="hl-str">"ORD-123"</span> }
+};
+
+<span class="hl-kw">var</span> res = <span class="hl-kw">await</span> client.PostAsync(
+    <span class="hl-str">"https://depix-backend.vercel.app/api/checkouts"</span>,
+    <span class="hl-kw">new</span> StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, <span class="hl-str">"application/json"</span>)
+);
+<span class="hl-kw">var</span> json = <span class="hl-kw">await</span> res.Content.ReadAsStringAsync();
+Console.WriteLine(json);</pre>
+        </div>
+      </div>
+
+      <div class="lang-panel" data-lang="go">
+        <div class="code-wrap">
+          <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+          <pre>body := <span class="hl-str">`{"amount":2990,"description":"Camiseta tamanho M","expires_in":900,"callback_url":"https://minha-loja.com/webhook/depix","metadata":{"order_id":"ORD-123"}}`</span>
+
+req, _ := http.NewRequest(<span class="hl-str">"POST"</span>, <span class="hl-str">"https://depix-backend.vercel.app/api/checkouts"</span>, strings.NewReader(body))
+req.Header.Set(<span class="hl-str">"Authorization"</span>, <span class="hl-str">"Bearer sk_live_&lt;sua-chave&gt;"</span>)
+req.Header.Set(<span class="hl-str">"Content-Type"</span>, <span class="hl-str">"application/json"</span>)
+
+resp, _ := http.DefaultClient.Do(req)
+<span class="hl-kw">defer</span> resp.Body.Close()
+io.Copy(os.Stdout, resp.Body)</pre>
+        </div>
+      </div>
+
+      <div class="lang-panel" data-lang="ruby">
+        <div class="code-wrap">
+          <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+          <pre><span class="hl-kw">require</span> <span class="hl-str">"net/http"</span>
+<span class="hl-kw">require</span> <span class="hl-str">"json"</span>
+
+uri = URI(<span class="hl-str">"https://depix-backend.vercel.app/api/checkouts"</span>)
+req = Net::HTTP::Post.new(uri, {
+  <span class="hl-str">"Authorization"</span> =&gt; <span class="hl-str">"Bearer sk_live_&lt;sua-chave&gt;"</span>,
+  <span class="hl-str">"Content-Type"</span> =&gt; <span class="hl-str">"application/json"</span>,
+})
+req.body = { amount: <span class="hl-num">2990</span>, description: <span class="hl-str">"Camiseta tamanho M"</span>, expires_in: <span class="hl-num">900</span>,
+             callback_url: <span class="hl-str">"https://minha-loja.com/webhook/depix"</span>,
+             metadata: { order_id: <span class="hl-str">"ORD-123"</span> } }.to_json
+
+res = Net::HTTP.start(uri.hostname, uri.port, use_ssl: <span class="hl-kw">true</span>) { |http| http.request(req) }
+puts JSON.parse(res.body)</pre>
+        </div>
+      </div>
+
+      <div class="lang-panel" data-lang="java">
+        <div class="code-wrap">
+          <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+          <pre>HttpClient client = HttpClient.newHttpClient();
+String json = <span class="hl-str">"""
+    {"amount":2990,"description":"Camiseta tamanho M","expires_in":900,
+     "callback_url":"https://minha-loja.com/webhook/depix",
+     "metadata":{"order_id":"ORD-123"}}"""</span>;
+
+HttpRequest request = HttpRequest.newBuilder()
+    .uri(URI.create(<span class="hl-str">"https://depix-backend.vercel.app/api/checkouts"</span>))
+    .header(<span class="hl-str">"Authorization"</span>, <span class="hl-str">"Bearer sk_live_&lt;sua-chave&gt;"</span>)
+    .header(<span class="hl-str">"Content-Type"</span>, <span class="hl-str">"application/json"</span>)
+    .POST(HttpRequest.BodyPublishers.ofString(json))
+    .build();
+
+HttpResponse&lt;String&gt; response = client.send(request, HttpResponse.BodyHandlers.ofString());
+System.out.println(response.body());</pre>
+        </div>
       </div>
 
       <div class="code-wrap">
-        <div class="code-label">Resposta — 201 Created</div>
+        <div class="code-label">Resposta -- 201 Created</div>
         <pre>{
   <span class="hl-key">"id"</span>:          <span class="hl-str">"chk_01jxxxxxxxxxxxxxxxxxxxxxx"</span>,
   <span class="hl-key">"status"</span>:      <span class="hl-str">"pending"</span>,
@@ -591,15 +812,15 @@
       </div>
 
       <div class="alert success">
-        <span class="alert-icon">💡</span>
-        <span>Exiba o <code>payment_url</code> ao seu cliente ou gere um QR code a partir do <code>pix.qr_code</code>. O QR code é compatível com qualquer app de banco.</span>
+        <span class="alert-icon">&#x1F4A1;</span>
+        <span>Exiba o <code>payment_url</code> ao seu cliente ou gere um QR code a partir do <code>pix.qr_code</code>. O QR code e compativel com qualquer app de banco.</span>
       </div>
     </section>
 
-    <!-- Get checkout -->
+    <!-- 4b. Get checkout -->
     <section class="doc-section" id="checkout-get">
       <h2>Consultar checkout</h2>
-      <p>Retorna os detalhes de um checkout específico.</p>
+      <p>Retorna os detalhes de um checkout especifico.</p>
 
       <div class="endpoint">
         <span class="method get">GET</span>
@@ -614,7 +835,7 @@
       </div>
 
       <div class="code-wrap">
-        <div class="code-label">Resposta — 200 OK</div>
+        <div class="code-label">Resposta -- 200 OK</div>
         <pre>{
   <span class="hl-key">"checkout"</span>: {
     <span class="hl-key">"id"</span>:             <span class="hl-str">"chk_01jxxxxxxxxxxxxxxxxxxxxxx"</span>,
@@ -635,12 +856,12 @@
 }</pre>
       </div>
 
-      <h3>Status possíveis</h3>
+      <h3>Status possiveis</h3>
       <table>
         <thead><tr><th>Status</th><th>Significado</th></tr></thead>
         <tbody>
           <tr><td>pending</td><td>Aguardando pagamento.</td></tr>
-          <tr><td>processing</td><td>Pix recebido, processando conversão para DePix.</td></tr>
+          <tr><td>processing</td><td>Pix recebido, processando conversao para DePix.</td></tr>
           <tr><td>completed</td><td>Pagamento confirmado. DePix na carteira do merchant.</td></tr>
           <tr><td>cancelled</td><td>Cancelado pelo merchant.</td></tr>
           <tr><td>expired</td><td>Prazo de pagamento expirou.</td></tr>
@@ -648,10 +869,10 @@
       </table>
     </section>
 
-    <!-- List checkouts -->
+    <!-- 4c. List checkouts -->
     <section class="doc-section" id="checkout-list">
       <h2>Listar checkouts</h2>
-      <p>Lista os checkouts do merchant com filtros e paginação.</p>
+      <p>Lista os checkouts do merchant com filtros e paginacao.</p>
 
       <div class="endpoint">
         <span class="method get">GET</span>
@@ -660,26 +881,27 @@
 
       <h3>Query params (todos opcionais)</h3>
       <table>
-        <thead><tr><th>Parâmetro</th><th>Descrição</th></tr></thead>
+        <thead><tr><th>Parametro</th><th>Descricao</th></tr></thead>
         <tbody>
           <tr><td>status</td><td>Filtrar por status: <code>pending</code>, <code>completed</code>, <code>cancelled</code>, <code>expired</code>.</td></tr>
-          <tr><td>from</td><td>Data de início (ISO 8601). Ex: <code>2025-06-01T00:00:00Z</code>.</td></tr>
+          <tr><td>product_id</td><td>Filtrar por produto. Ex: <code>prd_xxx</code>.</td></tr>
+          <tr><td>from</td><td>Data de inicio (ISO 8601). Ex: <code>2025-06-01T00:00:00Z</code>.</td></tr>
           <tr><td>to</td><td>Data de fim (ISO 8601).</td></tr>
-          <tr><td>q</td><td>Busca por ID ou descrição.</td></tr>
-          <tr><td>limit</td><td>Número de resultados por página. Padrão: 50. Máximo: 100.</td></tr>
-          <tr><td>offset</td><td>Paginação. Padrão: 0.</td></tr>
+          <tr><td>q</td><td>Busca por ID ou descricao.</td></tr>
+          <tr><td>limit</td><td>Numero de resultados por pagina. Padrao: 50. Maximo: 100.</td></tr>
+          <tr><td>offset</td><td>Paginacao. Padrao: 0.</td></tr>
         </tbody>
       </table>
 
       <div class="code-wrap">
         <div class="code-label">curl</div>
         <button class="copy-btn" onclick="copyCode(this)">copiar</button>
-        <pre><span class="hl-cmd">curl</span> <span class="hl-url">"https://depix-backend.vercel.app/api/checkouts?status=completed&limit=20"</span> \
+        <pre><span class="hl-cmd">curl</span> <span class="hl-url">"https://depix-backend.vercel.app/api/checkouts?status=completed&amp;limit=20"</span> \
   <span class="hl-flag">-H</span> <span class="hl-str">"Authorization: Bearer sk_live_&lt;sua-chave&gt;"</span></pre>
       </div>
 
       <div class="code-wrap">
-        <div class="code-label">Resposta — 200 OK</div>
+        <div class="code-label">Resposta -- 200 OK</div>
         <pre>{
   <span class="hl-key">"checkouts"</span>: [
     {
@@ -696,7 +918,7 @@
     <span class="hl-key">"total"</span>:            <span class="hl-num">47</span>,
     <span class="hl-key">"pending"</span>:          <span class="hl-num">2</span>,
     <span class="hl-key">"completed"</span>:        <span class="hl-num">40</span>,
-    <span class="hl-key">"completed_amount"</span>:  <span class="hl-num">189500</span>    <span class="hl-cm">// centavos — R$ 1.895,00</span>
+    <span class="hl-key">"completed_amount"</span>:  <span class="hl-num">189500</span>    <span class="hl-cm">// centavos -- R$ 1.895,00</span>
   },
   <span class="hl-key">"limit"</span>:  <span class="hl-num">20</span>,
   <span class="hl-key">"offset"</span>: <span class="hl-num">0</span>
@@ -704,10 +926,10 @@
       </div>
     </section>
 
-    <!-- Cancel -->
+    <!-- 4d. Cancel checkout -->
     <section class="doc-section" id="checkout-cancel">
       <h2>Cancelar checkout</h2>
-      <p>Cancela um checkout pendente. Só é possível cancelar checkouts com status <code>pending</code>.</p>
+      <p>Cancela um checkout pendente. So e possivel cancelar checkouts com status <code>pending</code>.</p>
 
       <div class="endpoint">
         <span class="method post">POST</span>
@@ -722,22 +944,568 @@
       </div>
 
       <div class="code-wrap">
-        <div class="code-label">Resposta — 200 OK</div>
+        <div class="code-label">Resposta -- 200 OK</div>
         <pre>{ <span class="hl-key">"success"</span>: <span class="hl-kw">true</span> }</pre>
       </div>
     </section>
 
-    <!-- Webhooks -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- 5. PRODUTOS                                            -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <!-- 5a. Create product -->
+    <section class="doc-section" id="product-create">
+      <h2>Criar produto</h2>
+      <p>Cria um novo produto com valor fixo. Cada produto gera um link de pagamento permanente que pode ser compartilhado com seus clientes.</p>
+
+      <div class="endpoint">
+        <span class="method post">POST</span>
+        <span class="path">/api/products</span>
+      </div>
+
+      <h3>Parametros</h3>
+      <table>
+        <thead><tr><th>Campo</th><th>Tipo</th><th></th><th>Descricao</th></tr></thead>
+        <tbody>
+          <tr><td>slug</td><td>string</td><td><span class="req">obrigatorio</span></td><td>Identificador na URL. Letras minusculas, numeros e hifens. 2-60 caracteres. Nao pode comecar/terminar com hifen.</td></tr>
+          <tr><td>amount</td><td>integer</td><td><span class="req">obrigatorio</span></td><td>Valor em centavos. Minimo: 500. Maximo: 300000.</td></tr>
+          <tr><td>description</td><td>string</td><td><span class="opt">opcional</span></td><td>Descricao do produto. Maximo 500 caracteres.</td></tr>
+          <tr><td>image_url</td><td>string</td><td><span class="opt">opcional</span></td><td>URL HTTPS da imagem do produto.</td></tr>
+          <tr><td>callback_url</td><td>string</td><td><span class="opt">opcional</span></td><td>URL HTTPS para webhooks. Sobrescreve o default do merchant.</td></tr>
+          <tr><td>redirect_url</td><td>string</td><td><span class="opt">opcional</span></td><td>URL de redirecionamento. Sobrescreve o default do merchant.</td></tr>
+          <tr><td>metadata</td><td>object</td><td><span class="opt">opcional</span></td><td>Dados adicionais. Maximo 4KB. Incluido nos webhooks dos checkouts gerados.</td></tr>
+          <tr><td>expires_in</td><td>integer</td><td><span class="opt">opcional</span></td><td>Tempo de expiracao dos checkouts em segundos. Padrao: 1800. Minimo: 300. Maximo: 86400.</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Exemplo</h3>
+
+      <div class="lang-tabs">
+        <button class="lang-tab" data-lang="curl" onclick="setLang('curl')">curl</button>
+        <button class="lang-tab" data-lang="javascript" onclick="setLang('javascript')">JavaScript</button>
+        <button class="lang-tab" data-lang="python" onclick="setLang('python')">Python</button>
+        <button class="lang-tab" data-lang="php" onclick="setLang('php')">PHP</button>
+        <button class="lang-tab" data-lang="csharp" onclick="setLang('csharp')">C#</button>
+        <button class="lang-tab" data-lang="go" onclick="setLang('go')">Go</button>
+        <button class="lang-tab" data-lang="ruby" onclick="setLang('ruby')">Ruby</button>
+        <button class="lang-tab" data-lang="java" onclick="setLang('java')">Java</button>
+      </div>
+
+      <div class="lang-panel" data-lang="curl">
+        <div class="code-wrap">
+          <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+          <pre><span class="hl-cmd">curl</span> <span class="hl-flag">-X POST</span> <span class="hl-url">https://depix-backend.vercel.app/api/products</span> \
+  <span class="hl-flag">-H</span> <span class="hl-str">"Authorization: Bearer sk_live_&lt;sua-chave&gt;"</span> \
+  <span class="hl-flag">-H</span> <span class="hl-str">"Content-Type: application/json"</span> \
+  <span class="hl-flag">-d</span> <span class="hl-str">'{
+    "slug": "camiseta-m",
+    "amount": 2990,
+    "description": "Camiseta tamanho M"
+  }'</span></pre>
+        </div>
+      </div>
+
+      <div class="lang-panel" data-lang="javascript">
+        <div class="code-wrap">
+          <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+          <pre><span class="hl-kw">const</span> res = <span class="hl-kw">await</span> fetch(<span class="hl-str">"https://depix-backend.vercel.app/api/products"</span>, {
+  method: <span class="hl-str">"POST"</span>,
+  headers: {
+    <span class="hl-str">"Authorization"</span>: <span class="hl-str">"Bearer sk_live_&lt;sua-chave&gt;"</span>,
+    <span class="hl-str">"Content-Type"</span>: <span class="hl-str">"application/json"</span>,
+  },
+  body: JSON.stringify({
+    slug: <span class="hl-str">"camiseta-m"</span>,
+    amount: <span class="hl-num">2990</span>,
+    description: <span class="hl-str">"Camiseta tamanho M"</span>,
+  }),
+});
+<span class="hl-kw">const</span> data = <span class="hl-kw">await</span> res.json();
+console.log(data.product.payment_url);</pre>
+        </div>
+      </div>
+
+      <div class="lang-panel" data-lang="python">
+        <div class="code-wrap">
+          <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+          <pre><span class="hl-kw">import</span> requests
+
+resp = requests.post(
+    <span class="hl-str">"https://depix-backend.vercel.app/api/products"</span>,
+    headers={<span class="hl-str">"Authorization"</span>: <span class="hl-str">"Bearer sk_live_&lt;sua-chave&gt;"</span>},
+    json={
+        <span class="hl-str">"slug"</span>: <span class="hl-str">"camiseta-m"</span>,
+        <span class="hl-str">"amount"</span>: <span class="hl-num">2990</span>,
+        <span class="hl-str">"description"</span>: <span class="hl-str">"Camiseta tamanho M"</span>,
+    },
+)
+data = resp.json()
+print(data[<span class="hl-str">"product"</span>][<span class="hl-str">"payment_url"</span>])</pre>
+        </div>
+      </div>
+
+      <div class="lang-panel" data-lang="php">
+        <div class="code-wrap">
+          <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+          <pre>$ch = curl_init(<span class="hl-str">"https://depix-backend.vercel.app/api/products"</span>);
+curl_setopt_array($ch, [
+    CURLOPT_POST =&gt; <span class="hl-kw">true</span>,
+    CURLOPT_RETURNTRANSFER =&gt; <span class="hl-kw">true</span>,
+    CURLOPT_HTTPHEADER =&gt; [
+        <span class="hl-str">"Authorization: Bearer sk_live_&lt;sua-chave&gt;"</span>,
+        <span class="hl-str">"Content-Type: application/json"</span>,
+    ],
+    CURLOPT_POSTFIELDS =&gt; json_encode([
+        <span class="hl-str">"slug"</span> =&gt; <span class="hl-str">"camiseta-m"</span>,
+        <span class="hl-str">"amount"</span> =&gt; <span class="hl-num">2990</span>,
+        <span class="hl-str">"description"</span> =&gt; <span class="hl-str">"Camiseta tamanho M"</span>,
+    ]),
+]);
+$response = curl_exec($ch);
+$data = json_decode($response, <span class="hl-kw">true</span>);
+<span class="hl-kw">echo</span> $data[<span class="hl-str">"product"</span>][<span class="hl-str">"payment_url"</span>];</pre>
+        </div>
+      </div>
+
+      <div class="lang-panel" data-lang="csharp">
+        <div class="code-wrap">
+          <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+          <pre><span class="hl-kw">using</span> <span class="hl-kw">var</span> client = <span class="hl-kw">new</span> HttpClient();
+client.DefaultRequestHeaders.Add(<span class="hl-str">"Authorization"</span>, <span class="hl-str">"Bearer sk_live_&lt;sua-chave&gt;"</span>);
+
+<span class="hl-kw">var</span> payload = <span class="hl-kw">new</span> { slug = <span class="hl-str">"camiseta-m"</span>, amount = <span class="hl-num">2990</span>, description = <span class="hl-str">"Camiseta tamanho M"</span> };
+
+<span class="hl-kw">var</span> res = <span class="hl-kw">await</span> client.PostAsync(
+    <span class="hl-str">"https://depix-backend.vercel.app/api/products"</span>,
+    <span class="hl-kw">new</span> StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, <span class="hl-str">"application/json"</span>)
+);
+Console.WriteLine(<span class="hl-kw">await</span> res.Content.ReadAsStringAsync());</pre>
+        </div>
+      </div>
+
+      <div class="lang-panel" data-lang="go">
+        <div class="code-wrap">
+          <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+          <pre>body := <span class="hl-str">`{"slug":"camiseta-m","amount":2990,"description":"Camiseta tamanho M"}`</span>
+
+req, _ := http.NewRequest(<span class="hl-str">"POST"</span>, <span class="hl-str">"https://depix-backend.vercel.app/api/products"</span>, strings.NewReader(body))
+req.Header.Set(<span class="hl-str">"Authorization"</span>, <span class="hl-str">"Bearer sk_live_&lt;sua-chave&gt;"</span>)
+req.Header.Set(<span class="hl-str">"Content-Type"</span>, <span class="hl-str">"application/json"</span>)
+
+resp, _ := http.DefaultClient.Do(req)
+<span class="hl-kw">defer</span> resp.Body.Close()
+io.Copy(os.Stdout, resp.Body)</pre>
+        </div>
+      </div>
+
+      <div class="lang-panel" data-lang="ruby">
+        <div class="code-wrap">
+          <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+          <pre><span class="hl-kw">require</span> <span class="hl-str">"net/http"</span>
+<span class="hl-kw">require</span> <span class="hl-str">"json"</span>
+
+uri = URI(<span class="hl-str">"https://depix-backend.vercel.app/api/products"</span>)
+req = Net::HTTP::Post.new(uri, {
+  <span class="hl-str">"Authorization"</span> =&gt; <span class="hl-str">"Bearer sk_live_&lt;sua-chave&gt;"</span>,
+  <span class="hl-str">"Content-Type"</span> =&gt; <span class="hl-str">"application/json"</span>,
+})
+req.body = { slug: <span class="hl-str">"camiseta-m"</span>, amount: <span class="hl-num">2990</span>, description: <span class="hl-str">"Camiseta tamanho M"</span> }.to_json
+
+res = Net::HTTP.start(uri.hostname, uri.port, use_ssl: <span class="hl-kw">true</span>) { |http| http.request(req) }
+puts JSON.parse(res.body)</pre>
+        </div>
+      </div>
+
+      <div class="lang-panel" data-lang="java">
+        <div class="code-wrap">
+          <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+          <pre>HttpClient client = HttpClient.newHttpClient();
+String json = <span class="hl-str">"""
+    {"slug":"camiseta-m","amount":2990,"description":"Camiseta tamanho M"}"""</span>;
+
+HttpRequest request = HttpRequest.newBuilder()
+    .uri(URI.create(<span class="hl-str">"https://depix-backend.vercel.app/api/products"</span>))
+    .header(<span class="hl-str">"Authorization"</span>, <span class="hl-str">"Bearer sk_live_&lt;sua-chave&gt;"</span>)
+    .header(<span class="hl-str">"Content-Type"</span>, <span class="hl-str">"application/json"</span>)
+    .POST(HttpRequest.BodyPublishers.ofString(json))
+    .build();
+
+HttpResponse&lt;String&gt; response = client.send(request, HttpResponse.BodyHandlers.ofString());
+System.out.println(response.body());</pre>
+        </div>
+      </div>
+
+      <div class="code-wrap">
+        <div class="code-label">Resposta -- 201 Created</div>
+        <pre>{
+  <span class="hl-key">"product"</span>: {
+    <span class="hl-key">"id"</span>:           <span class="hl-str">"prd_xxx"</span>,
+    <span class="hl-key">"slug"</span>:         <span class="hl-str">"camiseta-m"</span>,
+    <span class="hl-key">"amount"</span>:       <span class="hl-num">2990</span>,
+    <span class="hl-key">"description"</span>:  <span class="hl-str">"Camiseta tamanho M"</span>,
+    <span class="hl-key">"image_url"</span>:    <span class="hl-kw">null</span>,
+    <span class="hl-key">"callback_url"</span>: <span class="hl-kw">null</span>,
+    <span class="hl-key">"redirect_url"</span>: <span class="hl-kw">null</span>,
+    <span class="hl-key">"metadata"</span>:     <span class="hl-kw">null</span>,
+    <span class="hl-key">"expires_in"</span>:   <span class="hl-num">1800</span>,
+    <span class="hl-key">"active"</span>:       <span class="hl-kw">true</span>,
+    <span class="hl-key">"is_live"</span>:      <span class="hl-kw">true</span>,
+    <span class="hl-key">"payment_url"</span>:  <span class="hl-str">"https://pay.depixapp.com/joao/camiseta-m"</span>
+  }
+}</pre>
+      </div>
+    </section>
+
+    <!-- 5b. List products -->
+    <section class="doc-section" id="product-list">
+      <h2>Listar produtos</h2>
+      <p>Lista os produtos do merchant com filtros e paginacao.</p>
+
+      <div class="endpoint">
+        <span class="method get">GET</span>
+        <span class="path">/api/products</span>
+      </div>
+
+      <h3>Query params (todos opcionais)</h3>
+      <table>
+        <thead><tr><th>Parametro</th><th>Descricao</th></tr></thead>
+        <tbody>
+          <tr><td>active</td><td>Filtrar por status: <code>1</code> (ativos) ou <code>0</code> (inativos).</td></tr>
+          <tr><td>q</td><td>Busca por slug ou descricao.</td></tr>
+          <tr><td>limit</td><td>Numero de resultados. Padrao: 50. Maximo: 100.</td></tr>
+          <tr><td>offset</td><td>Paginacao. Padrao: 0.</td></tr>
+        </tbody>
+      </table>
+
+      <div class="code-wrap">
+        <div class="code-label">curl</div>
+        <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+        <pre><span class="hl-cmd">curl</span> <span class="hl-url">"https://depix-backend.vercel.app/api/products?active=1"</span> \
+  <span class="hl-flag">-H</span> <span class="hl-str">"Authorization: Bearer sk_live_&lt;sua-chave&gt;"</span></pre>
+      </div>
+
+      <div class="code-wrap">
+        <div class="code-label">Resposta -- 200 OK</div>
+        <pre>{
+  <span class="hl-key">"products"</span>: [
+    {
+      <span class="hl-key">"id"</span>:          <span class="hl-str">"prd_xxx"</span>,
+      <span class="hl-key">"slug"</span>:        <span class="hl-str">"camiseta-m"</span>,
+      <span class="hl-key">"amount"</span>:      <span class="hl-num">2990</span>,
+      <span class="hl-key">"description"</span>: <span class="hl-str">"Camiseta tamanho M"</span>,
+      <span class="hl-key">"active"</span>:      <span class="hl-kw">true</span>,
+      <span class="hl-key">"is_live"</span>:     <span class="hl-kw">true</span>,
+      <span class="hl-key">"payment_url"</span>: <span class="hl-str">"https://pay.depixapp.com/joao/camiseta-m"</span>
+    }
+  ],
+  <span class="hl-key">"stats"</span>: {
+    <span class="hl-key">"total"</span>:  <span class="hl-num">5</span>,
+    <span class="hl-key">"active"</span>: <span class="hl-num">4</span>
+  },
+  <span class="hl-key">"limit"</span>:  <span class="hl-num">50</span>,
+  <span class="hl-key">"offset"</span>: <span class="hl-num">0</span>
+}</pre>
+      </div>
+    </section>
+
+    <!-- 5c. Get product -->
+    <section class="doc-section" id="product-get">
+      <h2>Consultar produto</h2>
+      <p>Retorna os detalhes de um produto especifico, incluindo estatisticas de checkouts.</p>
+
+      <div class="endpoint">
+        <span class="method get">GET</span>
+        <span class="path">/api/products/<em>:id</em></span>
+      </div>
+
+      <div class="code-wrap">
+        <div class="code-label">curl</div>
+        <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+        <pre><span class="hl-cmd">curl</span> <span class="hl-url">https://depix-backend.vercel.app/api/products/prd_xxx</span> \
+  <span class="hl-flag">-H</span> <span class="hl-str">"Authorization: Bearer sk_live_&lt;sua-chave&gt;"</span></pre>
+      </div>
+
+      <div class="code-wrap">
+        <div class="code-label">Resposta -- 200 OK</div>
+        <pre>{
+  <span class="hl-key">"product"</span>: {
+    <span class="hl-key">"id"</span>:           <span class="hl-str">"prd_xxx"</span>,
+    <span class="hl-key">"slug"</span>:         <span class="hl-str">"camiseta-m"</span>,
+    <span class="hl-key">"amount"</span>:       <span class="hl-num">2990</span>,
+    <span class="hl-key">"description"</span>:  <span class="hl-str">"Camiseta tamanho M"</span>,
+    <span class="hl-key">"image_url"</span>:    <span class="hl-kw">null</span>,
+    <span class="hl-key">"callback_url"</span>: <span class="hl-kw">null</span>,
+    <span class="hl-key">"redirect_url"</span>: <span class="hl-kw">null</span>,
+    <span class="hl-key">"metadata"</span>:     <span class="hl-kw">null</span>,
+    <span class="hl-key">"expires_in"</span>:   <span class="hl-num">1800</span>,
+    <span class="hl-key">"active"</span>:       <span class="hl-kw">true</span>,
+    <span class="hl-key">"is_live"</span>:      <span class="hl-kw">true</span>,
+    <span class="hl-key">"payment_url"</span>:  <span class="hl-str">"https://pay.depixapp.com/joao/camiseta-m"</span>,
+    <span class="hl-key">"created_at"</span>:   <span class="hl-str">"2025-06-01T00:00:00.000Z"</span>
+  }
+}</pre>
+      </div>
+    </section>
+
+    <!-- 5d. Update product -->
+    <section class="doc-section" id="product-update">
+      <h2>Editar produto</h2>
+      <p>Atualiza um ou mais campos de um produto existente. Envie apenas os campos que deseja alterar.</p>
+
+      <div class="endpoint">
+        <span class="method patch">PATCH</span>
+        <span class="path">/api/products/<em>:id</em></span>
+      </div>
+
+      <h3>Parametros (todos opcionais)</h3>
+      <table>
+        <thead><tr><th>Campo</th><th>Tipo</th><th>Descricao</th></tr></thead>
+        <tbody>
+          <tr><td>slug</td><td>string</td><td>Novo identificador na URL. Mesmas regras da criacao.</td></tr>
+          <tr><td>amount</td><td>integer</td><td>Novo valor em centavos.</td></tr>
+          <tr><td>description</td><td>string</td><td>Nova descricao.</td></tr>
+          <tr><td>image_url</td><td>string</td><td>Nova URL de imagem.</td></tr>
+          <tr><td>callback_url</td><td>string</td><td>Nova URL de webhook.</td></tr>
+          <tr><td>redirect_url</td><td>string</td><td>Nova URL de redirecionamento.</td></tr>
+          <tr><td>metadata</td><td>object</td><td>Novos dados adicionais.</td></tr>
+          <tr><td>expires_in</td><td>integer</td><td>Novo tempo de expiracao dos checkouts.</td></tr>
+        </tbody>
+      </table>
+
+      <div class="code-wrap">
+        <div class="code-label">curl</div>
+        <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+        <pre><span class="hl-cmd">curl</span> <span class="hl-flag">-X PATCH</span> <span class="hl-url">https://depix-backend.vercel.app/api/products/prd_xxx</span> \
+  <span class="hl-flag">-H</span> <span class="hl-str">"Authorization: Bearer sk_live_&lt;sua-chave&gt;"</span> \
+  <span class="hl-flag">-H</span> <span class="hl-str">"Content-Type: application/json"</span> \
+  <span class="hl-flag">-d</span> <span class="hl-str">'{ "amount": 3490, "description": "Camiseta tamanho M - Edicao Especial" }'</span></pre>
+      </div>
+
+      <div class="code-wrap">
+        <div class="code-label">Resposta -- 200 OK</div>
+        <pre>{
+  <span class="hl-key">"product"</span>: {
+    <span class="hl-key">"id"</span>:           <span class="hl-str">"prd_xxx"</span>,
+    <span class="hl-key">"slug"</span>:         <span class="hl-str">"camiseta-m"</span>,
+    <span class="hl-key">"amount"</span>:       <span class="hl-num">3490</span>,
+    <span class="hl-key">"description"</span>:  <span class="hl-str">"Camiseta tamanho M - Edicao Especial"</span>,
+    <span class="hl-key">"active"</span>:       <span class="hl-kw">true</span>,
+    <span class="hl-key">"is_live"</span>:      <span class="hl-kw">true</span>,
+    <span class="hl-key">"payment_url"</span>:  <span class="hl-str">"https://pay.depixapp.com/joao/camiseta-m"</span>
+  }
+}</pre>
+      </div>
+    </section>
+
+    <!-- 5e. Activate / Deactivate product -->
+    <section class="doc-section" id="product-activate">
+      <h2>Ativar / Desativar produto</h2>
+      <p>Ativa ou desativa um produto. Produtos inativos retornam erro 404 quando acessados pelo link de pagamento.</p>
+
+      <div class="endpoint">
+        <span class="method post">POST</span>
+        <span class="path">/api/products/<em>:id</em>/activate</span>
+      </div>
+
+      <div class="endpoint">
+        <span class="method post">POST</span>
+        <span class="path">/api/products/<em>:id</em>/deactivate</span>
+      </div>
+
+      <div class="code-wrap">
+        <div class="code-label">curl -- ativar</div>
+        <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+        <pre><span class="hl-cmd">curl</span> <span class="hl-flag">-X POST</span> <span class="hl-url">https://depix-backend.vercel.app/api/products/prd_xxx/activate</span> \
+  <span class="hl-flag">-H</span> <span class="hl-str">"Authorization: Bearer sk_live_&lt;sua-chave&gt;"</span></pre>
+      </div>
+
+      <div class="code-wrap">
+        <div class="code-label">curl -- desativar</div>
+        <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+        <pre><span class="hl-cmd">curl</span> <span class="hl-flag">-X POST</span> <span class="hl-url">https://depix-backend.vercel.app/api/products/prd_xxx/deactivate</span> \
+  <span class="hl-flag">-H</span> <span class="hl-str">"Authorization: Bearer sk_live_&lt;sua-chave&gt;"</span></pre>
+      </div>
+
+      <div class="code-wrap">
+        <div class="code-label">Resposta -- 200 OK</div>
+        <pre>{ <span class="hl-key">"success"</span>: <span class="hl-kw">true</span> }</pre>
+      </div>
+    </section>
+
+    <!-- 5f. List product checkouts -->
+    <section class="doc-section" id="product-checkouts">
+      <h2>Checkouts do produto</h2>
+      <p>Lista os checkouts gerados a partir de um produto especifico. Aceita os mesmos filtros da listagem geral de checkouts.</p>
+
+      <div class="endpoint">
+        <span class="method get">GET</span>
+        <span class="path">/api/products/<em>:id</em>/checkouts</span>
+      </div>
+
+      <div class="code-wrap">
+        <div class="code-label">curl</div>
+        <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+        <pre><span class="hl-cmd">curl</span> <span class="hl-url">"https://depix-backend.vercel.app/api/products/prd_xxx/checkouts?status=completed"</span> \
+  <span class="hl-flag">-H</span> <span class="hl-str">"Authorization: Bearer sk_live_&lt;sua-chave&gt;"</span></pre>
+      </div>
+
+      <p>A resposta segue o mesmo formato da <a href="#checkout-list">listagem de checkouts</a>.</p>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- 6. LINKS DE PAGAMENTO                                  -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <section class="doc-section" id="payment-links">
+      <h2>Links de pagamento</h2>
+      <p>O DePix App gera links de pagamento permanentes para produtos e para a pagina do merchant. Esses links criam checkouts sob demanda quando o cliente acessa.</p>
+
+      <h3>Tipos de link</h3>
+      <table>
+        <thead><tr><th>Tipo</th><th>URL</th><th>Comportamento</th></tr></thead>
+        <tbody>
+          <tr><td>Produto</td><td><code>https://pay.depixapp.com/{username}/{slug}</code></td><td>Valor fixo. O cliente ve o produto e clica "Pagar com PIX".</td></tr>
+          <tr><td>Merchant</td><td><code>https://pay.depixapp.com/{username}</code></td><td>Valor livre. O cliente digita o valor e clica "Pagar com PIX".</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Ciclo de vida</h3>
+      <ul>
+        <li>Quando o cliente acessa o link e inicia o pagamento, um <strong>checkout individual</strong> e criado automaticamente.</li>
+        <li>A partir dai, o ciclo de vida e identico a um checkout criado via API (status, webhooks, expiracao).</li>
+        <li>O <code>callback_url</code> segue a cadeia: campo do produto (se houver) &#8594; default do merchant &#8594; null.</li>
+        <li>O <code>redirect_url</code> segue a mesma cadeia.</li>
+      </ul>
+
+      <div class="alert info">
+        <span class="alert-icon">&#x2139;</span>
+        <span>Os endpoints abaixo sao <strong>publicos</strong> e nao exigem autenticacao. Sao usados pelas paginas de pagamento, mas podem ser chamados diretamente para integracoes customizadas.</span>
+      </div>
+    </section>
+
+    <!-- 6a. Public product -->
+    <section class="doc-section" id="public-product">
+      <h2>Produto publico</h2>
+      <p>Retorna os dados publicos de um produto ativo. Nao requer autenticacao.</p>
+
+      <div class="endpoint">
+        <span class="method get">GET</span>
+        <span class="path">/api/products/<em>:id</em>/public</span>
+      </div>
+
+      <div class="code-wrap">
+        <div class="code-label">curl</div>
+        <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+        <pre><span class="hl-cmd">curl</span> <span class="hl-url">https://depix-backend.vercel.app/api/products/prd_xxx/public</span></pre>
+      </div>
+
+      <div class="code-wrap">
+        <div class="code-label">Resposta -- 200 OK</div>
+        <pre>{
+  <span class="hl-key">"product"</span>: {
+    <span class="hl-key">"id"</span>:          <span class="hl-str">"prd_xxx"</span>,
+    <span class="hl-key">"slug"</span>:        <span class="hl-str">"camiseta-m"</span>,
+    <span class="hl-key">"amount"</span>:      <span class="hl-num">2990</span>,
+    <span class="hl-key">"description"</span>: <span class="hl-str">"Camiseta tamanho M"</span>,
+    <span class="hl-key">"image_url"</span>:   <span class="hl-kw">null</span>
+  },
+  <span class="hl-key">"merchant"</span>: {
+    <span class="hl-key">"name"</span>:     <span class="hl-str">"Loja do Joao"</span>,
+    <span class="hl-key">"username"</span>: <span class="hl-str">"joao"</span>
+  }
+}</pre>
+      </div>
+    </section>
+
+    <!-- 6b. Create checkout from product -->
+    <section class="doc-section" id="public-product-checkout">
+      <h2>Checkout do produto</h2>
+      <p>Cria um checkout a partir de um produto ativo. Nao requer autenticacao. O valor e herdado do produto.</p>
+
+      <div class="endpoint">
+        <span class="method post">POST</span>
+        <span class="path">/api/products/<em>:id</em>/checkout</span>
+      </div>
+
+      <div class="code-wrap">
+        <div class="code-label">curl</div>
+        <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+        <pre><span class="hl-cmd">curl</span> <span class="hl-flag">-X POST</span> <span class="hl-url">https://depix-backend.vercel.app/api/products/prd_xxx/checkout</span></pre>
+      </div>
+
+      <p>A resposta segue o mesmo formato do <a href="#checkout-create">criar checkout</a> (status 201).</p>
+    </section>
+
+    <!-- 6c. Public merchant -->
+    <section class="doc-section" id="public-merchant">
+      <h2>Pagina do merchant</h2>
+      <p>Retorna os dados publicos do merchant. Nao requer autenticacao.</p>
+
+      <div class="endpoint">
+        <span class="method get">GET</span>
+        <span class="path">/api/merchants/<em>:username</em>/public</span>
+      </div>
+
+      <div class="code-wrap">
+        <div class="code-label">curl</div>
+        <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+        <pre><span class="hl-cmd">curl</span> <span class="hl-url">https://depix-backend.vercel.app/api/merchants/joao/public</span></pre>
+      </div>
+
+      <div class="code-wrap">
+        <div class="code-label">Resposta -- 200 OK</div>
+        <pre>{
+  <span class="hl-key">"merchant"</span>: {
+    <span class="hl-key">"name"</span>:     <span class="hl-str">"Loja do Joao"</span>,
+    <span class="hl-key">"username"</span>: <span class="hl-str">"joao"</span>
+  }
+}</pre>
+      </div>
+    </section>
+
+    <!-- 6d. Create checkout from merchant page -->
+    <section class="doc-section" id="public-merchant-checkout">
+      <h2>Checkout do merchant</h2>
+      <p>Cria um checkout com valor customizado a partir da pagina do merchant. Nao requer autenticacao.</p>
+
+      <div class="endpoint">
+        <span class="method post">POST</span>
+        <span class="path">/api/merchants/<em>:username</em>/checkout</span>
+      </div>
+
+      <h3>Parametros</h3>
+      <table>
+        <thead><tr><th>Campo</th><th>Tipo</th><th></th><th>Descricao</th></tr></thead>
+        <tbody>
+          <tr><td>amount</td><td>integer</td><td><span class="req">obrigatorio</span></td><td>Valor em centavos. Minimo: 500. Maximo: 300000.</td></tr>
+        </tbody>
+      </table>
+
+      <div class="code-wrap">
+        <div class="code-label">curl</div>
+        <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+        <pre><span class="hl-cmd">curl</span> <span class="hl-flag">-X POST</span> <span class="hl-url">https://depix-backend.vercel.app/api/merchants/joao/checkout</span> \
+  <span class="hl-flag">-H</span> <span class="hl-str">"Content-Type: application/json"</span> \
+  <span class="hl-flag">-d</span> <span class="hl-str">'{ "amount": 5000 }'</span></pre>
+      </div>
+
+      <p>A resposta segue o mesmo formato do <a href="#checkout-create">criar checkout</a> (status 201).</p>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- 7. WEBHOOKS                                            -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
     <section class="doc-section" id="webhooks">
       <h2>Webhooks</h2>
-      <p>Quando o status de um checkout muda, a API envia um POST para o <code>callback_url</code> que você informou ao criar o checkout.</p>
+      <p>Quando o status de um checkout muda, a API envia um POST para o <code>callback_url</code> que voce informou ao criar o checkout (ou configurado no produto/merchant).</p>
 
       <h3>Como funciona</h3>
       <ul>
-        <li>O request é enviado com <strong>timeout de 5 segundos</strong>.</li>
-        <li>Se falhar, a API tenta novamente <strong>3 vezes</strong>: imediatamente, após 1 minuto e após 10 minutos.</li>
+        <li>O request e enviado com <strong>timeout de 5 segundos</strong>.</li>
+        <li>Se falhar, a API tenta novamente ate <strong>2 vezes</strong>: apos 1 minuto e apos 10 minutos (3 tentativas no total).</li>
         <li>Sua endpoint deve responder com <strong>status 2xx</strong> para confirmar recebimento.</li>
-        <li>O <code>callback_url</code> precisa ser HTTPS e de acesso público (sem IPs privados).</li>
+        <li>O <code>callback_url</code> precisa ser HTTPS e de acesso publico (sem IPs privados).</li>
       </ul>
     </section>
 
@@ -745,17 +1513,32 @@
     <section class="doc-section" id="webhook-events">
       <h2>Eventos</h2>
 
+      <h3>checkout.processing</h3>
+      <p>Disparado quando o pagamento Pix e recebido e a conversao esta sendo processada.</p>
+      <div class="code-wrap">
+        <pre>{
+  <span class="hl-key">"event"</span>: <span class="hl-str">"checkout.processing"</span>,
+  <span class="hl-key">"data"</span>: {
+    <span class="hl-key">"id"</span>:             <span class="hl-str">"chk_01jxxxxxxxxxxxxxxxxxxxxxx"</span>,
+    <span class="hl-key">"status"</span>:         <span class="hl-str">"processing"</span>,
+    <span class="hl-key">"amount"</span>:         <span class="hl-num">2990</span>,
+    <span class="hl-key">"processing_at"</span>:  <span class="hl-str">"2025-06-01T15:02:00.000Z"</span>,
+    <span class="hl-key">"metadata"</span>:       { <span class="hl-key">"order_id"</span>: <span class="hl-str">"ORD-123"</span> }
+  }
+}</pre>
+      </div>
+
       <h3>checkout.completed</h3>
-      <p>Disparado quando o pagamento é confirmado e o DePix chega na carteira do merchant.</p>
+      <p>Disparado quando o pagamento e confirmado e o DePix chega na carteira do merchant.</p>
       <div class="code-wrap">
         <pre>{
   <span class="hl-key">"event"</span>: <span class="hl-str">"checkout.completed"</span>,
   <span class="hl-key">"data"</span>: {
-    <span class="hl-key">"id"</span>:           <span class="hl-str">"chk_01jxxxxxxxxxxxxxxxxxxxxxx"</span>,
-    <span class="hl-key">"status"</span>:       <span class="hl-str">"completed"</span>,
-    <span class="hl-key">"amount"</span>:       <span class="hl-num">2990</span>,
-    <span class="hl-key">"completed_at"</span>: <span class="hl-str">"2025-06-01T15:22:00.000Z"</span>,
-    <span class="hl-key">"metadata"</span>:     { <span class="hl-key">"order_id"</span>: <span class="hl-str">"ORD-123"</span> }
+    <span class="hl-key">"id"</span>:            <span class="hl-str">"chk_01jxxxxxxxxxxxxxxxxxxxxxx"</span>,
+    <span class="hl-key">"status"</span>:        <span class="hl-str">"completed"</span>,
+    <span class="hl-key">"amount"</span>:        <span class="hl-num">2990</span>,
+    <span class="hl-key">"completed_at"</span>:  <span class="hl-str">"2025-06-01T15:22:00.000Z"</span>,
+    <span class="hl-key">"metadata"</span>:      { <span class="hl-key">"order_id"</span>: <span class="hl-str">"ORD-123"</span> }
   }
 }</pre>
       </div>
@@ -766,10 +1549,26 @@
         <pre>{
   <span class="hl-key">"event"</span>: <span class="hl-str">"checkout.cancelled"</span>,
   <span class="hl-key">"data"</span>: {
-    <span class="hl-key">"id"</span>:       <span class="hl-str">"chk_01jxxxxxxxxxxxxxxxxxxxxxx"</span>,
-    <span class="hl-key">"status"</span>:   <span class="hl-str">"cancelled"</span>,
-    <span class="hl-key">"amount"</span>:   <span class="hl-num">2990</span>,
-    <span class="hl-key">"metadata"</span>: { <span class="hl-key">"order_id"</span>: <span class="hl-str">"ORD-123"</span> }
+    <span class="hl-key">"id"</span>:            <span class="hl-str">"chk_01jxxxxxxxxxxxxxxxxxxxxxx"</span>,
+    <span class="hl-key">"status"</span>:        <span class="hl-str">"cancelled"</span>,
+    <span class="hl-key">"amount"</span>:        <span class="hl-num">2990</span>,
+    <span class="hl-key">"cancelled_at"</span>:  <span class="hl-str">"2025-06-01T15:05:00.000Z"</span>,
+    <span class="hl-key">"metadata"</span>:      { <span class="hl-key">"order_id"</span>: <span class="hl-str">"ORD-123"</span> }
+  }
+}</pre>
+      </div>
+
+      <h3>checkout.expired</h3>
+      <p>Disparado quando o checkout expira sem receber pagamento.</p>
+      <div class="code-wrap">
+        <pre>{
+  <span class="hl-key">"event"</span>: <span class="hl-str">"checkout.expired"</span>,
+  <span class="hl-key">"data"</span>: {
+    <span class="hl-key">"id"</span>:          <span class="hl-str">"chk_01jxxxxxxxxxxxxxxxxxxxxxx"</span>,
+    <span class="hl-key">"status"</span>:      <span class="hl-str">"expired"</span>,
+    <span class="hl-key">"amount"</span>:      <span class="hl-num">2990</span>,
+    <span class="hl-key">"expires_at"</span>:  <span class="hl-str">"2025-06-01T15:30:00.000Z"</span>,
+    <span class="hl-key">"metadata"</span>:    { <span class="hl-key">"order_id"</span>: <span class="hl-str">"ORD-123"</span> }
   }
 }</pre>
       </div>
@@ -778,7 +1577,7 @@
     <!-- Verify signature -->
     <section class="doc-section" id="webhook-verify">
       <h2>Verificar assinatura</h2>
-      <p>Cada webhook vem com um header <code>X-DePix-Signature</code>. Sempre valide a assinatura antes de processar o evento — isso garante que o request veio da API do DePix App e não de terceiros.</p>
+      <p>Cada webhook vem com um header <code>X-DePix-Signature</code>. Sempre valide a assinatura antes de processar o evento -- isso garante que o request veio da API do DePix App e nao de terceiros.</p>
 
       <h3>Formato do header</h3>
       <div class="code-wrap">
@@ -786,28 +1585,55 @@
       </div>
 
       <ul>
-        <li><strong>t</strong> — timestamp Unix do envio (segundos).</li>
-        <li><strong>v1</strong> — assinatura HMAC-SHA256 em hexadecimal.</li>
+        <li><strong>t</strong> -- timestamp Unix do envio (segundos).</li>
+        <li><strong>v1</strong> -- assinatura HMAC-SHA256 em hexadecimal.</li>
       </ul>
 
       <h3>Como validar</h3>
-      <p>A assinatura é calculada sobre a string <code>timestamp.payload</code> usando o <strong>Webhook Secret</strong> da sua conta (disponível na Área do Lojista).</p>
+      <p>A assinatura e calculada sobre a string <code>timestamp.payload</code> usando o <strong>Webhook Secret</strong> da sua conta (disponivel na Area do Lojista).</p>
 
-      <div class="code-wrap">
-        <div class="code-label">Node.js</div>
-        <button class="copy-btn" onclick="copyCode(this)">copiar</button>
-        <pre><span class="hl-kw">import</span> crypto <span class="hl-kw">from</span> <span class="hl-str">"node:crypto"</span>;
+      <div class="lang-tabs">
+        <button class="lang-tab" data-lang="curl" onclick="setLang('curl')">curl</button>
+        <button class="lang-tab" data-lang="javascript" onclick="setLang('javascript')">JavaScript</button>
+        <button class="lang-tab" data-lang="python" onclick="setLang('python')">Python</button>
+        <button class="lang-tab" data-lang="php" onclick="setLang('php')">PHP</button>
+        <button class="lang-tab" data-lang="csharp" onclick="setLang('csharp')">C#</button>
+        <button class="lang-tab" data-lang="go" onclick="setLang('go')">Go</button>
+        <button class="lang-tab" data-lang="ruby" onclick="setLang('ruby')">Ruby</button>
+        <button class="lang-tab" data-lang="java" onclick="setLang('java')">Java</button>
+      </div>
+
+      <div class="lang-panel" data-lang="curl">
+        <div class="code-wrap">
+          <div class="code-label">Bash</div>
+          <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+          <pre><span class="hl-cm"># Calcular a assinatura esperada</span>
+<span class="hl-cmd">EXPECTED</span>=$(<span class="hl-kw">echo</span> -n <span class="hl-str">"${TIMESTAMP}.${RAW_BODY}"</span> | \
+  openssl dgst -sha256 -hmac <span class="hl-str">"${WEBHOOK_SECRET}"</span> | <span class="hl-kw">awk</span> <span class="hl-str">'{print $2}'</span>)
+
+<span class="hl-cm"># Comparar com o v1 recebido</span>
+<span class="hl-kw">if</span> [ <span class="hl-str">"$EXPECTED"</span> = <span class="hl-str">"$RECEIVED_V1"</span> ]; <span class="hl-kw">then</span>
+  <span class="hl-kw">echo</span> <span class="hl-str">"Assinatura valida"</span>
+<span class="hl-kw">fi</span></pre>
+        </div>
+      </div>
+
+      <div class="lang-panel" data-lang="javascript">
+        <div class="code-wrap">
+          <div class="code-label">Node.js</div>
+          <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+          <pre><span class="hl-kw">import</span> crypto <span class="hl-kw">from</span> <span class="hl-str">"node:crypto"</span>;
 
 <span class="hl-kw">function</span> verifyWebhook(rawBody, sigHeader, secret) {
   <span class="hl-kw">const</span> parts = Object.fromEntries(
-    sigHeader.split(<span class="hl-str">","</span>).map(p => p.split(<span class="hl-str">"="</span>, 2))
+    sigHeader.split(<span class="hl-str">","</span>).map(p =&gt; p.split(<span class="hl-str">"="</span>, 2))
   );
   <span class="hl-kw">const</span> timestamp = parts[<span class="hl-str">"t"</span>];
   <span class="hl-kw">const</span> received  = parts[<span class="hl-str">"v1"</span>];
 
   <span class="hl-kw">const</span> expected = crypto
     .createHmac(<span class="hl-str">"sha256"</span>, secret)
-    .update(`${timestamp}.${rawBody}`)
+    .update(<span class="hl-str">`${timestamp}.${rawBody}`</span>)
     .digest(<span class="hl-str">"hex"</span>);
 
   <span class="hl-cm">// Use timingSafeEqual to prevent timing attacks</span>
@@ -818,46 +1644,156 @@
 }
 
 <span class="hl-cm">// Exemplo com Express</span>
-app.post(<span class="hl-str">"/webhook/depix"</span>, express.raw({ type: <span class="hl-str">"application/json"</span> }), (req, res) => {
+app.post(<span class="hl-str">"/webhook/depix"</span>, express.raw({ type: <span class="hl-str">"application/json"</span> }), (req, res) =&gt; {
   <span class="hl-kw">const</span> sig = req.headers[<span class="hl-str">"x-depix-signature"</span>];
   <span class="hl-kw">if</span> (!verifyWebhook(req.body.toString(), sig, process.env.DEPIX_WEBHOOK_SECRET)) {
-    <span class="hl-kw">return</span> res.status(401).send(<span class="hl-str">"Assinatura inválida"</span>);
+    <span class="hl-kw">return</span> res.status(<span class="hl-num">401</span>).send(<span class="hl-str">"Assinatura invalida"</span>);
   }
   <span class="hl-kw">const</span> { event, data } = JSON.parse(req.body);
   <span class="hl-cm">// processa o evento...</span>
-  res.sendStatus(200);
+  res.sendStatus(<span class="hl-num">200</span>);
 });</pre>
+        </div>
+      </div>
+
+      <div class="lang-panel" data-lang="python">
+        <div class="code-wrap">
+          <div class="code-label">Python</div>
+          <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+          <pre><span class="hl-kw">import</span> hmac, hashlib
+
+<span class="hl-kw">def</span> verify_webhook(raw_body: str, sig_header: str, secret: str) -&gt; bool:
+    parts = <span class="hl-kw">dict</span>(p.split(<span class="hl-str">"="</span>, <span class="hl-num">1</span>) <span class="hl-kw">for</span> p <span class="hl-kw">in</span> sig_header.split(<span class="hl-str">","</span>))
+    timestamp = parts[<span class="hl-str">"t"</span>]
+    received = parts[<span class="hl-str">"v1"</span>]
+    expected = hmac.new(
+        secret.encode(),
+        <span class="hl-str">f"{timestamp}.{raw_body}"</span>.encode(),
+        hashlib.sha256
+    ).hexdigest()
+    <span class="hl-kw">return</span> hmac.compare_digest(expected, received)</pre>
+        </div>
+      </div>
+
+      <div class="lang-panel" data-lang="php">
+        <div class="code-wrap">
+          <div class="code-label">PHP</div>
+          <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+          <pre><span class="hl-kw">function</span> verifyWebhook(string $rawBody, string $sigHeader, string $secret): bool {
+    $parts = [];
+    <span class="hl-kw">foreach</span> (explode(<span class="hl-str">","</span>, $sigHeader) <span class="hl-kw">as</span> $pair) {
+        [$k, $v] = explode(<span class="hl-str">"="</span>, $pair, <span class="hl-num">2</span>);
+        $parts[$k] = $v;
+    }
+    $expected = hash_hmac(<span class="hl-str">"sha256"</span>, $parts[<span class="hl-str">"t"</span>] . <span class="hl-str">"."</span> . $rawBody, $secret);
+    <span class="hl-kw">return</span> hash_equals($expected, $parts[<span class="hl-str">"v1"</span>]);
+}</pre>
+        </div>
+      </div>
+
+      <div class="lang-panel" data-lang="csharp">
+        <div class="code-wrap">
+          <div class="code-label">C#</div>
+          <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+          <pre><span class="hl-kw">static</span> bool VerifyWebhook(string rawBody, string sigHeader, string secret) {
+    <span class="hl-kw">var</span> parts = sigHeader.Split(<span class="hl-str">','</span>)
+        .ToDictionary(p =&gt; p.Split(<span class="hl-str">'='</span>, <span class="hl-num">2</span>)[<span class="hl-num">0</span>], p =&gt; p.Split(<span class="hl-str">'='</span>, <span class="hl-num">2</span>)[<span class="hl-num">1</span>]);
+    <span class="hl-kw">using var</span> hmac = <span class="hl-kw">new</span> HMACSHA256(Encoding.UTF8.GetBytes(secret));
+    <span class="hl-kw">var</span> expected = Convert.ToHexString(
+        hmac.ComputeHash(Encoding.UTF8.GetBytes(<span class="hl-str">$"{parts["t"]}.{rawBody}"</span>))
+    ).ToLower();
+    <span class="hl-kw">return</span> CryptographicOperations.FixedTimeEquals(
+        Encoding.UTF8.GetBytes(expected),
+        Encoding.UTF8.GetBytes(parts[<span class="hl-str">"v1"</span>])
+    );
+}</pre>
+        </div>
+      </div>
+
+      <div class="lang-panel" data-lang="go">
+        <div class="code-wrap">
+          <div class="code-label">Go</div>
+          <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+          <pre><span class="hl-kw">func</span> verifyWebhook(rawBody, sigHeader, secret string) bool {
+    parts := make(map[string]string)
+    <span class="hl-kw">for</span> _, p := <span class="hl-kw">range</span> strings.Split(sigHeader, <span class="hl-str">","</span>) {
+        kv := strings.SplitN(p, <span class="hl-str">"="</span>, <span class="hl-num">2</span>)
+        parts[kv[<span class="hl-num">0</span>]] = kv[<span class="hl-num">1</span>]
+    }
+    mac := hmac.New(sha256.New, []byte(secret))
+    mac.Write([]byte(parts[<span class="hl-str">"t"</span>] + <span class="hl-str">"."</span> + rawBody))
+    expected := hex.EncodeToString(mac.Sum(<span class="hl-kw">nil</span>))
+    <span class="hl-kw">return</span> hmac.Equal([]byte(expected), []byte(parts[<span class="hl-str">"v1"</span>]))
+}</pre>
+        </div>
+      </div>
+
+      <div class="lang-panel" data-lang="ruby">
+        <div class="code-wrap">
+          <div class="code-label">Ruby</div>
+          <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+          <pre><span class="hl-kw">def</span> verify_webhook(raw_body, sig_header, secret)
+  parts = sig_header.split(<span class="hl-str">","</span>).to_h { |p| p.split(<span class="hl-str">"="</span>, <span class="hl-num">2</span>) }
+  expected = OpenSSL::HMAC.hexdigest(<span class="hl-str">"sha256"</span>, secret, <span class="hl-str">"#{parts['t']}.#{raw_body}"</span>)
+  Rack::Utils.secure_compare(expected, parts[<span class="hl-str">"v1"</span>])
+<span class="hl-kw">end</span></pre>
+        </div>
+      </div>
+
+      <div class="lang-panel" data-lang="java">
+        <div class="code-wrap">
+          <div class="code-label">Java</div>
+          <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+          <pre><span class="hl-kw">static</span> boolean verifyWebhook(String rawBody, String sigHeader, String secret)
+        <span class="hl-kw">throws</span> Exception {
+    Map&lt;String, String&gt; parts = <span class="hl-kw">new</span> HashMap&lt;&gt;();
+    <span class="hl-kw">for</span> (String p : sigHeader.split(<span class="hl-str">","</span>)) {
+        String[] kv = p.split(<span class="hl-str">"="</span>, <span class="hl-num">2</span>);
+        parts.put(kv[<span class="hl-num">0</span>], kv[<span class="hl-num">1</span>]);
+    }
+    Mac mac = Mac.getInstance(<span class="hl-str">"HmacSHA256"</span>);
+    mac.init(<span class="hl-kw">new</span> SecretKeySpec(secret.getBytes(), <span class="hl-str">"HmacSHA256"</span>));
+    String expected = HexFormat.of().formatHex(
+        mac.doFinal((parts.get(<span class="hl-str">"t"</span>) + <span class="hl-str">"."</span> + rawBody).getBytes())
+    );
+    <span class="hl-kw">return</span> MessageDigest.isEqual(expected.getBytes(), parts.get(<span class="hl-str">"v1"</span>).getBytes());
+}</pre>
+        </div>
       </div>
 
       <div class="alert warning">
-        <span class="alert-icon">⚠</span>
-        <span>Leia o body como <strong>raw bytes</strong> (antes do parsing JSON). Qualquer reformatação invalida a assinatura.</span>
+        <span class="alert-icon">&#x26A0;</span>
+        <span>Leia o body como <strong>raw bytes</strong> (antes do parsing JSON). Qualquer reformatacao invalida a assinatura.</span>
       </div>
     </section>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- 8. TESTES                                              -->
+    <!-- ═══════════════════════════════════════════════════════ -->
 
     <!-- Sandbox -->
     <section class="doc-section" id="sandbox">
       <h2>Sandbox</h2>
-      <p>Use chaves do tipo <code>sk_test_...</code> para testar sem movimentar dinheiro real. Checkouts criados com chave test nunca geram Pix real e ficam isolados dos checkouts de produção.</p>
+      <p>Use chaves do tipo <code>sk_test_...</code> para testar sem movimentar dinheiro real. Checkouts criados com chave test nunca geram Pix real e ficam isolados dos checkouts de producao.</p>
 
-      <h3>Diferenças do modo test</h3>
+      <h3>Diferencas do modo test</h3>
       <ul>
         <li>O campo <code>is_live</code> retorna <code>false</code>.</li>
-        <li>O QR code gerado não é um Pix válido — não pode ser pago num app de banco.</li>
+        <li>O QR code gerado nao e um Pix valido -- nao pode ser pago num app de banco.</li>
         <li>Use o endpoint <code>/simulate-payment</code> para marcar o checkout como pago.</li>
-        <li>Webhooks são enviados normalmente — ótimo para testar sua integração de ponta a ponta.</li>
+        <li>Webhooks sao enviados normalmente -- otimo para testar sua integracao de ponta a ponta.</li>
       </ul>
 
       <div class="alert success">
-        <span class="alert-icon">✓</span>
-        <span>O sandbox é independente de produção. Você pode criar, simular e cancelar checkouts de teste sem risco.</span>
+        <span class="alert-icon">&#x2713;</span>
+        <span>O sandbox e independente de producao. Voce pode criar, simular e cancelar checkouts de teste sem risco.</span>
       </div>
     </section>
 
     <!-- Simulate -->
     <section class="doc-section" id="simulate">
       <h2>Simular pagamento</h2>
-      <p>Marca um checkout de teste como pago. Só funciona com chaves <code>sk_test_</code>. Dispara o webhook <code>checkout.completed</code> normalmente.</p>
+      <p>Marca um checkout de teste como pago. So funciona com chaves <code>sk_test_</code>. Dispara o webhook <code>checkout.completed</code> normalmente.</p>
 
       <div class="endpoint">
         <span class="method post">POST</span>
@@ -879,17 +1815,78 @@ app.post(<span class="hl-str">"/webhook/depix"</span>, express.raw({ type: <span
       </div>
 
       <div class="code-wrap">
-        <div class="code-label">Resposta — 200 OK</div>
+        <div class="code-label">Resposta -- 200 OK</div>
         <pre>{ <span class="hl-key">"success"</span>: <span class="hl-kw">true</span> }</pre>
       </div>
 
-      <p>Após a simulação, seu <code>callback_url</code> receberá o evento <code>checkout.completed</code> em alguns segundos — exatamente como num pagamento real.</p>
+      <p>Apos a simulacao, seu <code>callback_url</code> recebera o evento <code>checkout.completed</code> em alguns segundos -- exatamente como num pagamento real.</p>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- 9. GET /api/me                                         -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <section class="doc-section" id="me">
+      <h2>Verificar chave (GET /api/me)</h2>
+      <p>Retorna as informacoes do merchant autenticado. Util para verificar se a API key e valida e consultar dados da conta.</p>
+
+      <div class="endpoint">
+        <span class="method get">GET</span>
+        <span class="path">/api/me</span>
+      </div>
+
+      <div class="code-wrap">
+        <div class="code-label">curl</div>
+        <button class="copy-btn" onclick="copyCode(this)">copiar</button>
+        <pre><span class="hl-cmd">curl</span> <span class="hl-url">https://depix-backend.vercel.app/api/me</span> \
+  <span class="hl-flag">-H</span> <span class="hl-str">"Authorization: Bearer sk_live_&lt;sua-chave&gt;"</span></pre>
+      </div>
+
+      <div class="code-wrap">
+        <div class="code-label">Resposta -- 200 OK</div>
+        <pre>{
+  <span class="hl-key">"merchant_id"</span>: <span class="hl-str">"mrc_xxx"</span>,
+  <span class="hl-key">"name"</span>:        <span class="hl-str">"Loja do Joao"</span>,
+  <span class="hl-key">"username"</span>:    <span class="hl-str">"joao"</span>,
+  <span class="hl-key">"is_live"</span>:     <span class="hl-kw">true</span>,
+  <span class="hl-key">"created_at"</span>:  <span class="hl-str">"2025-06-01T00:00:00.000Z"</span>
+}</pre>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- 10. RATE LIMITS                                        -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <section class="doc-section" id="rate-limits">
+      <h2>Rate limits</h2>
+      <p>A API aplica limites de requisicoes para garantir estabilidade e proteger contra abusos.</p>
+
+      <table>
+        <thead><tr><th>Endpoint</th><th>Limite</th><th>Janela</th></tr></thead>
+        <tbody>
+          <tr><td>POST /api/checkouts</td><td>30 requests</td><td>por minuto, por IP</td></tr>
+          <tr><td>Demais endpoints</td><td>Varia</td><td>por endpoint</td></tr>
+        </tbody>
+      </table>
+
+      <ul>
+        <li>Para requests autenticados com API key, o rate limit e aplicado por <strong>merchant</strong>.</li>
+        <li>Para endpoints publicos, o rate limit e aplicado por <strong>IP</strong>.</li>
+        <li>Quando o limite e atingido, a API retorna status <code>429</code> com o header <code>Retry-After</code> indicando quantos segundos aguardar.</li>
+      </ul>
+
+      <div class="alert info">
+        <span class="alert-icon">&#x2139;</span>
+        <span>Se voce precisa de limites maiores para sua integracao, entre em contato pelo suporte.</span>
+      </div>
     </section>
 
   </main>
 </div>
 
 <script>
+  // Copy code button
   function copyCode(btn) {
     const pre = btn.parentElement.querySelector("pre");
     navigator.clipboard.writeText(pre.innerText).then(() => {
@@ -901,6 +1898,23 @@ app.post(<span class="hl-str">"/webhook/depix"</span>, express.raw({ type: <span
       }, 2000);
     });
   }
+
+  // Language selector
+  const LANG_KEY = "depix-docs-lang";
+  function setLang(lang) {
+    localStorage.setItem(LANG_KEY, lang);
+    document.querySelectorAll(".lang-tabs").forEach(tabs => {
+      tabs.querySelectorAll(".lang-tab").forEach(tab => {
+        tab.classList.toggle("active", tab.dataset.lang === lang);
+      });
+    });
+    document.querySelectorAll(".lang-panel").forEach(panel => {
+      panel.classList.toggle("active", panel.dataset.lang === lang);
+    });
+  }
+  // Init: apply saved language or default
+  const savedLang = localStorage.getItem(LANG_KEY) || "curl";
+  setLang(savedLang);
 
   // Highlight active sidebar link on scroll
   const sections = document.querySelectorAll(".doc-section");
