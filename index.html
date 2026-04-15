@@ -142,16 +142,16 @@
   }
   </script>
 
-  <link rel="manifest" href="manifest.json?v=104" />
-  <link rel="icon" href="icon-192.png?v=104" />
-  <link rel="apple-touch-icon" href="icon-192.png?v=104" />
+  <link rel="manifest" href="manifest.json?v=106" />
+  <link rel="icon" href="icon-192.png?v=106" />
+  <link rel="apple-touch-icon" href="icon-192.png?v=106" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
   <!-- Asset version must match APP_VERSION in service-worker.js -->
-  <link rel="stylesheet" href="style.css?v=104" />
+  <link rel="stylesheet" href="style.css?v=106" />
 </head>
 <body>
 
@@ -160,7 +160,7 @@
 
   <nav class="landing-nav">
     <div class="landing-nav-inner">
-      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=104" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
+      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=106" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
       <div class="landing-nav-right">
         <a href="https://blog.depixapp.com/" class="landing-nav-link">Blog</a>
         <a href="#login" class="landing-nav-cta">Entrar</a>
@@ -786,7 +786,7 @@
     <div id="home-verify-banner" class="home-verify-banner hidden">
       <div class="home-verify-banner-text">
         <strong>Verifique sua conta</strong>
-        <p>Receba DePix <em>instantaneamente</em> e desbloqueie a Área do Lojista para aceitar pagamentos.</p>
+        <p>Aumente seu limite, receba DePix instantaneamente e desbloqueie a Área do Lojista.</p>
       </div>
       <a href="#verify-account" class="home-verify-banner-link">Saiba mais →</a>
     </div>
@@ -808,6 +808,7 @@
       <div id="formDeposito">
         <label for="valor">Valor do pagamento</label>
         <input id="valor" placeholder="R$ 0,00" inputmode="numeric" />
+        <p id="deposit-limit-info" class="deposit-limit-info hidden">Seu limite atual: R$ 500,00. <a href="#verify-account">Verifique sua conta</a> para aumentar seu limite.</p>
 
         <button id="btnGerar">Gerar QR code de pagamento</button>
       </div>
@@ -1468,11 +1469,11 @@
       <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#38e3ac" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
       <div>
         <h2 class="view-title verify-account-title">Verificação da conta</h2>
-        <p class="verify-account-subtitle">Prazo de liberação nos primeiros depósitos</p>
+        <p class="verify-account-subtitle">Processo de verificação dos primeiros depósitos</p>
       </div>
     </div>
 
-    <p class="verify-account-intro">Seus primeiros depósitos passam por uma verificação automática. É rápido — depois disso, tudo cai na hora.</p>
+    <p class="verify-account-intro">Seus primeiros depósitos passam por uma verificação automática. É tudo rápido e automático!</p>
 
     <div class="verify-steps">
       <div class="verify-step verify-step-highlight">
@@ -1482,6 +1483,7 @@
           <span class="verify-step-desc">Cai direto na sua carteira</span>
         </div>
         <span class="verify-step-badge verify-badge-green">Instantâneo</span>
+        <span class="verify-step-badge verify-badge-limit">Limite: R$ 500,00</span>
       </div>
       <div class="verify-step">
         <div class="verify-step-dot verify-dot-yellow"></div>
@@ -1490,6 +1492,7 @@
           <span class="verify-step-desc">Liberado no dia seguinte (D+1)</span>
         </div>
         <span class="verify-step-badge verify-badge-yellow">24 horas</span>
+        <span class="verify-step-badge verify-badge-limit">Limite: R$ 500,00</span>
       </div>
       <div class="verify-step verify-step-highlight">
         <div class="verify-step-dot verify-dot-green"></div>
@@ -1498,14 +1501,16 @@
           <span class="verify-step-desc">DePix cai instantaneamente na sua carteira</span>
         </div>
         <span class="verify-step-badge verify-badge-green">Instantâneo</span>
+        <span class="verify-step-badge verify-badge-limit">Limite: R$ 500,00</span>
       </div>
       <div class="verify-step verify-step-highlight">
         <div class="verify-step-dot verify-dot-green"></div>
         <div class="verify-step-content">
-          <strong>10º depósito</strong>
+          <strong>Após o 10º depósito</strong>
           <span class="verify-step-desc">Conta verificada — Área do Lojista desbloqueada</span>
         </div>
         <span class="verify-step-badge verify-badge-green">Verificado</span>
+        <span class="verify-step-badge verify-badge-limit verify-badge-limit-green">Limite: R$ 3.000,00</span>
       </div>
     </div>
 
@@ -1547,7 +1552,7 @@
   <div class="card charge-card">
     <h2 class="view-title">Meu Link de Pagamento</h2>
 
-    <p class="charge-intro">Este é o seu link exclusivo. Qualquer pessoa com ele pode ver seus produtos e pagar você via Pix.</p>
+    <p class="charge-intro">Este é o seu link exclusivo. Qualquer pessoa com ele pode ver seus produtos ou pagar um valor personalizado via Pix.</p>
 
     <div class="charge-qr-wrapper">
       <img id="charge-qr-img" class="charge-qr-img hidden" alt="QR code do link de pagamento" />
@@ -1587,7 +1592,7 @@
         </div>
         <div class="charge-help-step">
           <span class="charge-help-num">3</span>
-          <p>Seu cliente escolhe o produto, paga via Pix e você recebe em DePix</p>
+          <p>Seu cliente escolhe um produto ou digita qualquer valor, paga via Pix e você recebe em DePix</p>
         </div>
       </div>
     </div>
@@ -2399,6 +2404,6 @@
 
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 <!-- Asset version must match APP_VERSION in service-worker.js -->
-<script type="module" src="script.js?v=104"></script>
+<script type="module" src="script.js?v=106"></script>
 </body>
 </html>
