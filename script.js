@@ -2162,9 +2162,21 @@ function updateFilterBadge() {
 
 // Extrato: search input with debounce
 let searchTimeout = null;
+function updateExtratoSearchClear() {
+  const val = document.getElementById("filter-search")?.value || "";
+  document.getElementById("filter-search-clear")?.classList.toggle("hidden", !val.trim());
+}
 document.getElementById("filter-search")?.addEventListener("input", () => {
   clearTimeout(searchTimeout);
+  updateExtratoSearchClear();
   searchTimeout = setTimeout(() => { applyFilters(); updateFilterBadge(); }, 200);
+});
+document.getElementById("filter-search-clear")?.addEventListener("click", () => {
+  const input = document.getElementById("filter-search");
+  if (input) { input.value = ""; input.focus(); }
+  updateExtratoSearchClear();
+  applyFilters();
+  updateFilterBadge();
 });
 
 // Extrato: auto-filter on change
@@ -2186,7 +2198,7 @@ function handleCopyableClick(e) {
   }
 }
 document.getElementById("transactions-list")?.addEventListener("click", handleCopyableClick);
-document.getElementById("merchant-checkouts-list")?.addEventListener("click", handleCopyableClick);
+document.getElementById("products-list")?.addEventListener("click", handleCopyableClick);
 document.getElementById("api-keys-list")?.addEventListener("click", handleCopyableClick);
 document.getElementById("sales-list")?.addEventListener("click", handleCopyableClick);
 
@@ -2518,25 +2530,34 @@ async function loadMerchantDispatcher() {
 // === Cobrar ===
 async function loadChargeView() {
   showMerchantMenu();
-  const bannerDismissed = localStorage.getItem("depix-ship-banner-dismissed");
-  document.getElementById("merchant-ship-banner")?.classList.toggle("hidden", !!bannerDismissed);
-  document.getElementById("checkout-result")?.classList.add("hidden");
 
-  try {
-    const res = await apiFetch("/api/checkouts?limit=10");
-    if (!res.ok) return;
-    const data = await res.json();
-    const checkouts = data.checkouts || [];
-    const list = document.getElementById("merchant-checkouts-list");
-    const empty = document.getElementById("merchant-checkouts-empty");
-    if (checkouts.length === 0) {
-      list.innerHTML = "";
-      empty?.classList.remove("hidden");
-    } else {
-      empty?.classList.add("hidden");
-      list.innerHTML = checkouts.map(c => renderCheckoutItem(c)).join("");
-    }
-  } catch (e) { if (!e.blocked) showToast("Erro ao carregar cobranças."); }
+  // Ensure merchantData is loaded
+  if (!merchantData) {
+    try {
+      const res = await apiFetch("/api/merchant");
+      if (res.ok) { const d = await res.json(); merchantData = d.merchant || d; }
+    } catch { /* ignore */ }
+  }
+
+  const username = merchantData?.username;
+  const paymentUrl = username ? `https://pay.depixapp.com/${username}` : "";
+  const linkInput = document.getElementById("charge-payment-link");
+  if (linkInput) linkInput.value = paymentUrl;
+
+  // Generate QR code
+  const qrImg = document.getElementById("charge-qr-img");
+  const qrLoading = document.getElementById("charge-qr-loading");
+  const qrError = document.getElementById("charge-qr-error");
+  if (paymentUrl && qrImg) {
+    renderBrandedQr(paymentUrl, qrImg, { loadingEl: qrLoading, errorEl: qrError });
+  } else {
+    if (qrLoading) qrLoading.classList.add("hidden");
+    if (qrError) qrError.classList.remove("hidden");
+  }
+
+  // Show share button only if Web Share API is available
+  const shareBtn = document.getElementById("btn-charge-share");
+  if (shareBtn && navigator.share) shareBtn.classList.remove("hidden");
 }
 
 // === Minha Conta ===
@@ -2547,32 +2568,56 @@ async function loadAccountView() {
     if (res.ok) { const d = await res.json(); merchantData = d.merchant || d; }
     const container = document.getElementById("merchant-account-list");
     if (merchantData && container) {
-      const fields = [
+      const mainFields = [
         { label: "Nome", value: merchantData.business_name, field: "business_name" },
         { label: "Endereço Liquid", value: abbreviateHash(merchantData.liquid_address, 12, 8), field: "liquid_address" },
         { label: "CNPJ", value: merchantData.cnpj, field: "cnpj" },
         { label: "Website", value: merchantData.website, field: "website" },
         { label: "Logo URL", value: merchantData.logo_url, field: "logo_url" },
-        { label: "Callback URL padrão", value: merchantData.default_callback_url, field: "default_callback_url" },
-        { label: "Redirect URL padrão", value: merchantData.default_redirect_url, field: "default_redirect_url" },
       ];
-      container.innerHTML = '<div class="account-list">' + fields.map(f => {
+      const advancedFields = [
+        { label: "Callback URL", value: merchantData.default_callback_url, field: "default_callback_url", infoBtn: "account-callback-info" },
+        { label: "Redirect URL", value: merchantData.default_redirect_url, field: "default_redirect_url", infoBtn: "account-redirect-info" },
+      ];
+      const renderField = f => {
         const hasValue = !!f.value;
         const valueClass = `account-field-value${f.field === "liquid_address" ? " mono" : ""}${hasValue ? "" : " empty"}`;
         const display = hasValue ? escapeHtml(f.value) : "Não informado";
+        const infoIcon = f.infoBtn ? ` <button id="${f.infoBtn}" class="icon-btn-sm" aria-label="O que é isso?">?</button>` : "";
         return `<div class="account-field">
-          <div class="account-field-label">${f.label}</div>
+          <div class="account-field-label">${f.label}${infoIcon}</div>
           <div class="account-field-value-row">
             <span class="${valueClass}">${display}</span>
             <button class="merchant-edit-btn" data-field="${f.field}">${hasValue ? "Editar" : "Adicionar"}</button>
           </div>
         </div>`;
-      }).join("") + '</div>';
+      };
+      container.innerHTML = '<div class="account-list">'
+        + mainFields.map(renderField).join("")
+        + `<div class="account-advanced-toggle-row"><button id="btn-account-advanced" class="merchant-text-btn">Avançado <span id="account-advanced-arrow">▸</span></button></div>`
+        + `<div id="account-advanced-fields" class="account-advanced hidden">${advancedFields.map(renderField).join("")}</div>`
+        + '</div>';
       // Re-attach edit handlers
+      // Advanced toggle
+      document.getElementById("btn-account-advanced")?.addEventListener("click", () => {
+        const panel = document.getElementById("account-advanced-fields");
+        const arrow = document.getElementById("account-advanced-arrow");
+        if (panel) {
+          const isHidden = panel.classList.toggle("hidden");
+          if (arrow) arrow.textContent = isHidden ? "▸" : "▾";
+        }
+      });
+      // Info modals for advanced fields
+      document.getElementById("account-callback-info")?.addEventListener("click", () => {
+        document.getElementById("callback-info-modal")?.classList.remove("hidden");
+      });
+      document.getElementById("account-redirect-info")?.addEventListener("click", () => {
+        document.getElementById("redirect-info-modal")?.classList.remove("hidden");
+      });
       container.querySelectorAll(".merchant-edit-btn").forEach(btn => {
         btn.addEventListener("click", () => {
           const field = btn.dataset.field;
-          const labels = { business_name: "Nome do negócio", liquid_address: "Endereço Liquid", cnpj: "CNPJ", website: "Website", logo_url: "Logo URL", default_callback_url: "Callback URL padrão", default_redirect_url: "Redirect URL padrão" };
+          const labels = { business_name: "Nome do negócio", liquid_address: "Endereço Liquid", cnpj: "CNPJ", website: "Website", logo_url: "Logo URL", default_callback_url: "Callback URL", default_redirect_url: "Redirect URL" };
           if (field === "liquid_address") {
             pendingMerchantAction = { type: "edit_liquid" };
             document.getElementById("merchant-password-title").textContent = "Confirmar alteração";
@@ -2628,12 +2673,11 @@ async function loadApiView() {
           : `expira em ${Math.ceil((new Date(k.expires_at) - new Date()) / 86400000)}d`;
         const expiresClass = expired ? "text-danger" : "";
         const lastUsed = k.last_used_at ? formatDateShort(k.last_used_at) : "nunca";
-        const keyDisplay = k.key_plain || (k.prefix + "...");
+        const keyDisplay = k.key_plain || (k.prefix + "••••••");
         const labelText = k.label && k.label !== "Produção" && k.label !== "Teste" ? k.label : null;
-        const copyIcon = '<svg class="copy-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
         return `<div class="api-key-card">
           <div class="api-key-top-row">${typeBadge}${labelText ? `<span class="api-key-label">${escapeHtml(labelText)}</span>` : ""}<button class="btn-revoke-key" data-key-id="${escapeHtml(k.id)}">Revogar</button></div>
-          <div class="api-key-value copyable" data-copy="${escapeHtml(keyDisplay)}"><span class="mono">${escapeHtml(keyDisplay)}</span>${copyIcon}</div>
+          <div class="api-key-value"><span class="mono">${escapeHtml(keyDisplay)}</span></div>
           <div class="api-key-detail"><span class="${expiresClass}">${expiresText}</span> · usado: ${lastUsed}</div>
         </div>`;
       }).join("");
@@ -2883,6 +2927,9 @@ async function loadProductsView() {
         ? `<span class="product-card-desc">${escapeHtml(p.description)}</span>`
         : '';
       const checkoutCount = p.total_checkouts || 0;
+      const copyIcon = '<svg class="copy-icon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+      const productUrl = p.slug && merchantData?.username ? `https://pay.depixapp.com/${merchantData.username}/${p.slug}` : "";
+      const urlRow = productUrl ? `<div class="product-card-url copyable" data-copy="${escapeHtml(productUrl)}"><span class="mono">${escapeHtml(abbreviateHash(productUrl, 28, 10))}</span>${copyIcon}</div>` : "";
       return `<div class="product-card">
         <div class="product-card-header">
           <div class="product-card-name">${escapeHtml(p.slug)}</div>
@@ -2890,6 +2937,7 @@ async function loadProductsView() {
         </div>
         <div class="product-card-amount">${amount}</div>
         ${desc}
+        ${urlRow}
         <div class="product-card-footer">
           <span class="product-card-checkouts">${checkoutCount} checkout${checkoutCount !== 1 ? 's' : ''}</span>
           <div class="product-card-actions">
@@ -2934,7 +2982,6 @@ async function loadProductEditView() {
   if (!productId) { navigate("#merchant-products"); return; }
 
   setMsg("product-edit-msg", "");
-  document.getElementById("product-edit-url-row")?.classList.add("hidden");
 
   try {
     const res = await apiFetch(`/api/products/${productId}`);
@@ -2955,17 +3002,20 @@ async function loadProductEditView() {
     document.getElementById("product-edit-expires").value = product.expires_in ? String(product.expires_in) : "";
     document.getElementById("product-edit-metadata").value = product.metadata ? JSON.stringify(product.metadata, null, 2) : "";
 
-    // Product URL
-    if (product.slug && merchantData?.username) {
-      const productUrl = `https://pay.depixapp.com/${merchantData.username}/${product.slug}`;
-      document.getElementById("product-edit-url").value = productUrl;
-      document.getElementById("product-edit-url-row")?.classList.remove("hidden");
+    // Auto-expand advanced if any advanced field has a value
+    const hasAdvanced = product.callback_url || product.redirect_url || product.metadata;
+    const advPanel = document.querySelector('[data-advanced="product-edit"]');
+    const advArrow = document.getElementById("btn-product-edit-advanced")?.querySelector(".product-advanced-arrow");
+    if (hasAdvanced && advPanel) {
+      advPanel.classList.remove("hidden");
+      if (advArrow) advArrow.innerHTML = "&#x25BE;";
     }
 
     // Toggle button label
     const toggleBtn = document.getElementById("btn-product-edit-toggle");
     if (toggleBtn) {
       toggleBtn.textContent = product.active ? "Desativar" : "Ativar";
+      toggleBtn.classList.toggle("activate", !product.active);
       toggleBtn.dataset.productId = productId;
       toggleBtn.dataset.isActive = product.active ? "1" : "0";
     }
@@ -3094,57 +3144,25 @@ document.getElementById("menu-merchant-products")?.addEventListener("click", () 
 document.getElementById("menu-merchant-account")?.addEventListener("click", () => { closeMenu(); navigate("#merchant-account"); });
 document.getElementById("menu-merchant-api")?.addEventListener("click", () => { closeMenu(); navigate("#merchant-api"); });
 
-// Dismiss ship banner
-document.getElementById("dismiss-ship-banner")?.addEventListener("click", () => {
-  document.getElementById("merchant-ship-banner")?.classList.add("hidden");
-  localStorage.setItem("depix-ship-banner-dismissed", "1");
-});
-
-// Create checkout
-document.getElementById("btn-create-checkout")?.addEventListener("click", async () => {
-  const amountInput = document.getElementById("checkout-amount");
-  const desc = document.getElementById("checkout-description")?.value.trim();
-  let image = document.getElementById("checkout-image")?.value.trim();
-  if (image && !image.startsWith("http://") && !image.startsWith("https://")) {
-    image = "https://" + image;
-  }
-  const btn = document.getElementById("btn-create-checkout");
-  setMsg("checkout-create-msg", "");
-  const cents = toCents(amountInput?.value || "");
-  if (!cents || cents < 500) { setMsg("checkout-create-msg", `Valor mínimo: ${formatBRL(500)}`); return; }
-
-  btn.disabled = true;
-  btn.textContent = "Criando...";
-  try {
-    const body = { amount: cents };
-    if (desc) body.description = desc;
-    if (image) body.image_url = image;
-    const res = await apiFetch("/api/checkouts", { method: "POST", body: JSON.stringify(body) });
-    const data = await res.json();
-    if (!res.ok) { setMsg("checkout-create-msg", data?.response?.errorMessage || data?.errorMessage || "Erro ao criar checkout."); return; }
-    document.getElementById("checkout-link").value = data.payment_url || "";
-    document.getElementById("checkout-result")?.classList.remove("hidden");
-    amountInput.value = "";
-    document.getElementById("checkout-description").value = "";
-    document.getElementById("checkout-image").value = "";
-    showToast("Link criado!");
-    loadChargeView();
-  } catch (e) {
-    if (!e.blocked) setMsg("checkout-create-msg", e.message || "Erro ao criar checkout.");
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "Criar link de pagamento";
-  }
-});
-document.getElementById("checkout-image-info")?.addEventListener("click", () => {
-  document.getElementById("checkout-image-modal")?.classList.remove("hidden");
-});
-document.getElementById("close-checkout-image-modal")?.addEventListener("click", () => {
-  document.getElementById("checkout-image-modal")?.classList.add("hidden");
-});
-document.getElementById("btn-copy-checkout-link")?.addEventListener("click", () => {
-  const link = document.getElementById("checkout-link")?.value;
+// Charge view — copy, download QR, share
+document.getElementById("btn-charge-copy")?.addEventListener("click", () => {
+  const link = document.getElementById("charge-payment-link")?.value;
   if (link) { navigator.clipboard.writeText(link).then(() => showToast("Link copiado!")).catch(() => showToast("Erro ao copiar")); }
+});
+document.getElementById("btn-charge-download")?.addEventListener("click", () => {
+  const img = document.getElementById("charge-qr-img");
+  if (!img || !img.src) return;
+  const a = document.createElement("a");
+  a.href = img.src;
+  a.download = "depix-qrcode.png";
+  a.click();
+});
+document.getElementById("btn-charge-share")?.addEventListener("click", async () => {
+  const link = document.getElementById("charge-payment-link")?.value;
+  if (!link || !navigator.share) return;
+  try {
+    await navigator.share({ title: "Meu link de pagamento — DePix", url: link });
+  } catch { /* user cancelled or not supported */ }
 });
 
 // Copy key buttons (delegated)
@@ -3157,7 +3175,8 @@ document.addEventListener("click", (e) => {
 
 // Modal close handlers
 ["close-create-api-key", "close-api-key-created", "close-revoke-api-key",
- "close-merchant-password", "close-webhook-secret", "close-merchant-edit"].forEach(id => {
+ "close-merchant-password", "close-webhook-secret", "close-merchant-edit",
+ "close-callback-info", "close-redirect-info", "close-metadata-info"].forEach(id => {
   document.getElementById(id)?.addEventListener("click", () => {
     document.getElementById(id)?.closest(".modal")?.classList.add("hidden");
   });
@@ -3367,6 +3386,24 @@ document.getElementById("btn-create-merchant")?.addEventListener("click", async 
   } finally { btn.disabled = false; btn.textContent = "Começar"; }
 });
 
+// Sales: update filter badge count and clear button visibility
+function updateSalesFilterBadge() {
+  const status = document.getElementById("sales-filter-status")?.value || "";
+  const search = (document.getElementById("sales-filter-search")?.value || "").trim();
+  const period = document.querySelector("[data-sales-period].active")?.dataset.salesPeriod || "all";
+  const count = (status ? 1 : 0) + (search ? 1 : 0) + (period !== "all" ? 1 : 0);
+  const badge = document.getElementById("sales-filter-badge");
+  const toggle = document.getElementById("sales-filter-toggle");
+  const clearBtn = document.getElementById("sales-clear-filters");
+  if (badge) { badge.textContent = count; badge.classList.toggle("hidden", count === 0); }
+  if (toggle) toggle.classList.toggle("active", count > 0);
+  if (clearBtn) clearBtn.classList.toggle("hidden", count === 0);
+}
+function updateSalesSearchClear() {
+  const val = document.getElementById("sales-filter-search")?.value || "";
+  document.getElementById("sales-search-clear")?.classList.toggle("hidden", !val.trim());
+}
+
 // Sales filter toggle
 document.getElementById("sales-filter-toggle")?.addEventListener("click", () => {
   const panel = document.getElementById("sales-filter-panel");
@@ -3375,7 +3412,7 @@ document.getElementById("sales-filter-toggle")?.addEventListener("click", () => 
   toggle.classList.toggle("open");
 });
 // Sales status filter
-document.getElementById("sales-filter-status")?.addEventListener("change", () => loadSalesView());
+document.getElementById("sales-filter-status")?.addEventListener("change", () => { loadSalesView(); updateSalesFilterBadge(); });
 // Sales period presets
 document.querySelectorAll("[data-sales-period]").forEach(btn => {
   btn.addEventListener("click", () => {
@@ -3383,16 +3420,25 @@ document.querySelectorAll("[data-sales-period]").forEach(btn => {
     btn.classList.add("active");
     document.getElementById("sales-custom-range")?.classList.toggle("hidden", btn.dataset.salesPeriod !== "custom");
     if (btn.dataset.salesPeriod !== "custom") loadSalesView();
+    updateSalesFilterBadge();
   });
 });
 // Sales custom date range
-document.getElementById("sales-filter-start")?.addEventListener("change", () => loadSalesView());
-document.getElementById("sales-filter-end")?.addEventListener("change", () => loadSalesView());
+document.getElementById("sales-filter-start")?.addEventListener("change", () => { loadSalesView(); updateSalesFilterBadge(); });
+document.getElementById("sales-filter-end")?.addEventListener("change", () => { loadSalesView(); updateSalesFilterBadge(); });
 // Sales search (debounced)
 let salesSearchTimer;
 document.getElementById("sales-filter-search")?.addEventListener("input", () => {
   clearTimeout(salesSearchTimer);
-  salesSearchTimer = setTimeout(() => applySalesFilters(), 200);
+  updateSalesSearchClear();
+  salesSearchTimer = setTimeout(() => { applySalesFilters(); updateSalesFilterBadge(); }, 200);
+});
+document.getElementById("sales-search-clear")?.addEventListener("click", () => {
+  const input = document.getElementById("sales-filter-search");
+  if (input) { input.value = ""; input.focus(); }
+  updateSalesSearchClear();
+  applySalesFilters();
+  updateSalesFilterBadge();
 });
 // Sales clear filters
 document.getElementById("sales-clear-filters")?.addEventListener("click", () => {
@@ -3401,7 +3447,9 @@ document.getElementById("sales-clear-filters")?.addEventListener("click", () => 
   document.querySelectorAll("[data-sales-period]").forEach(b => b.classList.remove("active"));
   document.querySelector("[data-sales-period='all']")?.classList.add("active");
   document.getElementById("sales-custom-range")?.classList.add("hidden");
+  updateSalesSearchClear();
   loadSalesView();
+  updateSalesFilterBadge();
 });
 // Sales empty CTA
 document.getElementById("btn-sales-goto-create")?.addEventListener("click", () => navigate("#merchant-charge"));
@@ -3409,6 +3457,30 @@ document.getElementById("btn-sales-goto-create")?.addEventListener("click", () =
 // Products — navigate to create
 document.getElementById("btn-new-product")?.addEventListener("click", () => navigate("#merchant-product-create"));
 document.getElementById("btn-products-goto-create")?.addEventListener("click", () => navigate("#merchant-product-create"));
+
+// Products — advanced toggle (delegated for both create and edit)
+["btn-product-create-advanced", "btn-product-edit-advanced"].forEach(id => {
+  document.getElementById(id)?.addEventListener("click", () => {
+    const btn = document.getElementById(id);
+    const panel = btn?.closest(".card")?.querySelector(".product-advanced");
+    const arrow = btn?.querySelector(".product-advanced-arrow");
+    if (panel) {
+      const isHidden = panel.classList.toggle("hidden");
+      if (arrow) arrow.innerHTML = isHidden ? "&#x25B8;" : "&#x25BE;";
+    }
+  });
+});
+
+// Products — info modals (delegated, shared between create and edit)
+document.addEventListener("click", (e) => {
+  if (e.target.closest(".product-callback-info")) {
+    document.getElementById("callback-info-modal")?.classList.remove("hidden");
+  } else if (e.target.closest(".product-redirect-info")) {
+    document.getElementById("redirect-info-modal")?.classList.remove("hidden");
+  } else if (e.target.closest(".product-metadata-info")) {
+    document.getElementById("metadata-info-modal")?.classList.remove("hidden");
+  }
+});
 
 // Products — create submit
 document.getElementById("btn-product-create-submit")?.addEventListener("click", async () => {
@@ -3545,12 +3617,6 @@ document.getElementById("btn-product-edit-toggle")?.addEventListener("click", as
     btn.disabled = false;
     btn.textContent = isActive ? "Desativar" : "Ativar";
   }
-});
-
-// Products — copy product URL
-document.getElementById("btn-copy-product-url")?.addEventListener("click", () => {
-  const url = document.getElementById("product-edit-url")?.value;
-  if (url) { navigator.clipboard.writeText(url).then(() => showToast("URL copiada!")).catch(() => showToast("Erro ao copiar")); }
 });
 
 formatCurrencyInput(document.getElementById("checkout-amount"), "deposito");

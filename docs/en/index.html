@@ -644,7 +644,7 @@
         <tbody>
           <tr><td>amount</td><td>integer</td><td><span class="req">required</span></td><td>Amount in centavos. Minimum: 500 (R$ 5.00). Maximum: 300000 (R$ 3,000.00).</td></tr>
           <tr><td>description</td><td>string</td><td><span class="opt">optional</span></td><td>Order description. Maximum 500 characters. Displayed on the payment page.</td></tr>
-          <tr><td>expires_in</td><td>integer</td><td><span class="opt">optional</span></td><td>Expiration time in seconds. Default: 1800 (30min). Minimum: 300 (5min). Maximum: 86400 (24h).</td></tr>
+          <tr><td>expires_in</td><td>integer</td><td><span class="opt">optional</span></td><td>Expiration time in seconds. Default: 1200 (20min). Minimum: 300 (5min). Maximum: 1200 (20min).</td></tr>
           <tr><td>image_url</td><td>string</td><td><span class="opt">optional</span></td><td>HTTPS URL of the product image. Displayed on the payment page.</td></tr>
           <tr><td>callback_url</td><td>string</td><td><span class="opt">optional</span></td><td>HTTPS URL that receives the checkout webhooks.</td></tr>
           <tr><td>redirect_url</td><td>string</td><td><span class="opt">optional</span></td><td>URL to redirect the customer after payment.</td></tr>
@@ -1008,7 +1008,7 @@ System.out.println(response.body());</pre>
           <tr><td>callback_url</td><td>string</td><td><span class="opt">optional</span></td><td>HTTPS URL for webhooks. Overrides the merchant default.</td></tr>
           <tr><td>redirect_url</td><td>string</td><td><span class="opt">optional</span></td><td>Redirect URL. Overrides the merchant default.</td></tr>
           <tr><td>metadata</td><td>object</td><td><span class="opt">optional</span></td><td>Additional data. Maximum 4KB. Included in webhooks for generated checkouts.</td></tr>
-          <tr><td>expires_in</td><td>integer</td><td><span class="opt">optional</span></td><td>Checkout expiration time in seconds. Default: 1800. Minimum: 300. Maximum: 86400.</td></tr>
+          <tr><td>expires_in</td><td>integer</td><td><span class="opt">optional</span></td><td>Checkout expiration time in seconds. Default: 1200 (20min). Minimum: 300 (5min). Maximum: 1200 (20min).</td></tr>
         </tbody>
       </table>
 
@@ -1181,7 +1181,7 @@ System.out.println(response.body());</pre>
     <span class="hl-key">"callback_url"</span>: <span class="hl-kw">null</span>,
     <span class="hl-key">"redirect_url"</span>: <span class="hl-kw">null</span>,
     <span class="hl-key">"metadata"</span>:     <span class="hl-kw">null</span>,
-    <span class="hl-key">"expires_in"</span>:   <span class="hl-num">1800</span>,
+    <span class="hl-key">"expires_in"</span>:   <span class="hl-num">1200</span>,
     <span class="hl-key">"active"</span>:       <span class="hl-kw">true</span>,
     <span class="hl-key">"is_live"</span>:      <span class="hl-kw">true</span>,
     <span class="hl-key">"payment_url"</span>:  <span class="hl-str">"https://pay.depixapp.com/joao/tshirt-m"</span>
@@ -1271,7 +1271,7 @@ System.out.println(response.body());</pre>
     <span class="hl-key">"callback_url"</span>: <span class="hl-kw">null</span>,
     <span class="hl-key">"redirect_url"</span>: <span class="hl-kw">null</span>,
     <span class="hl-key">"metadata"</span>:     <span class="hl-kw">null</span>,
-    <span class="hl-key">"expires_in"</span>:   <span class="hl-num">1800</span>,
+    <span class="hl-key">"expires_in"</span>:   <span class="hl-num">1200</span>,
     <span class="hl-key">"active"</span>:       <span class="hl-kw">true</span>,
     <span class="hl-key">"is_live"</span>:      <span class="hl-kw">true</span>,
     <span class="hl-key">"payment_url"</span>:  <span class="hl-str">"https://pay.depixapp.com/joao/tshirt-m"</span>,
@@ -1302,7 +1302,7 @@ System.out.println(response.body());</pre>
           <tr><td>callback_url</td><td>string</td><td>New webhook URL.</td></tr>
           <tr><td>redirect_url</td><td>string</td><td>New redirect URL.</td></tr>
           <tr><td>metadata</td><td>object</td><td>New additional data.</td></tr>
-          <tr><td>expires_in</td><td>integer</td><td>New checkout expiration time.</td></tr>
+          <tr><td>expires_in</td><td>integer</td><td>New checkout expiration time. Minimum: 300 (5min). Maximum: 1200 (20min).</td></tr>
         </tbody>
       </table>
 

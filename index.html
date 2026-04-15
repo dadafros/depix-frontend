@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>DePix App - Aceite Pix. Receba em DePix.</title>
 
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
   <meta name="description" content="Aceite Pix, receba DePix. A forma mais simples de receber pagamentos e proteger seu dinheiro." />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-CfhkB0t1w4huapj30hvuB91Yj3BBXM349rph5EzFxd4=' https://challenges.cloudflare.com; img-src 'self' data: https://depix.eulen.app https://eulen.app https://response.eulen.app; connect-src 'self' https://depix-backend.vercel.app; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; frame-src https://brswap.me https://challenges.cloudflare.com" />
   <meta name="theme-color" content="#0a0f14" />
@@ -142,16 +142,16 @@
   }
   </script>
 
-  <link rel="manifest" href="manifest.json?v=100" />
-  <link rel="icon" href="icon-192.png?v=100" />
-  <link rel="apple-touch-icon" href="icon-192.png?v=100" />
+  <link rel="manifest" href="manifest.json?v=102" />
+  <link rel="icon" href="icon-192.png?v=102" />
+  <link rel="apple-touch-icon" href="icon-192.png?v=102" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
   <!-- Asset version must match APP_VERSION in service-worker.js -->
-  <link rel="stylesheet" href="style.css?v=100" />
+  <link rel="stylesheet" href="style.css?v=102" />
 </head>
 <body>
 
@@ -160,7 +160,7 @@
 
   <nav class="landing-nav">
     <div class="landing-nav-inner">
-      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=100" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
+      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=102" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
       <div class="landing-nav-right">
         <a href="https://blog.depixapp.com/" class="landing-nav-link">Blog</a>
         <a href="#login" class="landing-nav-cta">Entrar</a>
@@ -928,7 +928,7 @@
     <div id="menu-merchant-section" class="menu-section">
       <h3 class="menu-section-toggle"><svg class="menu-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5a6d82" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Lojista</h3>
       <div class="menu-section-items hidden">
-        <button id="menu-merchant-charge" class="menu-item">Cobrar</button>
+        <button id="menu-merchant-charge" class="menu-item">Meu Link</button>
         <button id="menu-merchant-sales" class="menu-item">Minhas Vendas</button>
         <button id="menu-merchant-products" class="menu-item">Meus Produtos</button>
         <button id="menu-merchant-account" class="menu-item">Minha Conta</button>
@@ -1254,6 +1254,7 @@
         <div class="extrato-search-row">
           <svg class="extrato-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
           <input id="filter-search" type="text" placeholder="Buscar…" autocomplete="off" />
+          <button id="filter-search-clear" class="extrato-search-clear hidden" type="button" aria-label="Limpar busca">&times;</button>
         <span id="search-hint" class="extrato-search-hint">Nome, chave PIX, mensagem, endereço ou TXID</span>
         </div>
         <div class="report-popover-wrap">
@@ -1543,47 +1544,55 @@
 
 <!-- ===== COBRAR ===== -->
 <section data-view="merchant-charge" class="page hidden">
-  <div class="card">
-    <h2 class="view-title">Cobrar</h2>
+  <div class="card charge-card">
+    <h2 class="view-title">Meu Link de Pagamento</h2>
 
-    <div id="merchant-ship-banner" class="merchant-banner">
-      <div class="merchant-banner-content">
-        <strong>Quando enviar o produto?</strong>
-        <p>Envie somente quando o status for <strong>"Concluído"</strong>. O DePix já está na sua carteira e a transação é <strong>irreversível</strong> — diferente do PIX, que pode ser estornado por até 80 dias.</p>
-      </div>
-      <button id="dismiss-ship-banner" class="merchant-banner-close" aria-label="Fechar">✕</button>
+    <p class="charge-intro">Este é o seu link exclusivo. Qualquer pessoa com ele pode ver seus produtos e pagar você via Pix.</p>
+
+    <div class="charge-qr-wrapper">
+      <img id="charge-qr-img" class="charge-qr-img hidden" alt="QR code do link de pagamento" />
+      <div id="charge-qr-loading" class="charge-qr-loading">Gerando QR code...</div>
+      <div id="charge-qr-error" class="charge-qr-error hidden">Não foi possível gerar o QR code.</div>
     </div>
 
-    <label for="checkout-amount">Valor (R$) *</label>
-    <input id="checkout-amount" inputmode="numeric" placeholder="R$ 0,00" />
-    <label for="checkout-description">Descrição</label>
-    <input id="checkout-description" placeholder="Ex: Camiseta preta G" />
-    <label for="checkout-image">Imagem do produto (URL) <button id="checkout-image-info" class="icon-btn-sm" aria-label="Sobre a imagem">?</button></label>
-    <input id="checkout-image" placeholder="https://..." />
-    <div id="checkout-create-msg" class="mensagem"></div>
-    <button id="btn-create-checkout" class="merchant-cta">Criar link de pagamento</button>
+    <div class="charge-link-box">
+      <input id="charge-payment-link" readonly />
+    </div>
 
-    <div id="checkout-result" class="hidden">
-      <div class="checkout-result-box">
-        <div class="checkout-result-icon">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#38e3ac" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+    <div class="charge-actions">
+      <button id="btn-charge-copy" class="charge-action-btn charge-action-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        Copiar link
+      </button>
+      <button id="btn-charge-download" class="charge-action-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Baixar QR code
+      </button>
+      <button id="btn-charge-share" class="charge-action-btn hidden">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        Compartilhar
+      </button>
+    </div>
+
+    <div class="charge-help">
+      <h3 class="charge-help-title">Como usar</h3>
+      <div class="charge-help-steps">
+        <div class="charge-help-step">
+          <span class="charge-help-num">1</span>
+          <p>Cadastre seus produtos em <a href="#merchant-products" class="link">Meus Produtos</a></p>
         </div>
-        <p class="checkout-result-title">Link criado!</p>
-        <p class="checkout-result-subtitle">Envie para seu cliente realizar o pagamento</p>
-        <div class="checkout-link-row">
-          <input id="checkout-link" readonly />
+        <div class="charge-help-step">
+          <span class="charge-help-num">2</span>
+          <p>Compartilhe o link ou imprima o QR code</p>
         </div>
-        <button id="btn-copy-checkout-link">Copiar link</button>
+        <div class="charge-help-step">
+          <span class="charge-help-num">3</span>
+          <p>Seu cliente escolhe o produto, paga via Pix e você recebe em DePix</p>
+        </div>
       </div>
     </div>
 
-    <h2 class="merchant-subsection-title">Últimos links</h2>
-    <div id="merchant-checkouts-list" class="transactions-list"></div>
-    <div id="merchant-checkouts-empty" class="hidden" style="text-align:center">
-      <p class="info-text">Nenhum link criado ainda.</p>
-    </div>
-
-    <p class="link-text"><a href="#home" class="link">← Voltar</a></p>
+    <p class="link-text"><a href="#home" class="link">&larr; Voltar</a></p>
   </div>
 </section>
 
@@ -1614,6 +1623,7 @@
         <div class="extrato-search-row">
           <svg class="extrato-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
           <input id="sales-filter-search" type="text" placeholder="Buscar…" autocomplete="off" />
+          <button id="sales-search-clear" class="extrato-search-clear hidden" type="button" aria-label="Limpar busca">&times;</button>
         </div>
         <button id="sales-filter-toggle" class="extrato-filter-toggle" type="button">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
@@ -1749,7 +1759,6 @@
 <!-- ===== CRIAR PRODUTO ===== -->
 <section data-view="merchant-product-create" class="page hidden">
   <div class="card">
-    <p class="link-text" style="margin-top:0;margin-bottom:12px"><a href="#merchant-products" class="link">&larr; Voltar aos produtos</a></p>
     <h2 class="view-title">Novo Produto</h2>
     <label for="product-create-slug">Slug (URL) *</label>
     <input id="product-create-slug" placeholder="ex: camiseta-preta" autocomplete="off" />
@@ -1760,39 +1769,33 @@
     <textarea id="product-create-description" placeholder="Descrição do produto..." rows="3"></textarea>
     <label for="product-create-image-url">URL da imagem (HTTPS)</label>
     <input id="product-create-image-url" placeholder="https://..." />
-    <label for="product-create-callback-url">Callback URL (HTTPS)</label>
-    <input id="product-create-callback-url" placeholder="https://..." />
-    <label for="product-create-redirect-url">Redirect URL (HTTPS)</label>
-    <input id="product-create-redirect-url" placeholder="https://..." />
     <label for="product-create-expires">Expiração</label>
     <select id="product-create-expires">
-      <option value="">Padrão (24h)</option>
-      <option value="1800">30 minutos</option>
-      <option value="3600">1 hora</option>
-      <option value="7200">2 horas</option>
-      <option value="21600">6 horas</option>
-      <option value="43200">12 horas</option>
-      <option value="86400">24 horas</option>
+      <option value="">Padrão (20 min)</option>
+      <option value="300">5 minutos</option>
+      <option value="600">10 minutos</option>
+      <option value="900">15 minutos</option>
+      <option value="1200">20 minutos</option>
     </select>
-    <label for="product-create-metadata">Metadata (JSON)</label>
-    <textarea id="product-create-metadata" placeholder='{"sku": "ABC123"}' rows="2"></textarea>
+    <div class="product-advanced-toggle-row"><button id="btn-product-create-advanced" class="merchant-text-btn" type="button">Avançado <span class="product-advanced-arrow">&#x25B8;</span></button></div>
+    <div class="product-advanced hidden" data-advanced="product-create">
+      <label for="product-create-callback-url">Callback URL (HTTPS) <button class="icon-btn-sm product-callback-info" aria-label="O que é isso?" type="button">?</button></label>
+      <input id="product-create-callback-url" placeholder="https://..." />
+      <label for="product-create-redirect-url">Redirect URL (HTTPS) <button class="icon-btn-sm product-redirect-info" aria-label="O que é isso?" type="button">?</button></label>
+      <input id="product-create-redirect-url" placeholder="https://..." />
+      <label for="product-create-metadata">Metadata (JSON) <button class="icon-btn-sm product-metadata-info" aria-label="O que é isso?" type="button">?</button></label>
+      <textarea id="product-create-metadata" placeholder='{"sku": "ABC123"}' rows="2"></textarea>
+    </div>
     <div id="product-create-msg" class="mensagem"></div>
     <button id="btn-product-create-submit" class="merchant-cta">Criar Produto</button>
+    <p class="link-text"><a href="#merchant-products" class="link">&larr; Voltar</a></p>
   </div>
 </section>
 
 <!-- ===== EDITAR PRODUTO ===== -->
 <section data-view="merchant-product-edit" class="page hidden">
   <div class="card">
-    <p class="link-text" style="margin-top:0;margin-bottom:12px"><a href="#merchant-products" class="link">&larr; Voltar aos produtos</a></p>
     <h2 class="view-title">Editar Produto</h2>
-    <div id="product-edit-url-row" class="product-url-row hidden">
-      <label>URL do produto</label>
-      <div class="checkout-link-row">
-        <input id="product-edit-url" readonly />
-        <button id="btn-copy-product-url" class="secondary" style="width:auto;padding:10px 14px;margin-bottom:0">Copiar</button>
-      </div>
-    </div>
     <label for="product-edit-slug">Slug (URL) *</label>
     <input id="product-edit-slug" placeholder="ex: camiseta-preta" autocomplete="off" />
     <p class="field-hint">Letras minúsculas, números e hifens. 2-60 caracteres.</p>
@@ -1802,34 +1805,33 @@
     <textarea id="product-edit-description" placeholder="Descrição do produto..." rows="3"></textarea>
     <label for="product-edit-image-url">URL da imagem (HTTPS)</label>
     <input id="product-edit-image-url" placeholder="https://..." />
-    <label for="product-edit-callback-url">Callback URL (HTTPS)</label>
-    <input id="product-edit-callback-url" placeholder="https://..." />
-    <label for="product-edit-redirect-url">Redirect URL (HTTPS)</label>
-    <input id="product-edit-redirect-url" placeholder="https://..." />
     <label for="product-edit-expires">Expiração</label>
     <select id="product-edit-expires">
-      <option value="">Padrão (24h)</option>
-      <option value="1800">30 minutos</option>
-      <option value="3600">1 hora</option>
-      <option value="7200">2 horas</option>
-      <option value="21600">6 horas</option>
-      <option value="43200">12 horas</option>
-      <option value="86400">24 horas</option>
+      <option value="">Padrão (20 min)</option>
+      <option value="300">5 minutos</option>
+      <option value="600">10 minutos</option>
+      <option value="900">15 minutos</option>
+      <option value="1200">20 minutos</option>
     </select>
-    <label for="product-edit-metadata">Metadata (JSON)</label>
-    <textarea id="product-edit-metadata" placeholder='{"sku": "ABC123"}' rows="2"></textarea>
-    <div id="product-edit-msg" class="mensagem"></div>
-    <div class="product-edit-actions">
-      <button id="btn-product-edit-save" class="merchant-cta">Salvar</button>
-      <button id="btn-product-edit-toggle" class="secondary">Desativar</button>
+    <div class="product-advanced-toggle-row"><button id="btn-product-edit-advanced" class="merchant-text-btn" type="button">Avançado <span class="product-advanced-arrow">&#x25B8;</span></button></div>
+    <div class="product-advanced hidden" data-advanced="product-edit">
+      <label for="product-edit-callback-url">Callback URL (HTTPS) <button class="icon-btn-sm product-callback-info" aria-label="O que é isso?" type="button">?</button></label>
+      <input id="product-edit-callback-url" placeholder="https://..." />
+      <label for="product-edit-redirect-url">Redirect URL (HTTPS) <button class="icon-btn-sm product-redirect-info" aria-label="O que é isso?" type="button">?</button></label>
+      <input id="product-edit-redirect-url" placeholder="https://..." />
+      <label for="product-edit-metadata">Metadata (JSON) <button class="icon-btn-sm product-metadata-info" aria-label="O que é isso?" type="button">?</button></label>
+      <textarea id="product-edit-metadata" placeholder='{"sku": "ABC123"}' rows="2"></textarea>
     </div>
+    <div id="product-edit-msg" class="mensagem"></div>
+    <button id="btn-product-edit-save" class="merchant-cta">Salvar</button>
+    <button id="btn-product-edit-toggle" class="product-toggle-btn">Desativar</button>
+    <p class="link-text"><a href="#merchant-products" class="link">&larr; Voltar</a></p>
   </div>
 </section>
 
 <!-- ===== CHECKOUTS DO PRODUTO ===== -->
 <section data-view="merchant-product-checkouts" class="page hidden">
   <div class="card merchant-products-card">
-    <p class="link-text" style="margin-top:0;margin-bottom:12px"><a href="#merchant-products" class="link">&larr; Voltar aos produtos</a></p>
     <h2 class="view-title" id="product-checkouts-title">Checkouts do Produto</h2>
     <div id="product-checkouts-info" class="product-checkouts-info"></div>
     <div id="product-checkouts-msg" class="mensagem"></div>
@@ -1838,6 +1840,7 @@
       <p class="info-text">Nenhum checkout para este produto.</p>
     </div>
     <div id="product-checkouts-list" class="transactions-list"></div>
+    <p class="link-text"><a href="#merchant-products" class="link">&larr; Voltar</a></p>
   </div>
 </section>
 
@@ -1959,17 +1962,36 @@
   </div>
 </div>
 
-<!-- ===== MODAL: IMAGEM DO PRODUTO ===== -->
-<div id="checkout-image-modal" class="modal hidden">
-  <div class="modal-box" style="text-align:left">
-    <h2>Imagem do produto</h2>
-    <p class="info-text">Cole o link de uma foto do seu produto. A imagem aparece na tela de pagamento do cliente.</p>
-    <p class="info-text" style="margin-top:8px">Não aceitamos upload. Use uma imagem que já esteja online: do seu site, redes sociais ou serviços como Imgur.</p>
-    <div style="margin:14px 0 0;font-size:12px;color:#8a9bb0;line-height:1.8">
-      <div style="display:flex;gap:8px;align-items:center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#5a6d82" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg> JPG ou PNG, quadrada (1:1)</div>
-      <div style="display:flex;gap:8px;align-items:center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#5a6d82" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3l-4 4-4-4"/></svg> Ideal: 800x800px, max 2 MB</div>
-    </div>
-    <button id="close-checkout-image-modal" class="secondary" style="width:100%;margin-top:16px">Entendi</button>
+<!-- ===== MODAL: O QUE É CALLBACK URL ===== -->
+<div id="callback-info-modal" class="modal hidden">
+  <div class="modal-box">
+    <h2>O que é a Callback URL?</h2>
+    <p class="info-text">A <strong>Callback URL</strong> é um endereço do seu sistema que recebe notificações automáticas quando um pagamento muda de status (ex: foi pago, expirou).</p>
+    <p class="info-text" style="margin-top:8px">Quando configurada, enviamos uma requisição para essa URL com os dados do pagamento. Assim seu sistema pode atualizar pedidos automaticamente, sem precisar consultar a API.</p>
+    <p class="info-text" style="margin-top:8px;color:#5a6d82"><strong>Para quem é:</strong> desenvolvedores que querem integrar o DePix com loja virtual, app ou sistema próprio.</p>
+    <button id="close-callback-info" class="secondary" style="width:100%;margin-top:16px">Entendi</button>
+  </div>
+</div>
+
+<!-- ===== MODAL: O QUE É REDIRECT URL ===== -->
+<div id="redirect-info-modal" class="modal hidden">
+  <div class="modal-box">
+    <h2>O que é a Redirect URL?</h2>
+    <p class="info-text">A <strong>Redirect URL</strong> é a página para onde o cliente é levado após concluir o pagamento.</p>
+    <p class="info-text" style="margin-top:8px">Por exemplo, pode ser uma página de "obrigado pela compra" ou de acompanhamento do pedido. Se não configurada, o cliente permanece na página de pagamento do DePix.</p>
+    <p class="info-text" style="margin-top:8px;color:#5a6d82"><strong>Para quem é:</strong> quem quer oferecer uma experiência personalizada ao cliente após o pagamento.</p>
+    <button id="close-redirect-info" class="secondary" style="width:100%;margin-top:16px">Entendi</button>
+  </div>
+</div>
+
+<!-- ===== MODAL: O QUE É METADATA ===== -->
+<div id="metadata-info-modal" class="modal hidden">
+  <div class="modal-box">
+    <h2>O que é Metadata?</h2>
+    <p class="info-text"><strong>Metadata</strong> são dados extras que você pode anexar a um produto em formato JSON. Esses dados são retornados junto com o checkout nas consultas da API e nos webhooks.</p>
+    <p class="info-text" style="margin-top:8px"><strong>Exemplo:</strong> guardar o SKU do produto, ID interno do seu sistema, ou qualquer informação que ajude a identificar a venda do seu lado.</p>
+    <p class="info-text" style="margin-top:8px;color:#5a6d82"><strong>Para quem é:</strong> desenvolvedores que integram o DePix com sistemas próprios e precisam rastrear dados adicionais por checkout.</p>
+    <button id="close-metadata-info" class="secondary" style="width:100%;margin-top:16px">Entendi</button>
   </div>
 </div>
 
@@ -2357,6 +2379,6 @@
 
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 <!-- Asset version must match APP_VERSION in service-worker.js -->
-<script type="module" src="script.js?v=100"></script>
+<script type="module" src="script.js?v=102"></script>
 </body>
 </html>

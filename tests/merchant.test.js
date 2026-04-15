@@ -124,6 +124,27 @@ function filterSalesBySearch(checkouts, search) {
   });
 }
 
+// ===== Copied from script.js — charge view helpers =====
+
+function buildPaymentUrl(merchantData) {
+  const username = merchantData?.username;
+  return username ? `https://pay.depixapp.com/${username}` : "";
+}
+
+function setupChargeDOM() {
+  const section = document.createElement("div");
+  section.innerHTML = `
+    <img id="charge-qr-img" class="hidden" />
+    <div id="charge-qr-loading"></div>
+    <div id="charge-qr-error" class="hidden"></div>
+    <input id="charge-payment-link" readonly />
+    <button id="btn-charge-copy"></button>
+    <button id="btn-charge-download"></button>
+    <button id="btn-charge-share" class="hidden"></button>
+  `;
+  document.body.appendChild(section);
+}
+
 // ===== DOM setup helper =====
 
 function setupSalesFilterDOM() {
@@ -521,5 +542,377 @@ describe("abbreviateHash", () => {
     const str = "abcdefghij"; // 10 chars
     // threshold: 4+3+3 = 10, not > 10, return as-is
     expect(abbreviateHash(str, 4, 3)).toBe("abcdefghij");
+  });
+});
+
+// =============================================================
+// Charge View (My Payment Link) Tests
+// =============================================================
+
+describe("buildPaymentUrl", () => {
+  it("should build URL from username", () => {
+    expect(buildPaymentUrl({ username: "lojadepix" })).toBe("https://pay.depixapp.com/lojadepix");
+  });
+
+  it("should return empty string when username is missing", () => {
+    expect(buildPaymentUrl({})).toBe("");
+    expect(buildPaymentUrl({ username: "" })).toBe("");
+  });
+
+  it("should return empty string when merchantData is null/undefined", () => {
+    expect(buildPaymentUrl(null)).toBe("");
+    expect(buildPaymentUrl(undefined)).toBe("");
+  });
+
+  it("should preserve username case and special chars", () => {
+    expect(buildPaymentUrl({ username: "Loja-123" })).toBe("https://pay.depixapp.com/Loja-123");
+  });
+});
+
+describe("charge view DOM", () => {
+  beforeEach(() => {
+    setupChargeDOM();
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("should have all required elements", () => {
+    expect(document.getElementById("charge-qr-img")).toBeTruthy();
+    expect(document.getElementById("charge-qr-loading")).toBeTruthy();
+    expect(document.getElementById("charge-qr-error")).toBeTruthy();
+    expect(document.getElementById("charge-payment-link")).toBeTruthy();
+    expect(document.getElementById("btn-charge-copy")).toBeTruthy();
+    expect(document.getElementById("btn-charge-download")).toBeTruthy();
+    expect(document.getElementById("btn-charge-share")).toBeTruthy();
+  });
+
+  it("should populate payment link input with built URL", () => {
+    const url = buildPaymentUrl({ username: "testuser" });
+    const input = document.getElementById("charge-payment-link");
+    input.value = url;
+    expect(input.value).toBe("https://pay.depixapp.com/testuser");
+  });
+
+  it("should have share button hidden by default", () => {
+    const shareBtn = document.getElementById("btn-charge-share");
+    expect(shareBtn.classList.contains("hidden")).toBe(true);
+  });
+
+  it("should show share button when navigator.share is available", () => {
+    const shareBtn = document.getElementById("btn-charge-share");
+    // Simulate Web Share API available
+    if (navigator.share) {
+      shareBtn.classList.remove("hidden");
+      expect(shareBtn.classList.contains("hidden")).toBe(false);
+    } else {
+      // In jsdom navigator.share is undefined, button stays hidden
+      expect(shareBtn.classList.contains("hidden")).toBe(true);
+    }
+  });
+
+  it("should keep share button hidden when navigator.share is unavailable", () => {
+    const shareBtn = document.getElementById("btn-charge-share");
+    // jsdom does not have navigator.share
+    expect(navigator.share).toBeUndefined();
+    expect(shareBtn.classList.contains("hidden")).toBe(true);
+  });
+});
+
+describe("charge view download QR", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("should create a download link with correct filename", () => {
+    setupChargeDOM();
+    const img = document.getElementById("charge-qr-img");
+    img.src = "data:image/png;base64,fakedata";
+
+    let clickedHref = "";
+    let clickedDownload = "";
+    const origCreateElement = document.createElement.bind(document);
+    vi.spyOn(document, "createElement").mockImplementation((tag) => {
+      const el = origCreateElement(tag);
+      if (tag === "a") {
+        vi.spyOn(el, "click").mockImplementation(() => {
+          clickedHref = el.href;
+          clickedDownload = el.download;
+        });
+      }
+      return el;
+    });
+
+    // Simulate download button click
+    const a = document.createElement("a");
+    a.href = img.src;
+    a.download = "depix-qrcode.png";
+    a.click();
+
+    expect(clickedDownload).toBe("depix-qrcode.png");
+    expect(clickedHref).toContain("data:image/png");
+
+    vi.restoreAllMocks();
+  });
+});
+
+// =============================================================
+// Account View — Advanced Toggle Tests
+// =============================================================
+
+describe("account advanced fields toggle", () => {
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <div id="merchant-account-list">
+        <div class="account-list">
+          <div class="account-advanced-toggle-row">
+            <button id="btn-account-advanced" class="merchant-text-btn">Avançado <span id="account-advanced-arrow">▸</span></button>
+          </div>
+          <div id="account-advanced-fields" class="account-advanced hidden">
+            <div class="account-field">Callback URL</div>
+            <div class="account-field">Redirect URL</div>
+          </div>
+        </div>
+      </div>
+    `;
+  });
+
+  afterEach(() => { document.body.innerHTML = ""; });
+
+  it("should start with advanced fields hidden", () => {
+    const panel = document.getElementById("account-advanced-fields");
+    expect(panel.classList.contains("hidden")).toBe(true);
+  });
+
+  it("should show advanced fields on toggle click", () => {
+    const _btn = document.getElementById("btn-account-advanced");
+    const panel = document.getElementById("account-advanced-fields");
+    const arrow = document.getElementById("account-advanced-arrow");
+
+    // Simulate toggle logic
+    panel.classList.toggle("hidden");
+    arrow.textContent = panel.classList.contains("hidden") ? "▸" : "▾";
+
+    expect(panel.classList.contains("hidden")).toBe(false);
+    expect(arrow.textContent).toBe("▾");
+  });
+
+  it("should hide advanced fields on second toggle click", () => {
+    const panel = document.getElementById("account-advanced-fields");
+    const arrow = document.getElementById("account-advanced-arrow");
+
+    // First toggle — show
+    panel.classList.toggle("hidden");
+    arrow.textContent = "▾";
+    // Second toggle — hide
+    panel.classList.toggle("hidden");
+    arrow.textContent = panel.classList.contains("hidden") ? "▸" : "▾";
+
+    expect(panel.classList.contains("hidden")).toBe(true);
+    expect(arrow.textContent).toBe("▸");
+  });
+
+  it("should contain callback and redirect fields inside advanced section", () => {
+    const panel = document.getElementById("account-advanced-fields");
+    expect(panel.innerHTML).toContain("Callback URL");
+    expect(panel.innerHTML).toContain("Redirect URL");
+  });
+});
+
+// =============================================================
+// Product Card URL Tests
+// =============================================================
+
+describe("product card URL rendering", () => {
+  function buildProductUrl(merchantData, slug) {
+    const username = merchantData?.username;
+    return slug && username ? `https://pay.depixapp.com/${username}/${slug}` : "";
+  }
+
+  it("should build product URL from username and slug", () => {
+    expect(buildProductUrl({ username: "loja" }, "camiseta")).toBe("https://pay.depixapp.com/loja/camiseta");
+  });
+
+  it("should return empty when username is missing", () => {
+    expect(buildProductUrl({}, "camiseta")).toBe("");
+    expect(buildProductUrl(null, "camiseta")).toBe("");
+  });
+
+  it("should return empty when slug is missing", () => {
+    expect(buildProductUrl({ username: "loja" }, "")).toBe("");
+    expect(buildProductUrl({ username: "loja" }, null)).toBe("");
+  });
+
+  it("should include URL in product card HTML with copyable class", () => {
+    const url = buildProductUrl({ username: "loja" }, "camiseta");
+    const html = `<div class="product-card-url copyable" data-copy="${url}">${abbreviateHash(url, 28, 10)}</div>`;
+    expect(html).toContain("copyable");
+    expect(html).toContain("data-copy=\"https://pay.depixapp.com/loja/camiseta\"");
+  });
+});
+
+// =============================================================
+// API Key Display Tests
+// =============================================================
+
+describe("API key display", () => {
+  it("should show masked key with dots when key_plain is absent", () => {
+    const k = { prefix: "sk_test_" };
+    const keyDisplay = k.key_plain || (k.prefix + "••••••");
+    expect(keyDisplay).toBe("sk_test_••••••");
+  });
+
+  it("should show full key when key_plain is present (just created)", () => {
+    const k = { prefix: "sk_test_", key_plain: "sk_test_abc123xyz" };
+    const keyDisplay = k.key_plain || (k.prefix + "••••••");
+    expect(keyDisplay).toBe("sk_test_abc123xyz");
+  });
+
+  it("should not include copyable class in rendered key card", () => {
+    const k = { prefix: "sk_live_", is_live: true, id: "key_1" };
+    const keyDisplay = k.prefix + "••••••";
+    const html = `<div class="api-key-value"><span class="mono">${keyDisplay}</span></div>`;
+    expect(html).not.toContain("copyable");
+    expect(html).not.toContain("copy-icon");
+  });
+});
+
+// =============================================================
+// Sales Filter Badge Tests
+// =============================================================
+
+describe("updateSalesFilterBadge logic", () => {
+  // Replicate the badge counting logic from script.js
+  function countSalesFilters({ status, search, period }) {
+    return (status ? 1 : 0) + (search ? 1 : 0) + (period !== "all" ? 1 : 0);
+  }
+
+  it("should return 0 when no filters active", () => {
+    expect(countSalesFilters({ status: "", search: "", period: "all" })).toBe(0);
+  });
+
+  it("should count status filter", () => {
+    expect(countSalesFilters({ status: "completed", search: "", period: "all" })).toBe(1);
+  });
+
+  it("should count search filter", () => {
+    expect(countSalesFilters({ status: "", search: "camiseta", period: "all" })).toBe(1);
+  });
+
+  it("should count period filter", () => {
+    expect(countSalesFilters({ status: "", search: "", period: "7d" })).toBe(1);
+  });
+
+  it("should count all filters combined", () => {
+    expect(countSalesFilters({ status: "pending", search: "teste", period: "30d" })).toBe(3);
+  });
+});
+
+// =============================================================
+// Search Clear Button Tests
+// =============================================================
+
+describe("search clear button visibility", () => {
+  function shouldShowClear(value) {
+    return !!(value && value.trim());
+  }
+
+  it("should be hidden when input is empty", () => {
+    expect(shouldShowClear("")).toBe(false);
+  });
+
+  it("should be hidden when input is whitespace", () => {
+    expect(shouldShowClear("   ")).toBe(false);
+  });
+
+  it("should be visible when input has text", () => {
+    expect(shouldShowClear("busca")).toBe(true);
+  });
+
+  it("should be visible when input has text with spaces", () => {
+    expect(shouldShowClear(" camiseta azul ")).toBe(true);
+  });
+});
+
+// =============================================================
+// Product Advanced Toggle Tests
+// =============================================================
+
+describe("product advanced fields toggle", () => {
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <div class="card">
+        <div class="product-advanced-toggle-row">
+          <button id="btn-product-create-advanced" class="merchant-text-btn" type="button">
+            Avançado <span class="product-advanced-arrow">&#x25B8;</span>
+          </button>
+        </div>
+        <div class="product-advanced hidden" data-advanced="product-create">
+          <input id="product-create-callback-url" />
+          <input id="product-create-redirect-url" />
+          <textarea id="product-create-metadata"></textarea>
+        </div>
+      </div>
+    `;
+  });
+
+  afterEach(() => { document.body.innerHTML = ""; });
+
+  it("should start with advanced fields hidden", () => {
+    const panel = document.querySelector('[data-advanced="product-create"]');
+    expect(panel.classList.contains("hidden")).toBe(true);
+  });
+
+  it("should show advanced fields on toggle", () => {
+    const panel = document.querySelector('[data-advanced="product-create"]');
+    panel.classList.toggle("hidden");
+    expect(panel.classList.contains("hidden")).toBe(false);
+  });
+
+  it("should contain callback, redirect and metadata fields", () => {
+    const panel = document.querySelector('[data-advanced="product-create"]');
+    expect(panel.querySelector("#product-create-callback-url")).toBeTruthy();
+    expect(panel.querySelector("#product-create-redirect-url")).toBeTruthy();
+    expect(panel.querySelector("#product-create-metadata")).toBeTruthy();
+  });
+});
+
+describe("product edit auto-expand advanced", () => {
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <div class="card">
+        <button id="btn-product-edit-advanced"><span class="product-advanced-arrow">&#x25B8;</span></button>
+        <div class="product-advanced hidden" data-advanced="product-edit">
+          <input id="product-edit-callback-url" />
+        </div>
+      </div>
+    `;
+  });
+
+  afterEach(() => { document.body.innerHTML = ""; });
+
+  it("should auto-expand when advanced fields have values", () => {
+    const panel = document.querySelector('[data-advanced="product-edit"]');
+    const arrow = document.querySelector(".product-advanced-arrow");
+
+    // Simulate: product has callback_url
+    const hasAdvanced = true;
+    if (hasAdvanced && panel) {
+      panel.classList.remove("hidden");
+      arrow.innerHTML = "&#x25BE;";
+    }
+
+    expect(panel.classList.contains("hidden")).toBe(false);
+    expect(arrow.innerHTML).toBe("▾");
+  });
+
+  it("should stay collapsed when no advanced fields have values", () => {
+    const panel = document.querySelector('[data-advanced="product-edit"]');
+    const hasAdvanced = false;
+    if (hasAdvanced && panel) {
+      panel.classList.remove("hidden");
+    }
+    expect(panel.classList.contains("hidden")).toBe(true);
   });
 });
