@@ -137,9 +137,6 @@ function buildPaymentUrl(merchantData) {
 function setupChargeDOM() {
   const section = document.createElement("div");
   section.innerHTML = `
-    <img id="charge-qr-img" class="hidden" />
-    <div id="charge-qr-loading"></div>
-    <div id="charge-qr-error" class="hidden"></div>
     <input id="charge-payment-link" readonly />
     <button id="btn-charge-copy"></button>
     <button id="btn-charge-download"></button>
@@ -611,9 +608,6 @@ describe("charge view DOM", () => {
   });
 
   it("should have all required elements", () => {
-    expect(document.getElementById("charge-qr-img")).toBeTruthy();
-    expect(document.getElementById("charge-qr-loading")).toBeTruthy();
-    expect(document.getElementById("charge-qr-error")).toBeTruthy();
     expect(document.getElementById("charge-payment-link")).toBeTruthy();
     expect(document.getElementById("btn-charge-copy")).toBeTruthy();
     expect(document.getElementById("btn-charge-download")).toBeTruthy();
@@ -659,8 +653,7 @@ describe("charge view download QR", () => {
 
   it("should create a download link with correct filename", () => {
     setupChargeDOM();
-    const img = document.getElementById("charge-qr-img");
-    img.src = "data:image/png;base64,fakedata";
+    const generatedDataUrl = "data:image/png;base64,fakedata";
 
     let clickedHref = "";
     let clickedDownload = "";
@@ -676,9 +669,9 @@ describe("charge view download QR", () => {
       return el;
     });
 
-    // Simulate download button click
+    // Simulate download button click — QR is generated on demand via renderPrintableQr
     const a = document.createElement("a");
-    a.href = img.src;
+    a.href = generatedDataUrl;
     a.download = "depix-qrcode.png";
     a.click();
 
@@ -778,9 +771,10 @@ describe("product card URL rendering", () => {
 
   it("should include URL in product card HTML with copyable class", () => {
     const url = buildProductUrl({ username: "loja" }, "camiseta");
-    const html = `<div class="product-card-url copyable" data-copy="${url}">${abbreviateHash(url, 28, 10)}</div>`;
+    const html = `<div class="product-card-url copyable" data-copy="${url}"><span class="product-card-url-text mono">${url}</span></div>`;
     expect(html).toContain("copyable");
     expect(html).toContain("data-copy=\"https://pay.depixapp.com/loja/camiseta\"");
+    expect(html).toContain("https://pay.depixapp.com/loja/camiseta");
   });
 });
 

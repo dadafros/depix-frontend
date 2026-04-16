@@ -142,16 +142,16 @@
   }
   </script>
 
-  <link rel="manifest" href="manifest.json?v=118" />
-  <link rel="icon" href="icon-192.png?v=118" />
-  <link rel="apple-touch-icon" href="icon-192.png?v=118" />
+  <link rel="manifest" href="manifest.json?v=119" />
+  <link rel="icon" href="icon-192.png?v=119" />
+  <link rel="apple-touch-icon" href="icon-192.png?v=119" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
   <!-- Asset version must match APP_VERSION in service-worker.js -->
-  <link rel="stylesheet" href="style.css?v=118" />
+  <link rel="stylesheet" href="style.css?v=119" />
 </head>
 <body>
 
@@ -160,7 +160,7 @@
 
   <nav class="landing-nav">
     <div class="landing-nav-inner">
-      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=118" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
+      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=119" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
       <div class="landing-nav-right">
         <a href="https://blog.depixapp.com/" class="landing-nav-link">Blog</a>
         <a href="#login" class="landing-nav-cta">Entrar</a>
@@ -1581,13 +1581,6 @@
 
     <p class="charge-intro">Este é o seu link exclusivo. Qualquer pessoa com ele pode ver seus produtos ou pagar um valor personalizado via Pix.</p>
 
-    <div class="charge-qr-wrapper">
-      <img id="charge-qr-img" class="charge-qr-img hidden" alt="QR code do link de pagamento" />
-      <div id="charge-qr-loading" class="charge-qr-loading">Gerando QR code...</div>
-      <div id="charge-qr-error" class="charge-qr-error hidden">Não foi possível gerar o QR code.</div>
-    </div>
-    <p class="charge-qr-hint">Use a câmera do celular para ler.<br>Não use o app do banco — este não é um QR code Pix.</p>
-
     <div class="charge-link-box">
       <a id="charge-payment-link" class="charge-link" target="_blank" rel="noopener">
         <span id="charge-payment-link-text"></span>
@@ -1595,19 +1588,25 @@
       </a>
     </div>
 
-    <button id="btn-charge-copy" class="charge-cta-primary">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-      Copiar link
-    </button>
     <div class="charge-actions-secondary">
-      <button id="btn-charge-download" class="charge-action-btn">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Baixar QR code
+      <button id="btn-charge-copy" class="charge-action-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        Copiar link
       </button>
       <button id="btn-charge-share" class="charge-action-btn hidden">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
         Compartilhar
       </button>
+    </div>
+
+    <button id="btn-charge-download" class="charge-cta-primary charge-cta-download">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Baixar QR code
+    </button>
+
+    <div class="merchant-alert charge-download-hint">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      Use a câmera do celular para ler o QR code baixado. Não use o app do banco — este não é um QR code Pix.
     </div>
 
     <div class="charge-help">
@@ -2488,6 +2487,6 @@
 
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 <!-- Asset version must match APP_VERSION in service-worker.js -->
-<script type="module" src="script.js?v=118"></script>
+<script type="module" src="script.js?v=119"></script>
 </body>
 </html>

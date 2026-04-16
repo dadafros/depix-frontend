@@ -2751,17 +2751,6 @@ async function loadChargeView() {
   if (linkEl) linkEl.href = paymentUrl;
   if (linkText) linkText.textContent = paymentUrl;
 
-  // Generate QR code
-  const qrImg = document.getElementById("charge-qr-img");
-  const qrLoading = document.getElementById("charge-qr-loading");
-  const qrError = document.getElementById("charge-qr-error");
-  if (paymentUrl && qrImg) {
-    renderBrandedQr(paymentUrl, qrImg, { loadingEl: qrLoading, errorEl: qrError });
-  } else {
-    if (qrLoading) qrLoading.classList.add("hidden");
-    if (qrError) qrError.classList.remove("hidden");
-  }
-
   // Show share button only if Web Share API is available
   const shareBtn = document.getElementById("btn-charge-share");
   if (shareBtn && navigator.share) shareBtn.classList.remove("hidden");
@@ -3259,7 +3248,7 @@ async function loadProductsView() {
       const checkoutCount = p.total_checkouts || 0;
       const copyIcon = '<svg class="copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
       const productUrl = p.slug && merchantData?.username ? `https://pay.depixapp.com/${merchantData.username}/${p.slug}` : "";
-      const urlRow = productUrl ? `<div class="product-card-url copyable" data-copy="${escapeHtml(productUrl)}"><span class="mono">${escapeHtml(abbreviateHash(productUrl, 28, 10))}</span>${copyIcon}</div>` : "";
+      const urlRow = productUrl ? `<div class="product-card-url copyable" data-copy="${escapeHtml(productUrl)}"><span class="product-card-url-text mono">${escapeHtml(productUrl)}</span><span class="product-card-url-copy">${copyIcon}Copiar</span></div>` : "";
       return `<div class="product-card">
         <div class="product-card-header">
           <div class="product-card-name">${escapeHtml(p.slug)}</div>
