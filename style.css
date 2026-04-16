@@ -3634,10 +3634,19 @@ textarea:focus {
 .charge-qr-error { color: #ff6b6b; font-size: 13px; }
 .charge-qr-hint { color: #94a3b8; font-size: 12px; text-align: center; margin: 6px 0 16px; line-height: 1.4; }
 .charge-link-box { margin-bottom: 16px; }
-.charge-link-box input {
-  width: 100%; text-align: center;
+.charge-link {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; text-align: center; padding: 10px 12px;
   font-family: 'JetBrains Mono', monospace; font-size: 12px;
+  color: #4fd1c5; text-decoration: none;
+  background: rgba(79, 209, 197, 0.06);
+  border: 1px solid rgba(79, 209, 197, 0.18);
+  border-radius: 8px;
+  transition: background 0.15s, border-color 0.15s;
+  cursor: pointer;
 }
+.charge-link:hover { background: rgba(79, 209, 197, 0.12); border-color: rgba(79, 209, 197, 0.3); }
+.charge-link-icon { flex-shrink: 0; opacity: 0.6; }
 .charge-cta-primary {
   width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
   padding: 14px 16px; border-radius: 12px; font-size: 15px; font-weight: 600;

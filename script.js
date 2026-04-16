@@ -2550,8 +2550,10 @@ async function loadChargeView() {
 
   const username = merchantData?.username;
   const paymentUrl = username ? `https://pay.depixapp.com/${username}` : "";
-  const linkInput = document.getElementById("charge-payment-link");
-  if (linkInput) linkInput.value = paymentUrl;
+  const linkEl = document.getElementById("charge-payment-link");
+  const linkText = document.getElementById("charge-payment-link-text");
+  if (linkEl) linkEl.href = paymentUrl;
+  if (linkText) linkText.textContent = paymentUrl;
 
   // Generate QR code
   const qrImg = document.getElementById("charge-qr-img");
@@ -3120,11 +3122,11 @@ document.getElementById("menu-merchant-api")?.addEventListener("click", () => { 
 
 // Charge view — copy, download QR, share
 document.getElementById("btn-charge-copy")?.addEventListener("click", () => {
-  const link = document.getElementById("charge-payment-link")?.value;
+  const link = document.getElementById("charge-payment-link")?.href;
   if (link) { navigator.clipboard.writeText(link).then(() => showToast("Link copiado!")).catch(() => showToast("Erro ao copiar")); }
 });
 document.getElementById("btn-charge-download")?.addEventListener("click", async () => {
-  const link = document.getElementById("charge-payment-link")?.value;
+  const link = document.getElementById("charge-payment-link")?.href;
   if (!link) return;
   try {
     const dataUrl = await renderPrintableQr(link);
@@ -3135,7 +3137,7 @@ document.getElementById("btn-charge-download")?.addEventListener("click", async 
   } catch { /* generation failed */ }
 });
 document.getElementById("btn-charge-share")?.addEventListener("click", async () => {
-  const link = document.getElementById("charge-payment-link")?.value;
+  const link = document.getElementById("charge-payment-link")?.href;
   if (!link || !navigator.share) return;
   try {
     await navigator.share({ title: "Meu link de pagamento — DePix", url: link });
@@ -3491,6 +3493,7 @@ document.getElementById("btn-product-create-submit")?.addEventListener("click", 
   if (slugErr) { setMsg("product-create-msg", slugErr); return; }
   const cents = toCents(amountInput?.value || "");
   if (!cents || cents < 500) { setMsg("product-create-msg", `Valor mínimo: ${formatBRL(500)}`); return; }
+  if (cents > 300000) { setMsg("product-create-msg", `Valor máximo: ${formatBRL(300000)}`); return; }
   const imgErr = validateHttpsUrl(imageUrl, "URL da imagem");
   if (imgErr) { setMsg("product-create-msg", imgErr); return; }
   const cbErr = validateHttpsUrl(callbackUrl, "Callback URL");
@@ -3545,6 +3548,7 @@ document.getElementById("btn-product-edit-save")?.addEventListener("click", asyn
   if (slugErr) { setMsg("product-edit-msg", slugErr); return; }
   const cents = toCents(amountInput?.value || "");
   if (!cents || cents < 500) { setMsg("product-edit-msg", `Valor mínimo: ${formatBRL(500)}`); return; }
+  if (cents > 300000) { setMsg("product-edit-msg", `Valor máximo: ${formatBRL(300000)}`); return; }
   const imgErr = validateHttpsUrl(imageUrl, "URL da imagem");
   if (imgErr) { setMsg("product-edit-msg", imgErr); return; }
   const cbErr = validateHttpsUrl(callbackUrl, "Callback URL");
