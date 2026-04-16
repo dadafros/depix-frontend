@@ -3541,10 +3541,13 @@ textarea:focus {
 .verify-step-content { flex: 1; min-width: 0; }
 .verify-step-content strong { display: block; font-size: 13px; color: #e8edf2; }
 .verify-step-desc { font-size: 11px; color: #5a6d82; }
+.verify-step-badges {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+  flex-shrink: 0;
+}
 .verify-step-badge {
   font-size: 9px; font-weight: 700; padding: 3px 7px; border-radius: 4px;
-  white-space: nowrap; flex-shrink: 0; text-transform: uppercase; letter-spacing: 0.3px;
-  margin-top: 3px;
+  white-space: nowrap; text-transform: uppercase; letter-spacing: 0.3px;
 }
 .verify-badge-yellow { background: rgba(236, 201, 75, 0.12); color: #ecc94b; }
 .verify-badge-green { background: rgba(104, 211, 145, 0.12); color: #68d391; }
