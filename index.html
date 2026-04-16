@@ -142,16 +142,16 @@
   }
   </script>
 
-  <link rel="manifest" href="manifest.json?v=120" />
-  <link rel="icon" href="icon-192.png?v=120" />
-  <link rel="apple-touch-icon" href="icon-192.png?v=120" />
+  <link rel="manifest" href="manifest.json?v=121" />
+  <link rel="icon" href="icon-192.png?v=121" />
+  <link rel="apple-touch-icon" href="icon-192.png?v=121" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
   <!-- Asset version must match APP_VERSION in service-worker.js -->
-  <link rel="stylesheet" href="style.css?v=120" />
+  <link rel="stylesheet" href="style.css?v=121" />
 </head>
 <body>
 
@@ -160,7 +160,7 @@
 
   <nav class="landing-nav">
     <div class="landing-nav-inner">
-      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=120" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
+      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=121" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
       <div class="landing-nav-right">
         <a href="https://blog.depixapp.com/" class="landing-nav-link">Blog</a>
         <a href="#login" class="landing-nav-cta">Entrar</a>
@@ -1825,9 +1825,8 @@
 <section data-view="merchant-product-create" class="page hidden">
   <div class="card">
     <h2 class="view-title">Novo Produto</h2>
-    <label for="product-create-slug">Slug (URL) *</label>
-    <input id="product-create-slug" placeholder="ex: camiseta-preta" autocomplete="off" />
-    <p class="field-hint">Letras minúsculas, números e hifens. 2-60 caracteres.</p>
+    <label for="product-create-name">Nome *</label>
+    <input id="product-create-name" placeholder="ex: Camiseta Preta" autocomplete="off" maxlength="80" />
     <label for="product-create-amount">Valor (R$) *</label>
     <input id="product-create-amount" inputmode="numeric" placeholder="R$ 0,00" />
     <label for="product-create-description">Descrição</label>
@@ -1851,7 +1850,7 @@
         <span>Enviando...</span>
       </div>
     </div>
-    <label for="product-create-expires">Expiração</label>
+    <label for="product-create-expires">Expiração <button class="icon-btn-sm product-expires-info" aria-label="O que é a expiração?" type="button">?</button></label>
     <select id="product-create-expires">
       <option value="">Padrão (20 min)</option>
       <option value="300">5 minutos</option>
@@ -1861,6 +1860,9 @@
     </select>
     <div class="product-advanced-toggle-row"><button id="btn-product-create-advanced" class="advanced-toggle-btn" type="button">Configurações avançadas <span class="advanced-toggle-arrow">&#x25B8;</span></button></div>
     <div class="product-advanced hidden" data-advanced="product-create">
+      <label for="product-create-slug">Slug (URL) <button class="icon-btn-sm product-slug-info" aria-label="O que é o slug?" type="button">?</button></label>
+      <input id="product-create-slug" placeholder="gerado a partir do nome" autocomplete="off" />
+      <p class="field-hint">URL: <span class="mono" id="product-create-url-preview">pay.depixapp.com/seuusuario/...</span></p>
       <label for="product-create-callback-url">Callback URL (HTTPS) <button class="icon-btn-sm product-callback-info" aria-label="O que é isso?" type="button">?</button></label>
       <input id="product-create-callback-url" placeholder="https://..." />
       <label for="product-create-redirect-url">Redirect URL (HTTPS) <button class="icon-btn-sm product-redirect-info" aria-label="O que é isso?" type="button">?</button></label>
@@ -1878,9 +1880,8 @@
 <section data-view="merchant-product-edit" class="page hidden">
   <div class="card">
     <h2 class="view-title">Editar Produto</h2>
-    <label for="product-edit-slug">Slug (URL) *</label>
-    <input id="product-edit-slug" placeholder="ex: camiseta-preta" autocomplete="off" />
-    <p class="field-hint">Letras minúsculas, números e hifens. 2-60 caracteres.</p>
+    <label for="product-edit-name">Nome *</label>
+    <input id="product-edit-name" placeholder="ex: Camiseta Preta" autocomplete="off" maxlength="80" />
     <label for="product-edit-amount">Valor (R$) *</label>
     <input id="product-edit-amount" inputmode="numeric" placeholder="R$ 0,00" />
     <label for="product-edit-description">Descrição</label>
@@ -1912,7 +1913,7 @@
         <span>Enviando...</span>
       </div>
     </div>
-    <label for="product-edit-expires">Expiração</label>
+    <label for="product-edit-expires">Expiração <button class="icon-btn-sm product-expires-info" aria-label="O que é a expiração?" type="button">?</button></label>
     <select id="product-edit-expires">
       <option value="">Padrão (20 min)</option>
       <option value="300">5 minutos</option>
@@ -1922,6 +1923,9 @@
     </select>
     <div class="product-advanced-toggle-row"><button id="btn-product-edit-advanced" class="advanced-toggle-btn" type="button">Configurações avançadas <span class="advanced-toggle-arrow">&#x25B8;</span></button></div>
     <div class="product-advanced hidden" data-advanced="product-edit">
+      <label for="product-edit-slug">Slug (URL) <button class="icon-btn-sm product-slug-info" aria-label="O que é o slug?" type="button">?</button></label>
+      <input id="product-edit-slug" placeholder="ex: camiseta-preta" autocomplete="off" />
+      <p class="field-hint">URL: <span class="mono" id="product-edit-url-preview">pay.depixapp.com/seuusuario/...</span></p>
       <label for="product-edit-callback-url">Callback URL (HTTPS) <button class="icon-btn-sm product-callback-info" aria-label="O que é isso?" type="button">?</button></label>
       <input id="product-edit-callback-url" placeholder="https://..." />
       <label for="product-edit-redirect-url">Redirect URL (HTTPS) <button class="icon-btn-sm product-redirect-info" aria-label="O que é isso?" type="button">?</button></label>
@@ -1991,7 +1995,7 @@
     </select>
     <label for="api-key-label">Label</label>
     <input id="api-key-label" placeholder="Ex: WooCommerce" />
-    <label for="api-key-expires">Expiração (dias)</label>
+    <label for="api-key-expires">Expiração (dias) <button class="icon-btn-sm api-key-expires-info" aria-label="O que é a expiração da chave?" type="button">?</button></label>
     <input id="api-key-expires" type="text" inputmode="numeric" placeholder="Opcional (máx 365)" />
     <div id="create-api-key-msg" class="mensagem"></div>
     <div class="modal-actions">
@@ -2100,6 +2104,39 @@
       <li>Evite texto pequeno — pode ficar ilegível no tamanho final</li>
     </ul>
     <button id="close-image-tips" class="secondary" style="width:100%;margin-top:16px">Entendi</button>
+  </div>
+</div>
+
+<!-- ===== MODAL: O QUE É EXPIRAÇÃO (PRODUTO) ===== -->
+<div id="expiration-info-modal" class="modal hidden">
+  <div class="modal-box">
+    <h2>O que é a Expiração?</h2>
+    <p class="info-text">A <strong>Expiração</strong> é o tempo que o cliente tem para pagar depois de abrir o checkout. Quando esse prazo acaba, o QR code PIX expira e a cobrança é marcada como expirada automaticamente.</p>
+    <p class="info-text" style="margin-top:8px">Se não escolher, usamos o padrão de <strong>20 minutos</strong>, que funciona bem para a maioria dos casos.</p>
+    <p class="info-text" style="margin-top:8px;color:#5a6d82">Prazos curtos (5–10 min) evitam cobranças abandonadas. Prazos longos dão mais margem para clientes que demoram a abrir o app do banco.</p>
+    <button id="close-expiration-info" class="secondary" style="width:100%;margin-top:16px">Entendi</button>
+  </div>
+</div>
+
+<!-- ===== MODAL: O QUE É EXPIRAÇÃO (API KEY) ===== -->
+<div id="api-key-expires-info-modal" class="modal hidden">
+  <div class="modal-box">
+    <h2>O que é a Expiração da chave?</h2>
+    <p class="info-text">Define por quantos dias a <strong>chave de API</strong> continuará válida após ser criada. Passado esse prazo, a chave deixa de funcionar automaticamente e sua integração precisará de uma nova.</p>
+    <p class="info-text" style="margin-top:8px">Se deixar em branco, a chave <strong>não expira</strong>. É recomendado definir um prazo por segurança — assim chaves esquecidas não ficam ativas para sempre.</p>
+    <p class="info-text" style="margin-top:8px;color:#5a6d82">Máximo: 365 dias. Você pode revogar manualmente a qualquer momento na lista de chaves.</p>
+    <button id="close-api-key-expires-info" class="secondary" style="width:100%;margin-top:16px">Entendi</button>
+  </div>
+</div>
+
+<!-- ===== MODAL: O QUE É SLUG ===== -->
+<div id="slug-info-modal" class="modal hidden">
+  <div class="modal-box">
+    <h2>O que é o Slug?</h2>
+    <p class="info-text">O <strong>slug</strong> é a parte final da URL de checkout do produto (ex: <span class="mono">pay.depixapp.com/seuusuario/<strong>camiseta-preta</strong></span>).</p>
+    <p class="info-text" style="margin-top:8px">Ele é gerado automaticamente a partir do <strong>Nome</strong> do produto. Você só precisa editá-lo manualmente se quiser personalizar a URL.</p>
+    <p class="info-text" style="margin-top:8px;color:#5a6d82">Use apenas letras minúsculas, números e hifens (2–60 caracteres).</p>
+    <button id="close-slug-info" class="secondary" style="width:100%;margin-top:16px">Entendi</button>
   </div>
 </div>
 
@@ -2487,6 +2524,6 @@
 
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 <!-- Asset version must match APP_VERSION in service-worker.js -->
-<script type="module" src="script.js?v=120"></script>
+<script type="module" src="script.js?v=121"></script>
 </body>
 </html>

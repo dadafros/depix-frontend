@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toCents, formatBRL, formatDePix, isAllowedImageUrl, escapeHtml } from "../utils.js";
+import { toCents, formatBRL, formatDePix, isAllowedImageUrl, escapeHtml, slugify } from "../utils.js";
 
 describe("toCents", () => {
   it("should parse simple value", () => {
@@ -214,5 +214,63 @@ describe("escapeHtml", () => {
 
   it("should handle user names with special chars", () => {
     expect(escapeHtml("João <admin>")).toBe("Jo\u00e3o &lt;admin&gt;");
+  });
+});
+
+describe("slugify", () => {
+  it("should lowercase simple text", () => {
+    expect(slugify("Camiseta Preta")).toBe("camiseta-preta");
+  });
+
+  it("should remove Portuguese accents", () => {
+    expect(slugify("Camiseta Edição Única")).toBe("camiseta-edicao-unica");
+    expect(slugify("Pão de Açúcar")).toBe("pao-de-acucar");
+  });
+
+  it("should collapse multiple spaces and separators into single hyphen", () => {
+    expect(slugify("foo   bar___baz")).toBe("foo-bar-baz");
+  });
+
+  it("should strip punctuation", () => {
+    expect(slugify("Hello, World! 100%")).toBe("hello-world-100");
+  });
+
+  it("should trim leading and trailing hyphens", () => {
+    expect(slugify("--foo--")).toBe("foo");
+    expect(slugify("!!! bar !!!")).toBe("bar");
+  });
+
+  it("should return empty string for empty input", () => {
+    expect(slugify("")).toBe("");
+    expect(slugify(null)).toBe("");
+    expect(slugify(undefined)).toBe("");
+  });
+
+  it("should return empty string for only special chars", () => {
+    expect(slugify("!!!")).toBe("");
+    expect(slugify("   ")).toBe("");
+  });
+
+  it("should cap length at 60 chars", () => {
+    const long = "a".repeat(100);
+    expect(slugify(long).length).toBe(60);
+  });
+
+  it("should preserve numbers", () => {
+    expect(slugify("Produto 123")).toBe("produto-123");
+  });
+
+  it("should handle non-string input", () => {
+    expect(slugify(123)).toBe("123");
+  });
+
+  it("should produce slug matching backend SLUG_RE", () => {
+    const SLUG_RE = /^[a-z0-9][a-z0-9-]*[a-z0-9]$/;
+    const samples = ["Camiseta Preta", "Edição Única", "Produto 2026", "Pão de Açúcar"];
+    for (const s of samples) {
+      const slug = slugify(s);
+      expect(slug.length).toBeGreaterThanOrEqual(2);
+      expect(SLUG_RE.test(slug)).toBe(true);
+    }
   });
 });

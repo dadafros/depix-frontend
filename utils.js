@@ -48,3 +48,14 @@ export function formatDePix(cents) {
   let str = (cents / 100).toFixed(8).replace(/0{1,6}$/, "");
   return str.replace(".", ",") + " DePix";
 }
+
+// Keep in sync with backend slugifyName() in api/_lib/routes/products.js
+export function slugify(text) {
+  return String(text || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+}
