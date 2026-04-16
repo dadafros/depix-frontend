@@ -939,13 +939,16 @@ System.out.println(response.body());</pre>
         <pre>{
   <span class="hl-key">"checkouts"</span>: [
     {
-      <span class="hl-key">"id"</span>:           <span class="hl-str">"chk_01jxxxxxxxxxxxxxxxxxxxxxx"</span>,
-      <span class="hl-key">"status"</span>:       <span class="hl-str">"completed"</span>,
-      <span class="hl-key">"amount"</span>:       <span class="hl-num">2990</span>,
-      <span class="hl-key">"description"</span>:  <span class="hl-str">"T-shirt size M"</span>,
-      <span class="hl-key">"created_at"</span>:   <span class="hl-str">"2025-06-01T15:00:00.000Z"</span>,
-      <span class="hl-key">"expires_at"</span>:   <span class="hl-str">"2025-06-01T15:30:00.000Z"</span>,
-      <span class="hl-key">"is_live"</span>:      <span class="hl-kw">true</span>
+      <span class="hl-key">"id"</span>:            <span class="hl-str">"chk_01jxxxxxxxxxxxxxxxxxxxxxx"</span>,
+      <span class="hl-key">"status"</span>:        <span class="hl-str">"completed"</span>,
+      <span class="hl-key">"amount"</span>:        <span class="hl-num">2990</span>,
+      <span class="hl-key">"description"</span>:   <span class="hl-str">"T-shirt size M"</span>,
+      <span class="hl-key">"product_name"</span>:  <span class="hl-str">"Black T-shirt"</span>,    <span class="hl-cm">// null if checkout is not linked to a product</span>
+      <span class="hl-key">"metadata"</span>:      <span class="hl-str">"{\"order_id\":\"42\"}"</span>,  <span class="hl-cm">// JSON string, null if absent</span>
+      <span class="hl-key">"created_at"</span>:    <span class="hl-str">"2025-06-01T15:00:00.000Z"</span>,
+      <span class="hl-key">"processing_at"</span>: <span class="hl-str">"2025-06-01T15:02:14.000Z"</span>,
+      <span class="hl-key">"expires_at"</span>:    <span class="hl-str">"2025-06-01T15:30:00.000Z"</span>,
+      <span class="hl-key">"is_live"</span>:       <span class="hl-kw">true</span>
     }
   ],
   <span class="hl-key">"stats"</span>: {
