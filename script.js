@@ -3337,12 +3337,11 @@ async function loadProductEditView() {
     document.getElementById("product-edit-expires").value = product.expires_in ? String(product.expires_in) : "";
     document.getElementById("product-edit-metadata").value = product.metadata ? JSON.stringify(product.metadata, null, 2) : "";
 
-    // Reset advanced to collapsed, then expand only if needed
-    const hasAdvanced = product.callback_url || product.redirect_url || product.metadata;
+    // Always start collapsed
     const advPanel = document.querySelector('[data-advanced="product-edit"]');
     const advArrow = document.getElementById("btn-product-edit-advanced")?.querySelector(".advanced-toggle-arrow");
-    if (advPanel) advPanel.classList.toggle("hidden", !hasAdvanced);
-    if (advArrow) advArrow.classList.toggle("open", !!hasAdvanced);
+    if (advPanel) advPanel.classList.add("hidden");
+    if (advArrow) advArrow.classList.remove("open");
 
     // Toggle button label
     const toggleBtn = document.getElementById("btn-product-edit-toggle");
