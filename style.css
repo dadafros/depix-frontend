@@ -3735,12 +3735,12 @@ textarea:focus {
   white-space: nowrap;
 }
 .merchant-edit-btn:hover { opacity: 1; }
-.account-advanced-toggle-row { padding: 10px 0 2px; }
+.account-advanced-toggle-row { padding: 14px 0 2px; margin-top: 4px; border-top: 1px solid rgba(255,255,255,0.06); }
 .account-advanced-toggle-row .advanced-toggle-btn {
   width: 100%; display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 14px; border-radius: 10px; font-size: 13px; font-weight: 500;
-  cursor: pointer; border: 1px solid rgba(255,255,255,0.06);
-  background: rgba(255,255,255,0.02); color: #8a9bb0;
+  padding: 12px 14px; border-radius: 10px; font-size: 13px; font-weight: 600;
+  cursor: pointer; border: 1px solid rgba(56, 227, 172, 0.12);
+  background: rgba(56, 227, 172, 0.04); color: #94a3b8;
   margin-bottom: 0;
 }
 .account-advanced-toggle-row .advanced-toggle-btn:active { background: rgba(255,255,255,0.04); }
@@ -3959,9 +3959,9 @@ textarea:focus {
 .product-advanced-toggle-row { margin: 4px 0 12px; }
 .product-advanced-toggle-row .advanced-toggle-btn {
   width: 100%; display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 14px; border-radius: 10px; font-size: 13px; font-weight: 500;
-  cursor: pointer; border: 1px solid rgba(255,255,255,0.06);
-  background: rgba(255,255,255,0.02); color: #8a9bb0;
+  padding: 12px 14px; border-radius: 10px; font-size: 13px; font-weight: 600;
+  cursor: pointer; border: 1px solid rgba(56, 227, 172, 0.12);
+  background: rgba(56, 227, 172, 0.04); color: #94a3b8;
   margin-bottom: 0;
 }
 .product-advanced-toggle-row .advanced-toggle-btn:active { background: rgba(255,255,255,0.04); }
