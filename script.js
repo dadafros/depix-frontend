@@ -2444,6 +2444,7 @@ document.getElementById("extrato-clear-filters")?.addEventListener("click", () =
   if (endDate) endDate.value = "";
   applyFilters();
   updateFilterBadge();
+  collapseFilterPanel("extrato-filter-panel", "extrato-filter-toggle");
 });
 
 // Extrato: load more (client-side pagination)
@@ -3029,7 +3030,8 @@ async function populateSalesProductDropdown() {
   const dropdown = document.getElementById("sales-filter-product");
   if (!dropdown) return;
   try {
-    if (!salesProductsCache) {
+    // Retry fetch if cache is null or empty (user may have just created a product)
+    if (!salesProductsCache || salesProductsCache.length === 0) {
       const res = await apiFetch("/api/products");
       if (res.ok) {
         const data = await res.json();
@@ -3042,7 +3044,7 @@ async function populateSalesProductDropdown() {
       for (const p of salesProductsCache) {
         const opt = document.createElement("option");
         opt.value = p.id;
-        opt.textContent = p.description || p.slug;
+        opt.textContent = p.name || p.description || p.slug;
         dropdown.appendChild(opt);
       }
       if (currentSalesProductId) dropdown.value = currentSalesProductId;
@@ -3749,8 +3751,11 @@ function updateSalesSearchClear() {
 document.getElementById("sales-filter-toggle")?.addEventListener("click", () => {
   const panel = document.getElementById("sales-filter-panel");
   const toggle = document.getElementById("sales-filter-toggle");
-  panel.classList.toggle("hidden", !panel.classList.contains("hidden"));
-  toggle.classList.toggle("open");
+  const willOpen = panel.classList.contains("hidden");
+  panel.classList.toggle("hidden", !willOpen);
+  toggle.classList.toggle("open", willOpen);
+  // Refresh product dropdown when opening — handles case where user just created a product
+  if (willOpen) populateSalesProductDropdown();
 });
 // Sales status filter
 document.getElementById("sales-filter-status")?.addEventListener("change", () => { loadSalesView(); updateSalesFilterBadge(); collapseFilterPanel("sales-filter-panel", "sales-filter-toggle"); });
@@ -3805,6 +3810,7 @@ document.getElementById("sales-clear-filters")?.addEventListener("click", () => 
   document.querySelector("[data-sales-period='all']")?.classList.add("active");
   document.getElementById("sales-custom-range")?.classList.add("hidden");
   updateSalesSearchClear();
+  collapseFilterPanel("sales-filter-panel", "sales-filter-toggle");
   if (currentSalesProductId) {
     currentSalesProductId = null;
     currentSalesProductSlug = "";
