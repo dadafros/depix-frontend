@@ -88,8 +88,11 @@ function renderCheckoutItem(c) {
 
 // ===== Copied from script.js — buildSalesFilterParams =====
 
+let currentSalesProductId = null;
+
 function buildSalesFilterParams() {
   const params = new URLSearchParams();
+  if (currentSalesProductId) params.set("product_id", currentSalesProductId);
   const status = document.getElementById("sales-filter-status")?.value;
   if (status) params.set("status", status);
   const search = document.getElementById("sales-filter-search")?.value.trim();
@@ -355,16 +358,45 @@ describe("renderCheckoutItem", () => {
 describe("buildSalesFilterParams", () => {
   beforeEach(() => {
     setupSalesFilterDOM();
+    currentSalesProductId = null;
   });
 
   afterEach(() => {
     vi.useRealTimers();
     document.body.innerHTML = "";
+    currentSalesProductId = null;
   });
 
   it("should return empty params when no filters are set", () => {
     const params = buildSalesFilterParams();
     expect(params.toString()).toBe("");
+  });
+
+  it("should include product_id when currentSalesProductId is set", () => {
+    currentSalesProductId = "prod_abc123";
+    const params = buildSalesFilterParams();
+    expect(params.get("product_id")).toBe("prod_abc123");
+  });
+
+  it("should not include product_id when currentSalesProductId is null", () => {
+    currentSalesProductId = null;
+    const params = buildSalesFilterParams();
+    expect(params.has("product_id")).toBe(false);
+  });
+
+  it("should combine product_id with other filters", () => {
+    currentSalesProductId = "prod_xyz";
+    const select = document.getElementById("sales-filter-status");
+    const option = document.createElement("option");
+    option.value = "completed";
+    select.appendChild(option);
+    select.value = "completed";
+    document.getElementById("sales-filter-search").value = "test";
+
+    const params = buildSalesFilterParams();
+    expect(params.get("product_id")).toBe("prod_xyz");
+    expect(params.get("status")).toBe("completed");
+    expect(params.get("q")).toBe("test");
   });
 
   it("should include status param when status filter is set", () => {
@@ -784,28 +816,32 @@ describe("API key display", () => {
 
 describe("updateSalesFilterBadge logic", () => {
   // Replicate the badge counting logic from script.js
-  function countSalesFilters({ status, search, period }) {
-    return (status ? 1 : 0) + (search ? 1 : 0) + (period !== "all" ? 1 : 0);
+  function countSalesFilters({ status, search, period, productId }) {
+    return (status ? 1 : 0) + (search ? 1 : 0) + (period !== "all" ? 1 : 0) + (productId ? 1 : 0);
   }
 
   it("should return 0 when no filters active", () => {
-    expect(countSalesFilters({ status: "", search: "", period: "all" })).toBe(0);
+    expect(countSalesFilters({ status: "", search: "", period: "all", productId: null })).toBe(0);
   });
 
   it("should count status filter", () => {
-    expect(countSalesFilters({ status: "completed", search: "", period: "all" })).toBe(1);
+    expect(countSalesFilters({ status: "completed", search: "", period: "all", productId: null })).toBe(1);
   });
 
   it("should count search filter", () => {
-    expect(countSalesFilters({ status: "", search: "camiseta", period: "all" })).toBe(1);
+    expect(countSalesFilters({ status: "", search: "camiseta", period: "all", productId: null })).toBe(1);
   });
 
   it("should count period filter", () => {
-    expect(countSalesFilters({ status: "", search: "", period: "7d" })).toBe(1);
+    expect(countSalesFilters({ status: "", search: "", period: "7d", productId: null })).toBe(1);
+  });
+
+  it("should count product filter", () => {
+    expect(countSalesFilters({ status: "", search: "", period: "all", productId: "prod_123" })).toBe(1);
   });
 
   it("should count all filters combined", () => {
-    expect(countSalesFilters({ status: "pending", search: "teste", period: "30d" })).toBe(3);
+    expect(countSalesFilters({ status: "pending", search: "teste", period: "30d", productId: "prod_123" })).toBe(4);
   });
 });
 
@@ -914,5 +950,110 @@ describe("product edit auto-expand advanced", () => {
       panel.classList.remove("hidden");
     }
     expect(panel.classList.contains("hidden")).toBe(true);
+  });
+});
+
+// =============================================================
+// Product Filter Chip Tests
+// =============================================================
+
+describe("sales product filter chip", () => {
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <div id="sales-product-filter" class="sales-product-filter hidden">
+        <span id="sales-product-filter-label"></span>
+        <button id="sales-product-filter-clear" type="button">&times;</button>
+      </div>
+    `;
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+    currentSalesProductId = null;
+  });
+
+  it("should be hidden by default", () => {
+    const chip = document.getElementById("sales-product-filter");
+    expect(chip.classList.contains("hidden")).toBe(true);
+  });
+
+  it("should show chip and set label when product filter is active", () => {
+    const chip = document.getElementById("sales-product-filter");
+    const label = document.getElementById("sales-product-filter-label");
+    currentSalesProductId = "prod_abc";
+    const slug = "camiseta-azul";
+
+    // Simulate loadSalesView product filter logic
+    label.textContent = `Produto: ${slug}`;
+    chip.classList.remove("hidden");
+
+    expect(chip.classList.contains("hidden")).toBe(false);
+    expect(label.textContent).toBe("Produto: camiseta-azul");
+  });
+
+  it("should hide chip when product filter is cleared", () => {
+    const chip = document.getElementById("sales-product-filter");
+    chip.classList.remove("hidden");
+    currentSalesProductId = "prod_abc";
+
+    // Simulate clear
+    currentSalesProductId = null;
+    chip.classList.add("hidden");
+
+    expect(chip.classList.contains("hidden")).toBe(true);
+    expect(currentSalesProductId).toBeNull();
+  });
+
+  it("should fall back to product ID when slug is missing", () => {
+    const label = document.getElementById("sales-product-filter-label");
+    const productId = "prod_abc";
+    const slug = "";
+
+    // Simulate loadSalesView logic: show product_id when slug is empty
+    label.textContent = `Produto: ${slug || productId}`;
+
+    expect(label.textContent).toBe("Produto: prod_abc");
+  });
+});
+
+// =============================================================
+// Product Card Checkouts Navigation Tests
+// =============================================================
+
+describe("product card checkouts navigation", () => {
+  it("should build correct sales URL with product_id and slug", () => {
+    const productId = "prod_abc123";
+    const slug = "camiseta-azul";
+    const url = `#merchant-sales?product_id=${productId}&product=${encodeURIComponent(slug)}`;
+    expect(url).toBe("#merchant-sales?product_id=prod_abc123&product=camiseta-azul");
+  });
+
+  it("should encode special characters in slug", () => {
+    const productId = "prod_xyz";
+    const slug = "produto com espaço";
+    const url = `#merchant-sales?product_id=${productId}&product=${encodeURIComponent(slug)}`;
+    expect(url).toContain("product=produto%20com%20espa%C3%A7o");
+  });
+
+  it("should render button with product-id and product-slug data attributes", () => {
+    const html = `<button class="merchant-text-btn btn-product-checkouts" data-product-id="prod_1" data-product-slug="meu-produto">Checkouts</button>`;
+    document.body.innerHTML = html;
+    const btn = document.querySelector(".btn-product-checkouts");
+    expect(btn.dataset.productId).toBe("prod_1");
+    expect(btn.dataset.productSlug).toBe("meu-produto");
+    document.body.innerHTML = "";
+  });
+
+  it("should parse product_id from hash params", () => {
+    const hash = "#merchant-sales?product_id=prod_abc&product=camiseta";
+    const params = new URLSearchParams(hash.split("?")[1] || "");
+    expect(params.get("product_id")).toBe("prod_abc");
+    expect(params.get("product")).toBe("camiseta");
+  });
+
+  it("should return null when no product_id in hash", () => {
+    const hash = "#merchant-sales";
+    const params = new URLSearchParams(hash.split("?")[1] || "");
+    expect(params.get("product_id")).toBeNull();
   });
 });
