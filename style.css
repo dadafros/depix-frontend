@@ -3973,11 +3973,32 @@ textarea:focus {
   padding-top: 12px;
 }
 
-/* Product checkouts */
-.product-checkouts-info { margin-bottom: 12px; }
-.product-checkouts-summary {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 14px; font-weight: 600; color: #e8edf2;
+/* Sales product filter chip */
+.sales-product-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: rgba(79, 209, 197, 0.10);
+  border: 1px solid rgba(79, 209, 197, 0.22);
+  border-radius: 8px;
+  font-size: 12px;
+  color: #4fd1c5;
+  margin-bottom: 8px;
+}
+.sales-product-filter button {
+  background: none;
+  border: none;
+  color: #4fd1c5;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+.sales-product-filter button:hover {
+  opacity: 1;
 }
 
 @media (min-width: 768px) {

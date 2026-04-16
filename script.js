@@ -2366,6 +2366,8 @@ let salesObserver = null;
 let salesDisplayedCount = 0;
 let filteredSales = [];
 let allSalesCheckouts = [];
+let currentSalesProductId = null;
+let currentSalesProductSlug = "";
 const SALES_PAGE_SIZE = 50;
 let pendingMerchantAction = null;
 let pendingRevokeKeyId = null;
@@ -2705,6 +2707,7 @@ async function loadApiView() {
 // === Minhas Vendas ===
 function buildSalesFilterParams() {
   const params = new URLSearchParams();
+  if (currentSalesProductId) params.set("product_id", currentSalesProductId);
   const status = document.getElementById("sales-filter-status")?.value;
   if (status) params.set("status", status);
   const search = document.getElementById("sales-filter-search")?.value.trim();
@@ -2731,6 +2734,20 @@ function buildSalesFilterParams() {
 async function loadSalesView() {
   stopSalesPolling();
   showMerchantMenu();
+
+  // Parse product filter from hash params
+  const hashParams = new URLSearchParams(window.location.hash.split("?")[1] || "");
+  currentSalesProductId = hashParams.get("product_id") || null;
+  currentSalesProductSlug = hashParams.get("product") || "";
+  const productChip = document.getElementById("sales-product-filter");
+  const productLabel = document.getElementById("sales-product-filter-label");
+  if (currentSalesProductId && productChip && productLabel) {
+    productLabel.textContent = `Produto: ${currentSalesProductSlug || currentSalesProductId}`;
+    productChip.classList.remove("hidden");
+  } else if (productChip) {
+    productChip.classList.add("hidden");
+  }
+
   document.getElementById("sales-loading")?.classList.remove("hidden");
   document.getElementById("sales-empty")?.classList.add("hidden");
   setMsg("sales-msg", "");
@@ -2948,7 +2965,7 @@ async function loadProductsView() {
         <div class="product-card-footer">
           <span class="product-card-checkouts">${checkoutCount} checkout${checkoutCount !== 1 ? 's' : ''}</span>
           <div class="product-card-actions">
-            <button class="merchant-text-btn btn-product-checkouts" data-product-id="${escapeHtml(p.id)}">Checkouts</button>
+            <button class="merchant-text-btn btn-product-checkouts" data-product-id="${escapeHtml(p.id)}" data-product-slug="${escapeHtml(p.slug)}">Checkouts</button>
             <button class="merchant-text-btn btn-product-edit" data-product-id="${escapeHtml(p.id)}">Editar</button>
           </div>
         </div>
@@ -2960,7 +2977,7 @@ async function loadProductsView() {
       btn.addEventListener("click", () => navigate(`#merchant-product-edit?id=${btn.dataset.productId}`));
     });
     list.querySelectorAll(".btn-product-checkouts").forEach(btn => {
-      btn.addEventListener("click", () => navigate(`#merchant-product-checkouts?id=${btn.dataset.productId}`));
+      btn.addEventListener("click", () => navigate(`#merchant-sales?product_id=${btn.dataset.productId}&product=${encodeURIComponent(btn.dataset.productSlug)}`));
     });
   } catch (e) {
     if (!e.blocked) setMsg("products-msg", e.message || "Erro ao carregar produtos.");
@@ -3039,58 +3056,6 @@ async function loadProductEditView() {
   }
 }
 
-async function loadProductCheckoutsView() {
-  showMerchantMenu();
-  const productId = getProductIdFromHash();
-  if (!productId) { navigate("#merchant-products"); return; }
-
-  document.getElementById("product-checkouts-loading")?.classList.remove("hidden");
-  document.getElementById("product-checkouts-empty")?.classList.add("hidden");
-  setMsg("product-checkouts-msg", "");
-  const list = document.getElementById("product-checkouts-list");
-  if (list) list.innerHTML = "";
-  document.getElementById("product-checkouts-info").innerHTML = "";
-
-  try {
-    // Fetch product details and checkouts
-    const [prodRes, checkoutsRes] = await Promise.all([
-      apiFetch(`/api/products/${productId}`),
-      apiFetch(`/api/products/${productId}/checkouts`),
-    ]);
-
-    if (prodRes.ok) {
-      const prodData = await prodRes.json();
-      const product = prodData.product || prodData;
-      document.getElementById("product-checkouts-title").textContent = `Checkouts: ${product.slug || ""}`;
-      document.getElementById("product-checkouts-info").innerHTML = `
-        <div class="product-checkouts-summary">
-          <span>${formatBRL(product.amount)}</span>
-          <span class="badge ${product.active ? 'badge-green' : 'badge-gray'}">${product.active ? 'Ativo' : 'Inativo'}</span>
-        </div>`;
-    } else {
-      setMsg("product-checkouts-msg", "Não foi possível carregar os detalhes do produto.");
-    }
-
-    if (!checkoutsRes.ok) {
-      const e = await checkoutsRes.json().catch(() => ({}));
-      setMsg("product-checkouts-msg", e?.errorMessage || "Erro ao carregar checkouts.");
-      return;
-    }
-    const data = await checkoutsRes.json();
-    const checkouts = data.checkouts || [];
-
-    if (checkouts.length === 0) {
-      document.getElementById("product-checkouts-empty")?.classList.remove("hidden");
-      return;
-    }
-
-    list.innerHTML = checkouts.map(c => renderCheckoutItem(c)).join("");
-  } catch (e) {
-    if (!e.blocked) setMsg("product-checkouts-msg", e.message || "Erro ao carregar checkouts.");
-  } finally {
-    document.getElementById("product-checkouts-loading")?.classList.add("hidden");
-  }
-}
 
 // Routes
 // Guard: only allow merchant sub-views if user has active merchant (checks via API)
@@ -3128,7 +3093,6 @@ route("#merchant-api", () => { stopSalesPolling(); merchantGuard(loadApiView); }
 route("#merchant-products", () => { stopSalesPolling(); merchantGuard(loadProductsView); });
 route("#merchant-product-create", () => { stopSalesPolling(); merchantGuard(loadProductCreateView); });
 route("#merchant-product-edit", () => { stopSalesPolling(); merchantGuard(loadProductEditView); });
-route("#merchant-product-checkouts", () => { stopSalesPolling(); merchantGuard(loadProductCheckoutsView); });
 route("#webhook-logs", () => { stopSalesPolling(); merchantGuard(loadWebhookLogs); });
 
 // Menu accordion — click section title to expand/collapse, only one open at a time
@@ -3404,7 +3368,7 @@ function updateSalesFilterBadge() {
   const status = document.getElementById("sales-filter-status")?.value || "";
   const search = (document.getElementById("sales-filter-search")?.value || "").trim();
   const period = document.querySelector("[data-sales-period].active")?.dataset.salesPeriod || "all";
-  const count = (status ? 1 : 0) + (search ? 1 : 0) + (period !== "all" ? 1 : 0);
+  const count = (status ? 1 : 0) + (search ? 1 : 0) + (period !== "all" ? 1 : 0) + (currentSalesProductId ? 1 : 0);
   const badge = document.getElementById("sales-filter-badge");
   const toggle = document.getElementById("sales-filter-toggle");
   const clearBtn = document.getElementById("sales-clear-filters");
@@ -3461,8 +3425,22 @@ document.getElementById("sales-clear-filters")?.addEventListener("click", () => 
   document.querySelector("[data-sales-period='all']")?.classList.add("active");
   document.getElementById("sales-custom-range")?.classList.add("hidden");
   updateSalesSearchClear();
+  if (currentSalesProductId) {
+    currentSalesProductId = null;
+    currentSalesProductSlug = "";
+    document.getElementById("sales-product-filter")?.classList.add("hidden");
+    window.location.hash = "#merchant-sales";
+    return; // navigate triggers loadSalesView
+  }
   loadSalesView();
   updateSalesFilterBadge();
+});
+// Sales product filter chip — clear
+document.getElementById("sales-product-filter-clear")?.addEventListener("click", () => {
+  currentSalesProductId = null;
+  currentSalesProductSlug = "";
+  document.getElementById("sales-product-filter")?.classList.add("hidden");
+  navigate("#merchant-sales");
 });
 // Sales empty CTA
 document.getElementById("btn-sales-goto-create")?.addEventListener("click", () => navigate("#merchant-charge"));

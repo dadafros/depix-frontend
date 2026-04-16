@@ -142,16 +142,16 @@
   }
   </script>
 
-  <link rel="manifest" href="manifest.json?v=110" />
-  <link rel="icon" href="icon-192.png?v=110" />
-  <link rel="apple-touch-icon" href="icon-192.png?v=110" />
+  <link rel="manifest" href="manifest.json?v=111" />
+  <link rel="icon" href="icon-192.png?v=111" />
+  <link rel="apple-touch-icon" href="icon-192.png?v=111" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
   <!-- Asset version must match APP_VERSION in service-worker.js -->
-  <link rel="stylesheet" href="style.css?v=110" />
+  <link rel="stylesheet" href="style.css?v=111" />
 </head>
 <body>
 
@@ -160,7 +160,7 @@
 
   <nav class="landing-nav">
     <div class="landing-nav-inner">
-      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=110" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
+      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=111" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
       <div class="landing-nav-right">
         <a href="https://blog.depixapp.com/" class="landing-nav-link">Blog</a>
         <a href="#login" class="landing-nav-cta">Entrar</a>
@@ -1624,6 +1624,10 @@
         <span class="sales-stat-value" id="sales-stat-pending">0</span>
       </div>
     </div>
+    <div id="sales-product-filter" class="sales-product-filter hidden">
+      <span id="sales-product-filter-label"></span>
+      <button id="sales-product-filter-clear" type="button" aria-label="Remover filtro de produto">&times;</button>
+    </div>
     <div class="extrato-filters">
       <div class="extrato-toolbar">
         <div class="extrato-search-row">
@@ -1851,21 +1855,6 @@
     <div id="product-edit-msg" class="mensagem"></div>
     <button id="btn-product-edit-save" class="merchant-cta">Salvar</button>
     <button id="btn-product-edit-toggle" class="product-toggle-btn">Desativar</button>
-    <p class="link-text"><a href="#merchant-products" class="link">&larr; Voltar</a></p>
-  </div>
-</section>
-
-<!-- ===== CHECKOUTS DO PRODUTO ===== -->
-<section data-view="merchant-product-checkouts" class="page hidden">
-  <div class="card merchant-products-card">
-    <h2 class="view-title" id="product-checkouts-title">Checkouts do Produto</h2>
-    <div id="product-checkouts-info" class="product-checkouts-info"></div>
-    <div id="product-checkouts-msg" class="mensagem"></div>
-    <div id="product-checkouts-loading" class="hidden"><span class="spinner"></span> Carregando…</div>
-    <div id="product-checkouts-empty" class="hidden" style="text-align:center">
-      <p class="info-text">Nenhum checkout para este produto.</p>
-    </div>
-    <div id="product-checkouts-list" class="transactions-list"></div>
     <p class="link-text"><a href="#merchant-products" class="link">&larr; Voltar</a></p>
   </div>
 </section>
@@ -2405,6 +2394,6 @@
 
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 <!-- Asset version must match APP_VERSION in service-worker.js -->
-<script type="module" src="script.js?v=110"></script>
+<script type="module" src="script.js?v=111"></script>
 </body>
 </html>
