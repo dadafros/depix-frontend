@@ -145,6 +145,104 @@ Requires Node.js >= 22.
 - **Success messages**: Green (#68d391)
 - **Toast notifications**: Bottom center, auto-dismiss after 2s
 
+## Frontend Best Practices — Non-negotiable
+
+The app renders tons of user-supplied strings — callback URLs, emails, names, Liquid addresses, product names, webhook URLs, affiliate codes. **Any of them can be arbitrarily long.** Every time we render one, the layout must survive the worst-case length without hiding buttons off-screen or forcing horizontal scroll. The 420px mobile card leaves zero slack.
+
+Treat these as defaults. If you render user input without following them, you are shipping a bug.
+
+### Rule 1 — Every user-supplied string must have a truncation strategy
+
+Before writing `<span>${userString}</span>`, decide: **single-line truncate with ellipsis** (default for labels, names, URLs in lists) or **wrap to multiple lines** (long-form text: modal bodies, descriptions, webhook payload pre-blocks).
+
+Single-line truncate (the default):
+```css
+.my-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+```
+
+Wrap long strings:
+```css
+.my-body {
+  overflow-wrap: anywhere;   /* or word-break: break-all for URLs/hashes */
+}
+```
+
+No third option. **Never leave a user string with default CSS** — the default is `white-space: normal` which wraps at spaces, and a long URL without spaces will overflow its container.
+
+### Rule 2 — Flex children that truncate MUST have `min-width: 0`
+
+Flex items default to `min-width: auto`, which means they refuse to shrink below their content's intrinsic size. `overflow: hidden; text-overflow: ellipsis; white-space: nowrap` **will not work** on a flex child unless you also set `min-width: 0` — instead the child grows past the container and pushes siblings (edit buttons, dates, badges) off-screen.
+
+Canonical row pattern (long value + trailing action):
+```css
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.row .value {
+  flex: 1;
+  min-width: 0;                   /* THIS IS THE LINE THAT FAILS SILENTLY WHEN OMITTED */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.row .action {
+  flex-shrink: 0;                 /* button/badge/date keeps its size, never gets pushed */
+}
+```
+
+This is exactly the bug we hit with the "Editar Callback URL" button — it was a `display: table` row without `table-layout: fixed`, which has the same failure mode. **Prefer flex over table layouts.** If you must use `display: table`, always add `table-layout: fixed`.
+
+### Rule 3 — Trailing actions use `flex-shrink: 0`
+
+Edit buttons, copy buttons, delete icons, badges, timestamps, and any other "chrome" next to a user string must have `flex-shrink: 0`. Without it, a long value can compress the button until it disappears or wraps awkwardly.
+
+### Rule 4 — Parent containers must constrain width
+
+The outermost card is `max-width: 420px`. Inside, every container that holds user strings must either:
+- Be a flex/grid child that inherits its width from the parent, OR
+- Have `max-width: 100%` explicitly.
+
+A `display: inline-block` element with long unbreakable content can still push past a 420px card if the parent doesn't constrain it.
+
+### Rule 5 — Abbreviate long strings in JS as a second line of defense
+
+For Liquid addresses, webhook URLs, API keys, we already abbreviate server-side values in JS (`abbreviateHash`, substring). This is **in addition to** the CSS truncation, not a replacement — CSS still has to truncate because the abbreviation still contains no spaces and can be pushed around by flex children without `min-width: 0`.
+
+### Rule 6 — Test with a pathological string before shipping
+
+Before marking any view done, paste a 200-character URL or a 50-character product name into the field and verify:
+1. The edit/copy/action button is still visible and clickable.
+2. Nothing causes horizontal scroll on the viewport.
+3. The string is either truncated with `…` or wraps cleanly.
+
+If you can't test in a browser (no dev server running), say so explicitly — don't claim the UI works based on the diff alone. Type-checks and unit tests verify code correctness, not layout.
+
+### Rule 7 — Modal inputs get `width: 100%` and `box-sizing: border-box`
+
+Inputs that receive user values (including pasted URLs) must not expand their modal. `<input type="text">` defaults to a fixed `size`-based width; always style modal inputs with `width: 100%; box-sizing: border-box` so they scroll horizontally internally instead of widening the modal.
+
+### Rule 8 — When in doubt, prefer the safe default
+
+- **Card titles / names / labels** → single-line truncate.
+- **URLs, emails, addresses in lists** → single-line truncate (abbreviate in JS if long-form copy is needed elsewhere).
+- **Long-form prose (modal bodies, descriptions, webhook payloads)** → `word-break: break-all` or `overflow-wrap: anywhere`.
+- **Never**: leave a user string with default CSS and hope it's short enough.
+
+### Red flags to grep for during code review
+
+Before approving any frontend PR that renders user data:
+- `white-space: nowrap` without a matching `overflow: hidden; text-overflow: ellipsis` nearby.
+- Flex children rendering a user string without `min-width: 0`.
+- `display: table` without `table-layout: fixed`.
+- Action buttons inside flex rows without `flex-shrink: 0`.
+- `escapeHtml(someUserField)` injected into a `<span>`/`<div>` with no CSS class that bounds its width.
+
 ## Internationalization (i18n) — Static Pages
 
 The `/docs` and `/btcpay` pages support Portuguese (default) and English:

@@ -2642,11 +2642,17 @@ textarea:focus {
 }
 
 .referral-name {
+  flex: 1;
+  min-width: 0;
   font-weight: 500;
   font-size: 0.9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .referral-date {
+  flex-shrink: 0;
   font-size: 0.75rem;
   color: #5a6d82;
   margin-left: auto;
@@ -2666,9 +2672,14 @@ textarea:focus {
 }
 
 .payment-addr {
+  flex: 1;
+  min-width: 0;
   font-size: 0.75rem;
   color: #5a6d82;
   font-family: monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tx-link {
@@ -3636,6 +3647,10 @@ textarea:focus {
   border-radius: 8px;
   transition: background 0.15s, border-color 0.15s;
   cursor: pointer;
+  overflow: hidden;
+}
+.charge-link > span {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .charge-link:hover { background: rgba(79, 209, 197, 0.12); border-color: rgba(79, 209, 197, 0.3); }
 .charge-link-icon { flex-shrink: 0; opacity: 0.6; }
@@ -3727,12 +3742,13 @@ textarea:focus {
 }
 .account-field:last-child { border-bottom: none; }
 .account-field-label { color: #5a6d82; font-size: 11px; margin-bottom: 3px; }
-.account-field-value-row { display: table; width: 100%; }
-.account-field-value-row > * { display: table-cell; vertical-align: middle; }
+.account-field-value-row { display: flex; align-items: center; gap: 10px; width: 100%; }
 .account-field-value {
-  color: #e8edf2; font-size: 14px; width: 100%;
+  flex: 1; min-width: 0;
+  color: #e8edf2; font-size: 14px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.merchant-edit-btn { flex-shrink: 0; }
 .account-field-value.empty { color: #3a4a5c; font-size: 13px; }
 .merchant-edit-btn {
   background: none; border: none; color: #38e3ac;
@@ -3774,7 +3790,13 @@ textarea:focus {
   background: rgba(255,255,255,0.04); border-radius: 10px; padding: 12px;
 }
 .api-key-top-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
-.api-key-label { font-size: 12px; color: #8a9bb0; }
+.api-key-label {
+  flex: 1; min-width: 0;
+  font-size: 12px; color: #8a9bb0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.api-key-top-row .badge { flex-shrink: 0; }
+.api-key-top-row .btn-revoke-key { flex-shrink: 0; }
 .api-key-value {
   display: flex; align-items: center; gap: 6px; margin: 6px 0 4px;
   background: rgba(0,0,0,0.2); border-radius: 6px; padding: 8px 10px; cursor: pointer;
@@ -3921,11 +3943,18 @@ textarea:focus {
 }
 .webhook-log-item:hover { background: rgba(255, 255, 255, 0.08); }
 .webhook-log-header { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.webhook-log-event { font-weight: 600; color: #e8edf2; font-size: 12px; }
-.webhook-log-status { font-size: 11px; font-weight: 600; }
-.webhook-log-attempt { font-size: 11px; color: #5a6d82; }
-.webhook-log-date { font-size: 11px; color: #5a6d82; margin-left: auto; }
-.webhook-log-url { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #5a6d82; margin-top: 3px; }
+.webhook-log-event {
+  font-weight: 600; color: #e8edf2; font-size: 12px;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 100%;
+}
+.webhook-log-status { font-size: 11px; font-weight: 600; flex-shrink: 0; }
+.webhook-log-attempt { font-size: 11px; color: #5a6d82; flex-shrink: 0; }
+.webhook-log-date { font-size: 11px; color: #5a6d82; margin-left: auto; flex-shrink: 0; }
+.webhook-log-url {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #5a6d82; margin-top: 3px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .webhook-log-details { margin-top: 10px; }
 .webhook-log-body {
   background: #0a0f14; border-radius: 6px; padding: 8px; margin-top: 6px; font-size: 11px; color: #8a9bb0;
@@ -3965,12 +3994,16 @@ textarea:focus {
 }
 .product-card-header {
   display: flex; align-items: center; justify-content: space-between;
+  gap: 8px;
   margin-bottom: 4px;
 }
 .product-card-name {
+  flex: 1; min-width: 0;
   font-family: 'JetBrains Mono', monospace; font-size: 13px;
   color: #e8edf2; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.product-card-header .badge { flex-shrink: 0; }
 .product-card-amount {
   font-size: 16px; font-weight: 700; color: #38e3ac; margin-bottom: 2px;
 }
@@ -3981,9 +4014,16 @@ textarea:focus {
 }
 .product-card-footer {
   display: flex; align-items: center; justify-content: space-between;
+  gap: 8px;
   margin-top: 6px; padding-top: 6px;
   border-top: 1px solid rgba(255, 255, 255, 0.04);
 }
+.product-card-checkouts {
+  flex: 1; min-width: 0;
+  font-size: 11px; color: #5a6d82;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.product-card-actions { display: flex; gap: 10px; flex-shrink: 0; }
 .product-card-url {
   display: flex; align-items: center; gap: 8px;
   padding: 9px 12px; margin: 6px 0;
@@ -4007,8 +4047,6 @@ textarea:focus {
   font-size: 12px; font-weight: 600; color: #38e3ac;
 }
 .product-card-url-copy .copy-icon { opacity: 0.9; }
-.product-card-checkouts { font-size: 11px; color: #5a6d82; }
-.product-card-actions { display: flex; gap: 10px; }
 .badge-gray { background: rgba(138, 155, 176, 0.15); color: #8a9bb0; }
 
 /* Merchant CTA button */
