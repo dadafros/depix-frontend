@@ -3905,8 +3905,7 @@ document.getElementById("btn-product-edit-save")?.addEventListener("click", asyn
     else body.callback_url = null;
     if (redirectUrl) body.redirect_url = redirectUrl;
     else body.redirect_url = null;
-    if (expiresIn) body.expires_in = parseInt(expiresIn, 10);
-    else body.expires_in = null;
+    body.expires_in = expiresIn ? parseInt(expiresIn, 10) : 1200;
     if (metadata) body.metadata = metadata;
     else body.metadata = null;
     const res = await apiFetch(`/api/products/${productId}`, { method: "PATCH", body: JSON.stringify(body) });
