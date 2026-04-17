@@ -734,7 +734,7 @@ describe("account advanced fields toggle", () => {
       <div id="merchant-account-list">
         <div class="account-list">
           <div class="account-advanced-toggle-row">
-            <button id="btn-account-advanced" class="merchant-text-btn">Avançado <span id="account-advanced-arrow">▸</span></button>
+            <button id="btn-account-advanced" class="advanced-toggle-btn">Configurações avançadas <span id="account-advanced-arrow" class="advanced-toggle-arrow">▸</span></button>
           </div>
           <div id="account-advanced-fields" class="account-advanced hidden">
             <div class="account-field">Callback URL</div>
@@ -758,11 +758,11 @@ describe("account advanced fields toggle", () => {
     const arrow = document.getElementById("account-advanced-arrow");
 
     // Simulate toggle logic
-    panel.classList.toggle("hidden");
-    arrow.textContent = panel.classList.contains("hidden") ? "▸" : "▾";
+    const isHidden = panel.classList.toggle("hidden");
+    arrow.classList.toggle("open", !isHidden);
 
     expect(panel.classList.contains("hidden")).toBe(false);
-    expect(arrow.textContent).toBe("▾");
+    expect(arrow.classList.contains("open")).toBe(true);
   });
 
   it("should hide advanced fields on second toggle click", () => {
@@ -771,13 +771,13 @@ describe("account advanced fields toggle", () => {
 
     // First toggle — show
     panel.classList.toggle("hidden");
-    arrow.textContent = "▾";
+    arrow.classList.add("open");
     // Second toggle — hide
-    panel.classList.toggle("hidden");
-    arrow.textContent = panel.classList.contains("hidden") ? "▸" : "▾";
+    const isHidden = panel.classList.toggle("hidden");
+    arrow.classList.toggle("open", !isHidden);
 
     expect(panel.classList.contains("hidden")).toBe(true);
-    expect(arrow.textContent).toBe("▸");
+    expect(arrow.classList.contains("open")).toBe(false);
   });
 
   it("should contain callback and redirect fields inside advanced section", () => {
@@ -916,8 +916,8 @@ describe("product advanced fields toggle", () => {
     document.body.innerHTML = `
       <div class="card">
         <div class="product-advanced-toggle-row">
-          <button id="btn-product-create-advanced" class="merchant-text-btn" type="button">
-            Avançado <span class="product-advanced-arrow">&#x25B8;</span>
+          <button id="btn-product-create-advanced" class="advanced-toggle-btn" type="button">
+            Configurações avançadas <span class="advanced-toggle-arrow">&#x25B8;</span>
           </button>
         </div>
         <div class="product-advanced hidden" data-advanced="product-create">
@@ -954,7 +954,7 @@ describe("product edit auto-expand advanced", () => {
   beforeEach(() => {
     document.body.innerHTML = `
       <div class="card">
-        <button id="btn-product-edit-advanced"><span class="product-advanced-arrow">&#x25B8;</span></button>
+        <button id="btn-product-edit-advanced"><span class="advanced-toggle-arrow">&#x25B8;</span></button>
         <div class="product-advanced hidden" data-advanced="product-edit">
           <input id="product-edit-callback-url" />
         </div>
@@ -966,17 +966,17 @@ describe("product edit auto-expand advanced", () => {
 
   it("should auto-expand when advanced fields have values", () => {
     const panel = document.querySelector('[data-advanced="product-edit"]');
-    const arrow = document.querySelector(".product-advanced-arrow");
+    const arrow = document.querySelector(".advanced-toggle-arrow");
 
     // Simulate: product has callback_url
     const hasAdvanced = true;
     if (hasAdvanced && panel) {
       panel.classList.remove("hidden");
-      arrow.innerHTML = "&#x25BE;";
+      arrow.classList.add("open");
     }
 
     expect(panel.classList.contains("hidden")).toBe(false);
-    expect(arrow.innerHTML).toBe("▾");
+    expect(arrow.classList.contains("open")).toBe(true);
   });
 
   it("should stay collapsed when no advanced fields have values", () => {
