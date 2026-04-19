@@ -10,6 +10,20 @@ function createMockFile(name, size, type) {
   return new File([buffer], name, { type });
 }
 
+// Mock FileReader to return a data: URL
+function mockFileReader() {
+  const origFileReader = global.FileReader;
+  global.FileReader = class {
+    readAsDataURL() {
+      setTimeout(() => {
+        this.result = "data:image/jpeg;base64,fakedata";
+        if (this.onload) this.onload();
+      }, 0);
+    }
+  };
+  return origFileReader;
+}
+
 describe("resizeImage", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -50,11 +64,8 @@ describe("resizeImage", () => {
       return document._createElement(tag);
     });
 
-    // Mock URL.createObjectURL / revokeObjectURL
-    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mock");
-    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    const origFileReader = mockFileReader();
 
-    // Mock Image constructor
     const origImage = global.Image;
     global.Image = class {
       constructor() {
@@ -72,6 +83,7 @@ describe("resizeImage", () => {
     expect(mockCanvas.height).toBe(360);
 
     global.Image = origImage;
+    global.FileReader = origFileReader;
   });
 
   it("should accept image/webp", async () => {
@@ -89,8 +101,8 @@ describe("resizeImage", () => {
       if (tag === "canvas") return mockCanvas;
       return document._createElement(tag);
     });
-    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mock");
-    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+
+    const origFileReader = mockFileReader();
 
     const origImage = global.Image;
     global.Image = class {
@@ -109,6 +121,7 @@ describe("resizeImage", () => {
     expect(mockCanvas.height).toBe(144);
 
     global.Image = origImage;
+    global.FileReader = origFileReader;
   });
 
   it("should fallback to JPEG when WebP toBlob returns null", async () => {
@@ -131,8 +144,8 @@ describe("resizeImage", () => {
       if (tag === "canvas") return mockCanvas;
       return document._createElement(tag);
     });
-    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mock");
-    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+
+    const origFileReader = mockFileReader();
 
     const origImage = global.Image;
     global.Image = class {
@@ -150,13 +163,13 @@ describe("resizeImage", () => {
     expect(toBlobCallCount).toBe(2); // tried WebP, then JPEG
 
     global.Image = origImage;
+    global.FileReader = origFileReader;
   });
 
   it("should handle Image load error", async () => {
     const file = createMockFile("corrupt.jpg", 1000, "image/jpeg");
 
-    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mock");
-    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    const origFileReader = mockFileReader();
 
     const origImage = global.Image;
     global.Image = class {
@@ -170,5 +183,23 @@ describe("resizeImage", () => {
     await expect(resizeImage(file, 360)).rejects.toThrow("carregar");
 
     global.Image = origImage;
+    global.FileReader = origFileReader;
+  });
+
+  it("should handle FileReader error", async () => {
+    const file = createMockFile("bad.jpg", 1000, "image/jpeg");
+
+    const origFileReader = global.FileReader;
+    global.FileReader = class {
+      readAsDataURL() {
+        setTimeout(() => {
+          if (this.onerror) this.onerror(new Error("read failed"));
+        }, 0);
+      }
+    };
+
+    await expect(resizeImage(file, 360)).rejects.toThrow("ler arquivo");
+
+    global.FileReader = origFileReader;
   });
 });

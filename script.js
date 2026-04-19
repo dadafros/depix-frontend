@@ -8,7 +8,7 @@ import {
   getSelectedAddress, setSelectedAddress,
   abbreviateAddress, hasAddresses
 } from "./addresses.js";
-import { toCents, formatBRL, formatDePix, escapeHtml } from "./utils.js";
+import { toCents, formatBRL, formatDePix, escapeHtml, slugify } from "./utils.js";
 import { validateLiquidAddress, validatePhone, validatePixKey, validateCPF, validateCNPJ, formatPixKey, preparePixKeyForApi } from "./validation.js";
 import { showToast, setMsg, goToAppropriateScreen as _goToAppropriateScreen } from "./script-helpers.js";
 import { captureReferralCode, buildRegistrationBody, clearReferralCode, buildAffiliateLink, renderReferralsHTML, generateFingerprint } from "./affiliates.js";
@@ -2404,6 +2404,25 @@ document.getElementById("products-list")?.addEventListener("click", handleCopyab
 document.getElementById("api-keys-list")?.addEventListener("click", handleCopyableClick);
 document.getElementById("sales-list")?.addEventListener("click", handleCopyableClick);
 
+// Checkout metadata modal
+document.getElementById("sales-list")?.addEventListener("click", (e) => {
+  const btn = e.target.closest(".checkout-metadata-btn");
+  if (!btn) return;
+  e.stopPropagation();
+  const raw = btn.dataset.metadata;
+  if (!raw) return;
+  try {
+    const obj = JSON.parse(raw);
+    document.getElementById("checkout-metadata-content").textContent = JSON.stringify(obj, null, 2);
+  } catch {
+    document.getElementById("checkout-metadata-content").textContent = raw;
+  }
+  document.getElementById("checkout-metadata-modal")?.classList.remove("hidden");
+});
+document.getElementById("close-checkout-metadata")?.addEventListener("click", () => {
+  document.getElementById("checkout-metadata-modal")?.classList.add("hidden");
+});
+
 // Extrato: clear filters
 document.getElementById("extrato-clear-filters")?.addEventListener("click", () => {
   // Reset search
@@ -2425,6 +2444,7 @@ document.getElementById("extrato-clear-filters")?.addEventListener("click", () =
   if (endDate) endDate.value = "";
   applyFilters();
   updateFilterBadge();
+  collapseFilterPanel("extrato-filter-panel", "extrato-filter-toggle");
 });
 
 // Extrato: load more (client-side pagination)
@@ -2595,13 +2615,18 @@ function renderCheckoutItem(c) {
   const colorClass = checkoutStatusColor(c.status);
   const amount = formatBRL(c.amount);
   const desc = c.description ? `<span class="checkout-desc">${escapeHtml(c.description)}</span>` : '<span class="checkout-desc text-muted">(sem descrição)</span>';
-  const copyIcon = '<svg class="copy-icon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  const productName = c.product_name ? `<span class="checkout-product-name">${escapeHtml(c.product_name)}</span>` : "";
   let paidIn = "";
   if (c.status === "completed" && c.created_at && c.processing_at) {
     const diffMs = new Date(c.processing_at) - new Date(c.created_at);
     const mins = Math.round(diffMs / 60000);
     paidIn = `<span class="transaction-detail"><span class="transaction-detail-label">Pago em:</span> <span class="transaction-detail-value">${mins}min</span></span>`;
   }
+  let parsedMeta = null;
+  if (c.metadata) {
+    try { parsedMeta = typeof c.metadata === "string" ? JSON.parse(c.metadata) : c.metadata; } catch { /* ignore */ }
+  }
+  const metadataBtn = parsedMeta ? `<button class="checkout-metadata-btn" type="button" data-metadata="${escapeHtml(JSON.stringify(parsedMeta))}">Metadata</button>` : "";
   return `<div class="transaction-item">
     <div class="transaction-info">
       <span class="transaction-amount">${amount}</span>
@@ -2609,9 +2634,10 @@ function renderCheckoutItem(c) {
     </div>
     <span class="transaction-status ${colorClass}">${statusLabel}</span>
     ${desc}
+    ${productName}
     <div class="transaction-details">
-      <span class="transaction-detail copyable mono" data-copy="${escapeHtml(c.payment_url || `https://pay.depixapp.com/${c.id}`)}"><span class="transaction-detail-label">Link:</span> <span class="transaction-detail-value">${escapeHtml(abbreviateHash(c.payment_url || `https://pay.depixapp.com/${c.id}`, 25, 8))}</span>${copyIcon}</span>
       ${paidIn}
+      ${metadataBtn}
     </div>
   </div>`;
 }
@@ -2750,17 +2776,6 @@ async function loadChargeView() {
   const linkText = document.getElementById("charge-payment-link-text");
   if (linkEl) linkEl.href = paymentUrl;
   if (linkText) linkText.textContent = paymentUrl;
-
-  // Generate QR code
-  const qrImg = document.getElementById("charge-qr-img");
-  const qrLoading = document.getElementById("charge-qr-loading");
-  const qrError = document.getElementById("charge-qr-error");
-  if (paymentUrl && qrImg) {
-    renderBrandedQr(paymentUrl, qrImg, { loadingEl: qrLoading, errorEl: qrError });
-  } else {
-    if (qrLoading) qrLoading.classList.add("hidden");
-    if (qrError) qrError.classList.remove("hidden");
-  }
 
   // Show share button only if Web Share API is available
   const shareBtn = document.getElementById("btn-charge-share");
@@ -3015,7 +3030,8 @@ async function populateSalesProductDropdown() {
   const dropdown = document.getElementById("sales-filter-product");
   if (!dropdown) return;
   try {
-    if (!salesProductsCache) {
+    // Retry fetch if cache is null or empty (user may have just created a product)
+    if (!salesProductsCache || salesProductsCache.length === 0) {
       const res = await apiFetch("/api/products");
       if (res.ok) {
         const data = await res.json();
@@ -3028,7 +3044,7 @@ async function populateSalesProductDropdown() {
       for (const p of salesProductsCache) {
         const opt = document.createElement("option");
         opt.value = p.id;
-        opt.textContent = p.description || p.slug;
+        opt.textContent = p.name || p.description || p.slug;
         dropdown.appendChild(opt);
       }
       if (currentSalesProductId) dropdown.value = currentSalesProductId;
@@ -3259,10 +3275,11 @@ async function loadProductsView() {
       const checkoutCount = p.total_checkouts || 0;
       const copyIcon = '<svg class="copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
       const productUrl = p.slug && merchantData?.username ? `https://pay.depixapp.com/${merchantData.username}/${p.slug}` : "";
-      const urlRow = productUrl ? `<div class="product-card-url copyable" data-copy="${escapeHtml(productUrl)}"><span class="mono">${escapeHtml(abbreviateHash(productUrl, 28, 10))}</span>${copyIcon}</div>` : "";
+      const urlRow = productUrl ? `<div class="product-card-url copyable" data-copy="${escapeHtml(productUrl)}"><span class="product-card-url-text mono">${escapeHtml(productUrl)}</span><span class="product-card-url-copy">${copyIcon}Copiar</span></div>` : "";
+      const displayName = p.name || p.slug;
       return `<div class="product-card">
         <div class="product-card-header">
-          <div class="product-card-name">${escapeHtml(p.slug)}</div>
+          <div class="product-card-name">${escapeHtml(displayName)}</div>
           ${statusBadge}
         </div>
         <div class="product-card-amount">${amount}</div>
@@ -3295,6 +3312,7 @@ async function loadProductsView() {
 async function loadProductCreateView() {
   showMerchantMenu();
   // Reset form
+  document.getElementById("product-create-name").value = "";
   document.getElementById("product-create-slug").value = "";
   document.getElementById("product-create-amount").value = "";
   document.getElementById("product-create-description").value = "";
@@ -3309,6 +3327,7 @@ async function loadProductCreateView() {
   const createAdvArrow = document.getElementById("btn-product-create-advanced")?.querySelector(".advanced-toggle-arrow");
   if (createAdvPanel) createAdvPanel.classList.add("hidden");
   if (createAdvArrow) createAdvArrow.classList.remove("open");
+  wireProductNameToSlug("product-create", { slugAlreadySet: false });
 }
 
 async function loadProductEditView() {
@@ -3328,6 +3347,7 @@ async function loadProductEditView() {
     const data = await res.json();
     const product = data.product || data;
 
+    document.getElementById("product-edit-name").value = product.name || product.slug || "";
     document.getElementById("product-edit-slug").value = product.slug || "";
     document.getElementById("product-edit-amount").value = product.amount ? formatBRL(product.amount) : "";
     document.getElementById("product-edit-description").value = product.description || "";
@@ -3356,9 +3376,41 @@ async function loadProductEditView() {
     const saveBtn = document.getElementById("btn-product-edit-save");
     if (saveBtn) saveBtn.dataset.productId = productId;
 
+    wireProductNameToSlug("product-edit", { slugAlreadySet: true });
+
   } catch (e) {
     if (!e.blocked) setMsg("product-edit-msg", e.message || "Erro ao carregar produto.");
   }
+}
+
+// Wire auto-slug + URL preview for a product form. Called each time the view
+// loads so listeners reattach against the fresh form state. Re-binding is safe
+// because we clone the inputs to strip any previous listeners.
+function wireProductNameToSlug(prefix, { slugAlreadySet }) {
+  const nameEl = document.getElementById(`${prefix}-name`);
+  const slugEl = document.getElementById(`${prefix}-slug`);
+  const previewEl = document.getElementById(`${prefix}-url-preview`);
+  if (!nameEl || !slugEl) return;
+
+  // Clone-and-replace clears any prior listeners from earlier view loads
+  const freshName = nameEl.cloneNode(true);
+  nameEl.parentNode.replaceChild(freshName, nameEl);
+  const freshSlug = slugEl.cloneNode(true);
+  slugEl.parentNode.replaceChild(freshSlug, slugEl);
+
+  let slugEdited = slugAlreadySet;
+  const updatePreview = () => {
+    if (!previewEl) return;
+    const user = merchantData?.username || "seuusuario";
+    const s = freshSlug.value || "...";
+    previewEl.textContent = `pay.depixapp.com/${user}/${s}`;
+  };
+  freshSlug.addEventListener("input", () => { slugEdited = true; updatePreview(); });
+  freshName.addEventListener("input", () => {
+    if (!slugEdited) freshSlug.value = slugify(freshName.value);
+    updatePreview();
+  });
+  updatePreview();
 }
 
 
@@ -3459,7 +3511,8 @@ document.addEventListener("click", (e) => {
 ["close-create-api-key", "close-api-key-created", "close-revoke-api-key",
  "close-merchant-password", "close-webhook-secret", "close-merchant-edit",
  "close-callback-info", "close-redirect-info", "close-metadata-info",
- "close-image-tips"].forEach(id => {
+ "close-image-tips", "close-expiration-info", "close-api-key-expires-info",
+ "close-slug-info"].forEach(id => {
   document.getElementById(id)?.addEventListener("click", () => {
     document.getElementById(id)?.closest(".modal")?.classList.add("hidden");
   });
@@ -3698,8 +3751,11 @@ function updateSalesSearchClear() {
 document.getElementById("sales-filter-toggle")?.addEventListener("click", () => {
   const panel = document.getElementById("sales-filter-panel");
   const toggle = document.getElementById("sales-filter-toggle");
-  panel.classList.toggle("hidden", !panel.classList.contains("hidden"));
-  toggle.classList.toggle("open");
+  const willOpen = panel.classList.contains("hidden");
+  panel.classList.toggle("hidden", !willOpen);
+  toggle.classList.toggle("open", willOpen);
+  // Refresh product dropdown when opening — handles case where user just created a product
+  if (willOpen) populateSalesProductDropdown();
 });
 // Sales status filter
 document.getElementById("sales-filter-status")?.addEventListener("change", () => { loadSalesView(); updateSalesFilterBadge(); collapseFilterPanel("sales-filter-panel", "sales-filter-toggle"); });
@@ -3754,6 +3810,7 @@ document.getElementById("sales-clear-filters")?.addEventListener("click", () => 
   document.querySelector("[data-sales-period='all']")?.classList.add("active");
   document.getElementById("sales-custom-range")?.classList.add("hidden");
   updateSalesSearchClear();
+  collapseFilterPanel("sales-filter-panel", "sales-filter-toggle");
   if (currentSalesProductId) {
     currentSalesProductId = null;
     currentSalesProductSlug = "";
@@ -3801,12 +3858,19 @@ document.addEventListener("click", (e) => {
     document.getElementById("metadata-info-modal")?.classList.remove("hidden");
   } else if (e.target.closest(".image-tips-btn")) {
     document.getElementById("image-tips-modal")?.classList.remove("hidden");
+  } else if (e.target.closest(".product-expires-info")) {
+    document.getElementById("expiration-info-modal")?.classList.remove("hidden");
+  } else if (e.target.closest(".api-key-expires-info")) {
+    document.getElementById("api-key-expires-info-modal")?.classList.remove("hidden");
+  } else if (e.target.closest(".product-slug-info")) {
+    document.getElementById("slug-info-modal")?.classList.remove("hidden");
   }
 });
 
 // Products — create submit
 document.getElementById("btn-product-create-submit")?.addEventListener("click", async () => {
-  const slug = document.getElementById("product-create-slug")?.value.trim();
+  const name = document.getElementById("product-create-name")?.value.trim();
+  let slug = document.getElementById("product-create-slug")?.value.trim();
   const amountInput = document.getElementById("product-create-amount");
   const description = document.getElementById("product-create-description")?.value.trim();
   const imageFile = productCreateImageRow.getFile();
@@ -3818,8 +3882,11 @@ document.getElementById("btn-product-create-submit")?.addEventListener("click", 
   setMsg("product-create-msg", "");
 
   // Validation
+  if (!name || name.length < 2) { setMsg("product-create-msg", "Informe um Nome com pelo menos 2 caracteres."); return; }
+  if (name.length > 80) { setMsg("product-create-msg", "Nome deve ter no máximo 80 caracteres."); return; }
+  if (!slug) slug = slugify(name);
   const slugErr = validateSlug(slug);
-  if (slugErr) { setMsg("product-create-msg", slugErr); return; }
+  if (slugErr) { setMsg("product-create-msg", "Não foi possível gerar uma URL a partir do Nome. Ajuste o Nome ou edite o slug em Configurações avançadas."); return; }
   const cents = toCents(amountInput?.value || "");
   if (!cents || cents < 500) { setMsg("product-create-msg", `Valor mínimo: ${formatBRL(500)}`); return; }
   if (cents > 300000) { setMsg("product-create-msg", `Valor máximo: ${formatBRL(300000)}`); return; }
@@ -3836,7 +3903,7 @@ document.getElementById("btn-product-create-submit")?.addEventListener("click", 
 
   btn.disabled = true; btn.textContent = "Criando...";
   try {
-    const body = { slug, amount: cents };
+    const body = { name, slug, amount: cents };
     if (description) body.description = description;
     if (callbackUrl) body.callback_url = callbackUrl;
     if (redirectUrl) body.redirect_url = redirectUrl;
@@ -3867,6 +3934,7 @@ document.getElementById("btn-product-create-submit")?.addEventListener("click", 
 document.getElementById("btn-product-edit-save")?.addEventListener("click", async () => {
   const productId = document.getElementById("btn-product-edit-save")?.dataset.productId;
   if (!productId) return;
+  const name = document.getElementById("product-edit-name")?.value.trim();
   const slug = document.getElementById("product-edit-slug")?.value.trim();
   const amountInput = document.getElementById("product-edit-amount");
   const description = document.getElementById("product-edit-description")?.value.trim();
@@ -3880,6 +3948,8 @@ document.getElementById("btn-product-edit-save")?.addEventListener("click", asyn
   setMsg("product-edit-msg", "");
 
   // Validation
+  if (!name || name.length < 2) { setMsg("product-edit-msg", "Informe um Nome com pelo menos 2 caracteres."); return; }
+  if (name.length > 80) { setMsg("product-edit-msg", "Nome deve ter no máximo 80 caracteres."); return; }
   const slugErr = validateSlug(slug);
   if (slugErr) { setMsg("product-edit-msg", slugErr); return; }
   const cents = toCents(amountInput?.value || "");
@@ -3898,15 +3968,14 @@ document.getElementById("btn-product-edit-save")?.addEventListener("click", asyn
 
   btn.disabled = true; btn.textContent = "Salvando...";
   try {
-    const body = { slug, amount: cents };
+    const body = { name, slug, amount: cents };
     if (description) body.description = description;
     else body.description = null;
     if (callbackUrl) body.callback_url = callbackUrl;
     else body.callback_url = null;
     if (redirectUrl) body.redirect_url = redirectUrl;
     else body.redirect_url = null;
-    if (expiresIn) body.expires_in = parseInt(expiresIn, 10);
-    else body.expires_in = null;
+    body.expires_in = expiresIn ? parseInt(expiresIn, 10) : 1200;
     if (metadata) body.metadata = metadata;
     else body.metadata = null;
     const res = await apiFetch(`/api/products/${productId}`, { method: "PATCH", body: JSON.stringify(body) });

@@ -18,14 +18,14 @@
   <meta property="og:url" content="https://depixapp.com/docs/en" />
   <meta property="og:title" content="API Documentation — DePix App" />
   <meta property="og:description" content="Complete DePix App API documentation. Authentication, checkouts, webhooks, and sandbox." />
-  <meta property="og:image" content="https://depixapp.com/social-preview.png" />
+  <meta property="og:image" content="https://depixapp.com/social-preview-docs.png" />
   <meta property="og:locale" content="en_US" />
   <meta property="og:locale:alternate" content="pt_BR" />
 
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="API Documentation — DePix App" />
   <meta name="twitter:description" content="Complete DePix App API documentation. Authentication, checkouts, webhooks, and sandbox." />
-  <meta name="twitter:image" content="https://depixapp.com/social-preview.png" />
+  <meta name="twitter:image" content="https://depixapp.com/social-preview-docs.png" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -939,13 +939,16 @@ System.out.println(response.body());</pre>
         <pre>{
   <span class="hl-key">"checkouts"</span>: [
     {
-      <span class="hl-key">"id"</span>:           <span class="hl-str">"chk_01jxxxxxxxxxxxxxxxxxxxxxx"</span>,
-      <span class="hl-key">"status"</span>:       <span class="hl-str">"completed"</span>,
-      <span class="hl-key">"amount"</span>:       <span class="hl-num">2990</span>,
-      <span class="hl-key">"description"</span>:  <span class="hl-str">"T-shirt size M"</span>,
-      <span class="hl-key">"created_at"</span>:   <span class="hl-str">"2025-06-01T15:00:00.000Z"</span>,
-      <span class="hl-key">"expires_at"</span>:   <span class="hl-str">"2025-06-01T15:30:00.000Z"</span>,
-      <span class="hl-key">"is_live"</span>:      <span class="hl-kw">true</span>
+      <span class="hl-key">"id"</span>:            <span class="hl-str">"chk_01jxxxxxxxxxxxxxxxxxxxxxx"</span>,
+      <span class="hl-key">"status"</span>:        <span class="hl-str">"completed"</span>,
+      <span class="hl-key">"amount"</span>:        <span class="hl-num">2990</span>,
+      <span class="hl-key">"description"</span>:   <span class="hl-str">"T-shirt size M"</span>,
+      <span class="hl-key">"product_name"</span>:  <span class="hl-str">"Black T-shirt"</span>,    <span class="hl-cm">// null if checkout is not linked to a product</span>
+      <span class="hl-key">"metadata"</span>:      <span class="hl-str">"{\"order_id\":\"42\"}"</span>,  <span class="hl-cm">// JSON string, null if absent</span>
+      <span class="hl-key">"created_at"</span>:    <span class="hl-str">"2025-06-01T15:00:00.000Z"</span>,
+      <span class="hl-key">"processing_at"</span>: <span class="hl-str">"2025-06-01T15:02:14.000Z"</span>,
+      <span class="hl-key">"expires_at"</span>:    <span class="hl-str">"2025-06-01T15:30:00.000Z"</span>,
+      <span class="hl-key">"is_live"</span>:       <span class="hl-kw">true</span>
     }
   ],
   <span class="hl-key">"stats"</span>: {
@@ -1001,7 +1004,8 @@ System.out.println(response.body());</pre>
       <table>
         <thead><tr><th>Field</th><th>Type</th><th></th><th>Description</th></tr></thead>
         <tbody>
-          <tr><td>slug</td><td>string</td><td><span class="req">required</span></td><td>URL identifier. Lowercase letters, numbers, and hyphens. 2-60 characters. Cannot start/end with a hyphen.</td></tr>
+          <tr><td>name</td><td>string</td><td><span class="req">required</span></td><td>Product name shown in the UI. 2-80 characters.</td></tr>
+          <tr><td>slug</td><td>string</td><td><span class="opt">optional</span></td><td>URL identifier. If omitted, auto-generated from <code>name</code>. Lowercase letters, numbers, and hyphens. 2-60 characters. Cannot start/end with a hyphen.</td></tr>
           <tr><td>amount</td><td>integer</td><td><span class="req">required</span></td><td>Amount in centavos. Minimum: 500. Maximum: 300000.</td></tr>
           <tr><td>description</td><td>string</td><td><span class="opt">optional</span></td><td>Product description. Maximum 500 characters.</td></tr>
           <tr><td>image_url</td><td>string</td><td><span class="opt">optional</span></td><td>HTTPS URL of the product image.</td></tr>
@@ -1032,6 +1036,7 @@ System.out.println(response.body());</pre>
   <span class="hl-flag">-H</span> <span class="hl-str">"Authorization: Bearer sk_live_&lt;your-key&gt;"</span> \
   <span class="hl-flag">-H</span> <span class="hl-str">"Content-Type: application/json"</span> \
   <span class="hl-flag">-d</span> <span class="hl-str">'{
+    "name": "T-shirt M",
     "slug": "tshirt-m",
     "amount": 2990,
     "description": "T-shirt size M"
@@ -1049,6 +1054,7 @@ System.out.println(response.body());</pre>
     <span class="hl-str">"Content-Type"</span>: <span class="hl-str">"application/json"</span>,
   },
   body: JSON.stringify({
+    name: <span class="hl-str">"T-shirt M"</span>,
     slug: <span class="hl-str">"tshirt-m"</span>,
     amount: <span class="hl-num">2990</span>,
     description: <span class="hl-str">"T-shirt size M"</span>,
@@ -1068,6 +1074,7 @@ resp = requests.post(
     <span class="hl-str">"https://depix-backend.vercel.app/api/products"</span>,
     headers={<span class="hl-str">"Authorization"</span>: <span class="hl-str">"Bearer sk_live_&lt;your-key&gt;"</span>},
     json={
+        <span class="hl-str">"name"</span>: <span class="hl-str">"T-shirt M"</span>,
         <span class="hl-str">"slug"</span>: <span class="hl-str">"tshirt-m"</span>,
         <span class="hl-str">"amount"</span>: <span class="hl-num">2990</span>,
         <span class="hl-str">"description"</span>: <span class="hl-str">"T-shirt size M"</span>,
@@ -1090,6 +1097,7 @@ curl_setopt_array($ch, [
         <span class="hl-str">"Content-Type: application/json"</span>,
     ],
     CURLOPT_POSTFIELDS =&gt; json_encode([
+        <span class="hl-str">"name"</span> =&gt; <span class="hl-str">"T-shirt M"</span>,
         <span class="hl-str">"slug"</span> =&gt; <span class="hl-str">"tshirt-m"</span>,
         <span class="hl-str">"amount"</span> =&gt; <span class="hl-num">2990</span>,
         <span class="hl-str">"description"</span> =&gt; <span class="hl-str">"T-shirt size M"</span>,
@@ -1107,7 +1115,7 @@ $data = json_decode($response, <span class="hl-kw">true</span>);
           <pre><span class="hl-kw">using</span> <span class="hl-kw">var</span> client = <span class="hl-kw">new</span> HttpClient();
 client.DefaultRequestHeaders.Add(<span class="hl-str">"Authorization"</span>, <span class="hl-str">"Bearer sk_live_&lt;your-key&gt;"</span>);
 
-<span class="hl-kw">var</span> payload = <span class="hl-kw">new</span> { slug = <span class="hl-str">"tshirt-m"</span>, amount = <span class="hl-num">2990</span>, description = <span class="hl-str">"T-shirt size M"</span> };
+<span class="hl-kw">var</span> payload = <span class="hl-kw">new</span> { name = <span class="hl-str">"T-shirt M"</span>, slug = <span class="hl-str">"tshirt-m"</span>, amount = <span class="hl-num">2990</span>, description = <span class="hl-str">"T-shirt size M"</span> };
 
 <span class="hl-kw">var</span> res = <span class="hl-kw">await</span> client.PostAsync(
     <span class="hl-str">"https://depix-backend.vercel.app/api/products"</span>,
@@ -1120,7 +1128,7 @@ Console.WriteLine(<span class="hl-kw">await</span> res.Content.ReadAsStringAsync
       <div class="lang-panel" data-lang="go">
         <div class="code-wrap">
           <button class="copy-btn" onclick="copyCode(this)">copy</button>
-          <pre>body := <span class="hl-str">`{"slug":"tshirt-m","amount":2990,"description":"T-shirt size M"}`</span>
+          <pre>body := <span class="hl-str">`{"name":"T-shirt M","slug":"tshirt-m","amount":2990,"description":"T-shirt size M"}`</span>
 
 req, _ := http.NewRequest(<span class="hl-str">"POST"</span>, <span class="hl-str">"https://depix-backend.vercel.app/api/products"</span>, strings.NewReader(body))
 req.Header.Set(<span class="hl-str">"Authorization"</span>, <span class="hl-str">"Bearer sk_live_&lt;your-key&gt;"</span>)
@@ -1143,7 +1151,7 @@ req = Net::HTTP::Post.new(uri, {
   <span class="hl-str">"Authorization"</span> =&gt; <span class="hl-str">"Bearer sk_live_&lt;your-key&gt;"</span>,
   <span class="hl-str">"Content-Type"</span> =&gt; <span class="hl-str">"application/json"</span>,
 })
-req.body = { slug: <span class="hl-str">"tshirt-m"</span>, amount: <span class="hl-num">2990</span>, description: <span class="hl-str">"T-shirt size M"</span> }.to_json
+req.body = { name: <span class="hl-str">"T-shirt M"</span>, slug: <span class="hl-str">"tshirt-m"</span>, amount: <span class="hl-num">2990</span>, description: <span class="hl-str">"T-shirt size M"</span> }.to_json
 
 res = Net::HTTP.start(uri.hostname, uri.port, use_ssl: <span class="hl-kw">true</span>) { |http| http.request(req) }
 puts JSON.parse(res.body)</pre>
@@ -1155,7 +1163,7 @@ puts JSON.parse(res.body)</pre>
           <button class="copy-btn" onclick="copyCode(this)">copy</button>
           <pre>HttpClient client = HttpClient.newHttpClient();
 String json = <span class="hl-str">"""
-    {"slug":"tshirt-m","amount":2990,"description":"T-shirt size M"}"""</span>;
+    {"name":"T-shirt M","slug":"tshirt-m","amount":2990,"description":"T-shirt size M"}"""</span>;
 
 HttpRequest request = HttpRequest.newBuilder()
     .uri(URI.create(<span class="hl-str">"https://depix-backend.vercel.app/api/products"</span>))
@@ -1174,6 +1182,7 @@ System.out.println(response.body());</pre>
         <pre>{
   <span class="hl-key">"product"</span>: {
     <span class="hl-key">"id"</span>:           <span class="hl-str">"prd_xxx"</span>,
+    <span class="hl-key">"name"</span>:         <span class="hl-str">"T-shirt M"</span>,
     <span class="hl-key">"slug"</span>:         <span class="hl-str">"tshirt-m"</span>,
     <span class="hl-key">"amount"</span>:       <span class="hl-num">2990</span>,
     <span class="hl-key">"description"</span>:  <span class="hl-str">"T-shirt size M"</span>,
@@ -1205,7 +1214,7 @@ System.out.println(response.body());</pre>
         <thead><tr><th>Parameter</th><th>Description</th></tr></thead>
         <tbody>
           <tr><td>active</td><td>Filter by status: <code>1</code> (active) or <code>0</code> (inactive).</td></tr>
-          <tr><td>q</td><td>Search by slug or description.</td></tr>
+          <tr><td>q</td><td>Search by name, slug, or description.</td></tr>
           <tr><td>limit</td><td>Number of results. Default: 50. Maximum: 100.</td></tr>
           <tr><td>offset</td><td>Pagination. Default: 0.</td></tr>
         </tbody>
@@ -1224,6 +1233,7 @@ System.out.println(response.body());</pre>
   <span class="hl-key">"products"</span>: [
     {
       <span class="hl-key">"id"</span>:          <span class="hl-str">"prd_xxx"</span>,
+      <span class="hl-key">"name"</span>:        <span class="hl-str">"T-shirt M"</span>,
       <span class="hl-key">"slug"</span>:        <span class="hl-str">"tshirt-m"</span>,
       <span class="hl-key">"amount"</span>:      <span class="hl-num">2990</span>,
       <span class="hl-key">"description"</span>: <span class="hl-str">"T-shirt size M"</span>,
@@ -1264,6 +1274,7 @@ System.out.println(response.body());</pre>
         <pre>{
   <span class="hl-key">"product"</span>: {
     <span class="hl-key">"id"</span>:           <span class="hl-str">"prd_xxx"</span>,
+    <span class="hl-key">"name"</span>:         <span class="hl-str">"T-shirt M"</span>,
     <span class="hl-key">"slug"</span>:         <span class="hl-str">"tshirt-m"</span>,
     <span class="hl-key">"amount"</span>:       <span class="hl-num">2990</span>,
     <span class="hl-key">"description"</span>:  <span class="hl-str">"T-shirt size M"</span>,
@@ -1295,6 +1306,7 @@ System.out.println(response.body());</pre>
       <table>
         <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
         <tbody>
+          <tr><td>name</td><td>string</td><td>New product name. 2-80 characters.</td></tr>
           <tr><td>slug</td><td>string</td><td>New URL identifier. Same rules as creation.</td></tr>
           <tr><td>amount</td><td>integer</td><td>New amount in centavos.</td></tr>
           <tr><td>description</td><td>string</td><td>New description.</td></tr>
@@ -1320,6 +1332,7 @@ System.out.println(response.body());</pre>
         <pre>{
   <span class="hl-key">"product"</span>: {
     <span class="hl-key">"id"</span>:           <span class="hl-str">"prd_xxx"</span>,
+    <span class="hl-key">"name"</span>:         <span class="hl-str">"T-shirt M"</span>,
     <span class="hl-key">"slug"</span>:         <span class="hl-str">"tshirt-m"</span>,
     <span class="hl-key">"amount"</span>:       <span class="hl-num">3490</span>,
     <span class="hl-key">"description"</span>:  <span class="hl-str">"T-shirt size M - Special Edition"</span>,
@@ -1438,6 +1451,7 @@ System.out.println(response.body());</pre>
         <pre>{
   <span class="hl-key">"product"</span>: {
     <span class="hl-key">"id"</span>:          <span class="hl-str">"prd_xxx"</span>,
+    <span class="hl-key">"name"</span>:        <span class="hl-str">"T-shirt M"</span>,
     <span class="hl-key">"slug"</span>:        <span class="hl-str">"tshirt-m"</span>,
     <span class="hl-key">"amount"</span>:      <span class="hl-num">2990</span>,
     <span class="hl-key">"description"</span>: <span class="hl-str">"T-shirt size M"</span>,

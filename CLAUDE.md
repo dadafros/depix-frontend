@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 DePix is a Progressive Web App (PWA) for generating PIX QR codes (deposits) and processing Liquid-to-PIX withdrawals. It's a vanilla JavaScript SPA with zero npm runtime dependencies, hosted on GitHub Pages.
 
 **This project is one of two repos:**
-- **Frontend (this repo)**: `dadafros/depix` — Vanilla JS PWA on GitHub Pages
+- **Frontend (this repo)**: `dadafros/depix-frontend` — Vanilla JS PWA on GitHub Pages
 - **Backend**: `dadafros/depix-backend` — Vercel serverless API
 
 **Live URL**: `https://depixapp.com`
@@ -145,6 +145,104 @@ Requires Node.js >= 22.
 - **Success messages**: Green (#68d391)
 - **Toast notifications**: Bottom center, auto-dismiss after 2s
 
+## Frontend Best Practices — Non-negotiable
+
+The app renders tons of user-supplied strings — callback URLs, emails, names, Liquid addresses, product names, webhook URLs, affiliate codes. **Any of them can be arbitrarily long.** Every time we render one, the layout must survive the worst-case length without hiding buttons off-screen or forcing horizontal scroll. The 420px mobile card leaves zero slack.
+
+Treat these as defaults. If you render user input without following them, you are shipping a bug.
+
+### Rule 1 — Every user-supplied string must have a truncation strategy
+
+Before writing `<span>${userString}</span>`, decide: **single-line truncate with ellipsis** (default for labels, names, URLs in lists) or **wrap to multiple lines** (long-form text: modal bodies, descriptions, webhook payload pre-blocks).
+
+Single-line truncate (the default):
+```css
+.my-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+```
+
+Wrap long strings:
+```css
+.my-body {
+  overflow-wrap: anywhere;   /* or word-break: break-all for URLs/hashes */
+}
+```
+
+No third option. **Never leave a user string with default CSS** — the default is `white-space: normal` which wraps at spaces, and a long URL without spaces will overflow its container.
+
+### Rule 2 — Flex children that truncate MUST have `min-width: 0`
+
+Flex items default to `min-width: auto`, which means they refuse to shrink below their content's intrinsic size. `overflow: hidden; text-overflow: ellipsis; white-space: nowrap` **will not work** on a flex child unless you also set `min-width: 0` — instead the child grows past the container and pushes siblings (edit buttons, dates, badges) off-screen.
+
+Canonical row pattern (long value + trailing action):
+```css
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.row .value {
+  flex: 1;
+  min-width: 0;                   /* THIS IS THE LINE THAT FAILS SILENTLY WHEN OMITTED */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.row .action {
+  flex-shrink: 0;                 /* button/badge/date keeps its size, never gets pushed */
+}
+```
+
+This is exactly the bug we hit with the "Editar Callback URL" button — it was a `display: table` row without `table-layout: fixed`, which has the same failure mode. **Prefer flex over table layouts.** If you must use `display: table`, always add `table-layout: fixed`.
+
+### Rule 3 — Trailing actions use `flex-shrink: 0`
+
+Edit buttons, copy buttons, delete icons, badges, timestamps, and any other "chrome" next to a user string must have `flex-shrink: 0`. Without it, a long value can compress the button until it disappears or wraps awkwardly.
+
+### Rule 4 — Parent containers must constrain width
+
+The outermost card is `max-width: 420px`. Inside, every container that holds user strings must either:
+- Be a flex/grid child that inherits its width from the parent, OR
+- Have `max-width: 100%` explicitly.
+
+A `display: inline-block` element with long unbreakable content can still push past a 420px card if the parent doesn't constrain it.
+
+### Rule 5 — Abbreviate long strings in JS as a second line of defense
+
+For Liquid addresses, webhook URLs, API keys, we already abbreviate server-side values in JS (`abbreviateHash`, substring). This is **in addition to** the CSS truncation, not a replacement — CSS still has to truncate because the abbreviation still contains no spaces and can be pushed around by flex children without `min-width: 0`.
+
+### Rule 6 — Test with a pathological string before shipping
+
+Before marking any view done, paste a 200-character URL or a 50-character product name into the field and verify:
+1. The edit/copy/action button is still visible and clickable.
+2. Nothing causes horizontal scroll on the viewport.
+3. The string is either truncated with `…` or wraps cleanly.
+
+If you can't test in a browser (no dev server running), say so explicitly — don't claim the UI works based on the diff alone. Type-checks and unit tests verify code correctness, not layout.
+
+### Rule 7 — Modal inputs get `width: 100%` and `box-sizing: border-box`
+
+Inputs that receive user values (including pasted URLs) must not expand their modal. `<input type="text">` defaults to a fixed `size`-based width; always style modal inputs with `width: 100%; box-sizing: border-box` so they scroll horizontally internally instead of widening the modal.
+
+### Rule 8 — When in doubt, prefer the safe default
+
+- **Card titles / names / labels** → single-line truncate.
+- **URLs, emails, addresses in lists** → single-line truncate (abbreviate in JS if long-form copy is needed elsewhere).
+- **Long-form prose (modal bodies, descriptions, webhook payloads)** → `word-break: break-all` or `overflow-wrap: anywhere`.
+- **Never**: leave a user string with default CSS and hope it's short enough.
+
+### Red flags to grep for during code review
+
+Before approving any frontend PR that renders user data:
+- `white-space: nowrap` without a matching `overflow: hidden; text-overflow: ellipsis` nearby.
+- Flex children rendering a user string without `min-width: 0`.
+- `display: table` without `table-layout: fixed`.
+- Action buttons inside flex rows without `flex-shrink: 0`.
+- `escapeHtml(someUserField)` injected into a `<span>`/`<div>` with no CSS class that bounds its width.
+
 ## Internationalization (i18n) — Static Pages
 
 The `/docs` and `/btcpay` pages support Portuguese (default) and English:
@@ -205,7 +303,7 @@ Frontend changes reflect immediately (volume mount). See `../depix-dev/CLAUDE.md
 
 ## Git
 
-- Remote: `git@github-personal:dadafros/depix.git`
+- Remote: `git@github-personal:dadafros/depix-frontend.git`
 - SSH key alias `github-personal` maps to `~/.ssh/id_ed25519_outlook`
 - Commit as: `dadafros <davi_bf@outlook.com>`
 - Branch naming: `feat/*` for features, `claude/*` for Claude Code branches
@@ -216,28 +314,49 @@ Frontend changes reflect immediately (volume mount). See `../depix-dev/CLAUDE.md
 
 ### How it works
 
-The app uses a service worker with two caching strategies:
+The app uses a service worker with three caching strategies:
 - **HTML (`index.html`)**: Network-first — always fetches from server, falls back to cache when offline
-- **Static assets (JS, CSS, images)**: Cache-first — served from cache for speed, versioned via `?v=N` query strings
+- **JS / CSS**: Network-first — prevents stale ES module drift (see "iOS PWA blank-screen incident" below). Falls back to cache when offline.
+- **Images / icons / manifest**: Cache-first — served from cache for speed. Versioned via `?v=N`.
 
-A single `APP_VERSION` constant in `service-worker.js` controls all cache busting. When bumped, all asset URLs change (e.g. `script.js?v=90` → `script.js?v=91`), causing cache misses that force fresh downloads.
+A single `APP_VERSION` constant in `service-worker.js` controls cache naming (`depix-v${APP_VERSION}`). When bumped, the install event creates a brand-new cache and the activate event deletes older ones.
 
 The SW uses `skipWaiting()` + `clients.claim()` so new versions activate immediately. The app detects `controllerchange` and auto-reloads — users never stay stuck on an old version.
+
+### CRITICAL: the unversioned-modules gotcha (iOS PWA blank-screen incident, 2026-04-16)
+
+ES module imports in `script.js` use **unversioned specifiers**:
+
+```js
+import { slugify } from "./utils.js";  // NOT "./utils.js?v=123"
+```
+
+The browser resolves these relative to the importing module's URL but **drops the query string** during resolution, so the actual request is `https://depixapp.com/utils.js` — with no `?v=`. That means:
+
+- Versioned entries in `STATIC_FILES` (like `./utils.js?v=124`) are **never hit by module imports**.
+- If the SW's fetch handler uses cache-first and dynamically caches unversioned URLs, the cache can permanently retain a stale `./utils.js` from an earlier version. When a later `script.js` imports a newly-added export, the browser gets the old file, parsing fails with `SyntaxError: Importing binding name 'X' is not found`, and the whole app is dead before `serviceWorker.register` runs — so the SW can't even self-repair.
+
+**Mitigations in place (do not remove without replacing):**
+
+1. `STATIC_FILES` pre-caches JS modules under BOTH URLs — `./utils.js?v=${APP_VERSION}` (for the HTML references) AND `./utils.js` (for the ES module imports). Each install guarantees the unversioned entry matches the new source.
+2. JS/CSS fetches are **network-first**. Even if the cache has a stale module, the network response takes precedence. Cache is only used when offline.
+
+Images, icons, and the manifest remain cache-first because they don't cross-version-drift and cache-first is cheaper for them.
 
 ### CRITICAL: Deploy checklist
 
 **Every time you change ANY frontend file (JS, CSS, HTML), you MUST do both of these steps before pushing:**
 
-1. **Bump `APP_VERSION`** in `service-worker.js` (line 3): e.g. `const APP_VERSION = 90;` → `const APP_VERSION = 91;`
-2. **Update `?v=` query strings** in `index.html` to match the new version number. Search for `?v=` — there are ~6 occurrences (script.js, style.css, router.js, manifest.json, icons). Change all from `?v=90` to `?v=91`.
+1. **Bump `APP_VERSION`** in `service-worker.js` (line 3): e.g. `const APP_VERSION = 124;` → `const APP_VERSION = 125;`
+2. **Update `?v=` query strings** in `index.html` to match the new version number. Search for `?v=` — there are ~6 occurrences (script.js, style.css, manifest.json, icons). Change all from `?v=124` to `?v=125`.
 
-**Both steps are required.** If you only bump `APP_VERSION` but not the HTML query strings, the SW will cache new URLs but the HTML will still reference old ones. If you only bump the HTML but not `APP_VERSION`, the SW won't reinstall.
+**Both steps are required.** If you only bump `APP_VERSION` but not the HTML query strings, the HTML will reference the old version. If you only bump the HTML but not `APP_VERSION`, the SW won't reinstall.
 
 ### What happens if you forget
 
 - Users will be served stale cached files from the old service worker
-- The app can break entirely if JS/CSS imports changed between versions
-- There is no way to remotely force-update users — they must wait for the browser to detect the SW change
+- New-export imports will break (classic blank-screen symptom) — the unversioned-modules mitigations help but don't cover every case
+- There is no remote kill switch — stuck users must wait for the browser's 24h SW auto-update or reinstall the PWA manually
 
 ### Files involved
 
@@ -248,13 +367,13 @@ The SW uses `skipWaiting()` + `clients.claim()` so new versions activate immedia
 
 ### Adding new files to the cache
 
-If you create a new JS/CSS file, add it to the `STATIC_FILES` array in `service-worker.js` using the versioned template:
+If you create a new JS module, add it to the `JS_MODULES` array in `service-worker.js` (it gets spread into `STATIC_FILES` both with and without `?v=`). For CSS or other static files, add directly to `STATIC_FILES` using the versioned template:
 ```js
-`./new-file.js?v=${APP_VERSION}`,
+`./new-file.css?v=${APP_VERSION}`,
 ```
 And reference it in `index.html` with the matching query string:
 ```html
-<script type="module" src="new-file.js?v=90"></script>
+<link rel="stylesheet" href="new-file.css?v=124" />
 ```
 
 ## Workflow Rules
@@ -265,3 +384,15 @@ And reference it in `index.html` with the matching query string:
 - **Use PRs for large or complex work**: Large refactors, high-risk changes, or substantial multi-file work should go on a separate branch and be opened as a PR for review.
 - **User instruction wins**: If the user explicitly asks for a different flow, follow the user's instruction.
 - **Sync before branching**: If the work should go through a PR, always sync with `main` first (`git pull origin main`) before creating or updating the branch.
+
+## Git Worktrees
+
+Ciclo de vida completo em `~/.claude/CLAUDE.md`. Específico deste repo:
+
+- **Localização**: `.claude/worktrees/<branch-slug>/`
+- **Branch default**: `main`
+- **Naming convention**: `feat/*` (features), `fix/*` (bugfixes), `claude/*` (agent work)
+- **Fluxo padrão** (default): worktree com branch → commit → `git push origin HEAD:main` → cleanup imediato (remove worktree + delete branch + `git fetch --prune`)
+- **Fluxo PR** (trabalho grande/complexo, ver "Workflow Rules"): worktree → `git push -u origin <branch>` → `gh pr create` → após merge, mesmo cleanup
+- **Antes de criar**: `git worktree list` + `git branch -a` pra não duplicar trabalho existente
+- **Reminder**: ao editar arquivos JS/CSS/HTML, o "Deploy checklist" acima (bump `APP_VERSION` + `?v=` query strings) aplica antes de pushar pra main — independente do fluxo

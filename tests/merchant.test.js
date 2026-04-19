@@ -64,13 +64,18 @@ function renderCheckoutItem(c) {
   const colorClass = checkoutStatusColor(c.status);
   const amount = formatBRL(c.amount);
   const desc = c.description ? `<span class="checkout-desc">${escapeHtml(c.description)}</span>` : '<span class="checkout-desc text-muted">(sem descrição)</span>';
-  const copyIcon = '<svg class="copy-icon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  const productName = c.product_name ? `<span class="checkout-product-name">${escapeHtml(c.product_name)}</span>` : "";
   let paidIn = "";
   if (c.status === "completed" && c.created_at && c.processing_at) {
     const diffMs = new Date(c.processing_at) - new Date(c.created_at);
     const mins = Math.round(diffMs / 60000);
     paidIn = `<span class="transaction-detail"><span class="transaction-detail-label">Pago em:</span> <span class="transaction-detail-value">${mins}min</span></span>`;
   }
+  let parsedMeta = null;
+  if (c.metadata) {
+    try { parsedMeta = typeof c.metadata === "string" ? JSON.parse(c.metadata) : c.metadata; } catch { /* ignore */ }
+  }
+  const metadataBtn = parsedMeta ? `<button class="checkout-metadata-btn" type="button" data-metadata="${escapeHtml(JSON.stringify(parsedMeta))}">Metadata</button>` : "";
   return `<div class="transaction-item">
     <div class="transaction-info">
       <span class="transaction-amount">${amount}</span>
@@ -78,10 +83,10 @@ function renderCheckoutItem(c) {
     </div>
     <span class="transaction-status ${colorClass}">${statusLabel}</span>
     ${desc}
+    ${productName}
     <div class="transaction-details">
-      <span class="transaction-detail copyable mono" data-copy="${escapeHtml(c.id || "")}"><span class="transaction-detail-label">ID:</span> <span class="transaction-detail-value">${escapeHtml(c.id || "")}</span>${copyIcon}</span>
-      <span class="transaction-detail copyable mono" data-copy="${escapeHtml(c.payment_url || "")}"><span class="transaction-detail-label">Link:</span> <span class="transaction-detail-value">${escapeHtml(abbreviateHash(c.payment_url || "", 25, 8))}</span>${copyIcon}</span>
       ${paidIn}
+      ${metadataBtn}
     </div>
   </div>`;
 }
@@ -137,9 +142,6 @@ function buildPaymentUrl(merchantData) {
 function setupChargeDOM() {
   const section = document.createElement("div");
   section.innerHTML = `
-    <img id="charge-qr-img" class="hidden" />
-    <div id="charge-qr-loading"></div>
-    <div id="charge-qr-error" class="hidden"></div>
     <input id="charge-payment-link" readonly />
     <button id="btn-charge-copy"></button>
     <button id="btn-charge-download"></button>
@@ -334,24 +336,61 @@ describe("renderCheckoutItem", () => {
     expect(html).not.toContain("Pago em:");
   });
 
-  it("should contain the checkout ID in output", () => {
+  it("should not contain payment link", () => {
     const html = renderCheckoutItem(baseCheckout);
-    expect(html).toContain("chk_abc123def456");
+    expect(html).not.toContain("Link:");
+    expect(html).not.toContain("payment_url");
   });
 
-  it("should contain payment_url in data-copy attribute", () => {
-    const html = renderCheckoutItem(baseCheckout);
-    expect(html).toContain(baseCheckout.payment_url);
-  });
-
-  it("should abbreviate payment_url in display text", () => {
-    const longUrl = "https://depixapp.com/pay/chk_abc123def456ghijklmnopqrstuvwxyz";
-    const checkout = { ...baseCheckout, payment_url: longUrl };
+  it("should show product name when present", () => {
+    const checkout = { ...baseCheckout, product_name: "Camiseta Preta" };
     const html = renderCheckoutItem(checkout);
-    // The abbreviated form should contain the ellipsis character
-    expect(html).toContain("\u2026");
-    // Full URL should still be in data-copy
-    expect(html).toContain(longUrl);
+    expect(html).toContain("checkout-product-name");
+    expect(html).toContain("Camiseta Preta");
+  });
+
+  it("should not show product name when absent", () => {
+    const html = renderCheckoutItem(baseCheckout);
+    expect(html).not.toContain("checkout-product-name");
+  });
+
+  it("should escape XSS in product name", () => {
+    const checkout = { ...baseCheckout, product_name: '<img onerror="alert(1)">' };
+    const html = renderCheckoutItem(checkout);
+    expect(html).not.toContain("<img");
+    expect(html).toContain("&lt;img");
+  });
+
+  it("should show metadata button when metadata is present", () => {
+    const checkout = { ...baseCheckout, metadata: '{"sku":"ABC123"}' };
+    const html = renderCheckoutItem(checkout);
+    expect(html).toContain("checkout-metadata-btn");
+    expect(html).toContain("Metadata");
+    expect(html).toContain("data-metadata");
+  });
+
+  it("should handle metadata as object (already parsed)", () => {
+    const checkout = { ...baseCheckout, metadata: { sku: "ABC123" } };
+    const html = renderCheckoutItem(checkout);
+    expect(html).toContain("checkout-metadata-btn");
+  });
+
+  it("should not show metadata button when metadata is null", () => {
+    const html = renderCheckoutItem(baseCheckout);
+    expect(html).not.toContain("checkout-metadata-btn");
+  });
+
+  it("should not show metadata button when metadata is invalid JSON string", () => {
+    const checkout = { ...baseCheckout, metadata: "not-json" };
+    const html = renderCheckoutItem(checkout);
+    expect(html).not.toContain("checkout-metadata-btn");
+  });
+
+  it("should escape metadata content in data attribute", () => {
+    const checkout = { ...baseCheckout, metadata: '{"key":"value with \\"quotes\\""}' };
+    const html = renderCheckoutItem(checkout);
+    expect(html).toContain("checkout-metadata-btn");
+    expect(html).not.toContain('data-metadata="{"key"');
   });
 });
 
@@ -611,9 +650,6 @@ describe("charge view DOM", () => {
   });
 
   it("should have all required elements", () => {
-    expect(document.getElementById("charge-qr-img")).toBeTruthy();
-    expect(document.getElementById("charge-qr-loading")).toBeTruthy();
-    expect(document.getElementById("charge-qr-error")).toBeTruthy();
     expect(document.getElementById("charge-payment-link")).toBeTruthy();
     expect(document.getElementById("btn-charge-copy")).toBeTruthy();
     expect(document.getElementById("btn-charge-download")).toBeTruthy();
@@ -659,8 +695,7 @@ describe("charge view download QR", () => {
 
   it("should create a download link with correct filename", () => {
     setupChargeDOM();
-    const img = document.getElementById("charge-qr-img");
-    img.src = "data:image/png;base64,fakedata";
+    const generatedDataUrl = "data:image/png;base64,fakedata";
 
     let clickedHref = "";
     let clickedDownload = "";
@@ -676,9 +711,9 @@ describe("charge view download QR", () => {
       return el;
     });
 
-    // Simulate download button click
+    // Simulate download button click — QR is generated on demand via renderPrintableQr
     const a = document.createElement("a");
-    a.href = img.src;
+    a.href = generatedDataUrl;
     a.download = "depix-qrcode.png";
     a.click();
 
@@ -699,7 +734,7 @@ describe("account advanced fields toggle", () => {
       <div id="merchant-account-list">
         <div class="account-list">
           <div class="account-advanced-toggle-row">
-            <button id="btn-account-advanced" class="merchant-text-btn">Avançado <span id="account-advanced-arrow">▸</span></button>
+            <button id="btn-account-advanced" class="advanced-toggle-btn">Configurações avançadas <span id="account-advanced-arrow" class="advanced-toggle-arrow">▸</span></button>
           </div>
           <div id="account-advanced-fields" class="account-advanced hidden">
             <div class="account-field">Callback URL</div>
@@ -723,11 +758,11 @@ describe("account advanced fields toggle", () => {
     const arrow = document.getElementById("account-advanced-arrow");
 
     // Simulate toggle logic
-    panel.classList.toggle("hidden");
-    arrow.textContent = panel.classList.contains("hidden") ? "▸" : "▾";
+    const isHidden = panel.classList.toggle("hidden");
+    arrow.classList.toggle("open", !isHidden);
 
     expect(panel.classList.contains("hidden")).toBe(false);
-    expect(arrow.textContent).toBe("▾");
+    expect(arrow.classList.contains("open")).toBe(true);
   });
 
   it("should hide advanced fields on second toggle click", () => {
@@ -736,13 +771,13 @@ describe("account advanced fields toggle", () => {
 
     // First toggle — show
     panel.classList.toggle("hidden");
-    arrow.textContent = "▾";
+    arrow.classList.add("open");
     // Second toggle — hide
-    panel.classList.toggle("hidden");
-    arrow.textContent = panel.classList.contains("hidden") ? "▸" : "▾";
+    const isHidden = panel.classList.toggle("hidden");
+    arrow.classList.toggle("open", !isHidden);
 
     expect(panel.classList.contains("hidden")).toBe(true);
-    expect(arrow.textContent).toBe("▸");
+    expect(arrow.classList.contains("open")).toBe(false);
   });
 
   it("should contain callback and redirect fields inside advanced section", () => {
@@ -778,9 +813,10 @@ describe("product card URL rendering", () => {
 
   it("should include URL in product card HTML with copyable class", () => {
     const url = buildProductUrl({ username: "loja" }, "camiseta");
-    const html = `<div class="product-card-url copyable" data-copy="${url}">${abbreviateHash(url, 28, 10)}</div>`;
+    const html = `<div class="product-card-url copyable" data-copy="${url}"><span class="product-card-url-text mono">${url}</span></div>`;
     expect(html).toContain("copyable");
     expect(html).toContain("data-copy=\"https://pay.depixapp.com/loja/camiseta\"");
+    expect(html).toContain("https://pay.depixapp.com/loja/camiseta");
   });
 });
 
@@ -880,8 +916,8 @@ describe("product advanced fields toggle", () => {
     document.body.innerHTML = `
       <div class="card">
         <div class="product-advanced-toggle-row">
-          <button id="btn-product-create-advanced" class="merchant-text-btn" type="button">
-            Avançado <span class="product-advanced-arrow">&#x25B8;</span>
+          <button id="btn-product-create-advanced" class="advanced-toggle-btn" type="button">
+            Configurações avançadas <span class="advanced-toggle-arrow">&#x25B8;</span>
           </button>
         </div>
         <div class="product-advanced hidden" data-advanced="product-create">
@@ -918,7 +954,7 @@ describe("product edit auto-expand advanced", () => {
   beforeEach(() => {
     document.body.innerHTML = `
       <div class="card">
-        <button id="btn-product-edit-advanced"><span class="product-advanced-arrow">&#x25B8;</span></button>
+        <button id="btn-product-edit-advanced"><span class="advanced-toggle-arrow">&#x25B8;</span></button>
         <div class="product-advanced hidden" data-advanced="product-edit">
           <input id="product-edit-callback-url" />
         </div>
@@ -930,17 +966,17 @@ describe("product edit auto-expand advanced", () => {
 
   it("should auto-expand when advanced fields have values", () => {
     const panel = document.querySelector('[data-advanced="product-edit"]');
-    const arrow = document.querySelector(".product-advanced-arrow");
+    const arrow = document.querySelector(".advanced-toggle-arrow");
 
     // Simulate: product has callback_url
     const hasAdvanced = true;
     if (hasAdvanced && panel) {
       panel.classList.remove("hidden");
-      arrow.innerHTML = "&#x25BE;";
+      arrow.classList.add("open");
     }
 
     expect(panel.classList.contains("hidden")).toBe(false);
-    expect(arrow.innerHTML).toBe("▾");
+    expect(arrow.classList.contains("open")).toBe(true);
   });
 
   it("should stay collapsed when no advanced fields have values", () => {
