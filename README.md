@@ -18,6 +18,7 @@ Progressive Web App for generating PIX QR codes and processing withdrawals via t
 - **User Accounts** — Registration with email verification, JWT authentication
 - **Address Management** — Save multiple Liquid wallet addresses locally
 - **Transaction Reports** — Request deposit/withdrawal reports delivered via email (PDF + CSV)
+- **Área do Lojista** — Unlocked after ≥10 deposits + CNPJ verification: create charges, products, view sales, manage API keys and webhook logs
 - **PWA** — Installable on mobile and desktop, works offline
 - **Zero build step** — Pure vanilla JavaScript with ES modules
 
@@ -64,12 +65,25 @@ depix/
 
 | Screen | Route | Description |
 |--------|-------|-------------|
+| Landing | `#landing` | Marketing page for logged-out visitors |
 | Login | `#login` | Username + password authentication |
 | Register | `#register` | Account creation (name, email, WhatsApp, username, password) |
 | Verify | `#verify` | 6-digit email verification code |
+| Forgot / Reset Password | `#forgot-password`, `#reset-password` | Request + apply password reset |
 | Home | `#home` | QR code generation (deposit) + withdrawal with toggle |
 | No Address | `#no-address` | Empty state — prompts user to add first wallet address |
-| Reports | `#reports` | Request deposit/withdrawal reports by date range |
+| Transactions | `#transactions` | Transaction list + PDF/CSV report by date range |
+| Affiliates / Commissions | `#affiliates`, `#commissions` | Referral link, referred-user list, commission balance |
+| FAQ | `#faq` | Static help content |
+| **Área do Lojista** | | Unlocked after ≥10 deposits + CNPJ verification |
+| Verify Account | `#verify-account` | CNPJ + website gate into merchant area |
+| Merchant dispatcher | `#merchant` | Routes to the right merchant sub-view |
+| Criar Cobrança | `#merchant-charge` | Create on-demand checkout |
+| Minhas Vendas | `#merchant-sales` | Checkout list with status filters + polling |
+| Conta / Split | `#merchant-account` | Merchant profile, split address, commission |
+| API Keys | `#merchant-api` | Create / list / revoke sk_live_ + sk_test_ keys |
+| Produtos | `#merchant-products` (+ create/edit) | Product catalog management |
+| Webhook Logs | `#webhook-logs` | Delivery attempts with payload inspector |
 
 ## Security
 

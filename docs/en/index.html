@@ -620,6 +620,8 @@
           <tr><td>404</td><td>Resource not found.</td></tr>
           <tr><td>409</td><td>State conflict — operation not allowed in the current status.</td></tr>
           <tr><td>429</td><td>Rate limit exceeded. Wait and try again.</td></tr>
+          <tr><td>500</td><td>Internal server error. Try again in a few moments.</td></tr>
+          <tr><td>503</td><td>Service unavailable — platform under maintenance or Pix provider temporarily down.</td></tr>
         </tbody>
       </table>
     </section>
@@ -885,7 +887,8 @@ System.out.println(response.body());</pre>
     <span class="hl-key">"created_at"</span>:     <span class="hl-str">"2025-06-01T15:00:00.000Z"</span>,
     <span class="hl-key">"processing_at"</span>:  <span class="hl-str">"2025-06-01T15:02:00.000Z"</span>,
     <span class="hl-key">"completed_at"</span>:   <span class="hl-str">"2025-06-01T15:22:00.000Z"</span>,
-    <span class="hl-key">"cancelled_at"</span>:   <span class="hl-kw">null</span>
+    <span class="hl-key">"cancelled_at"</span>:   <span class="hl-kw">null</span>,
+    <span class="hl-key">"blockchain_tx_id"</span>: <span class="hl-str">"abc123...def456"</span>  <span class="hl-cm">// Liquid txid (present when completed)</span>
   }
 }</pre>
       </div>
@@ -1911,17 +1914,24 @@ app.post(<span class="hl-str">"/webhook/depix"</span>, express.raw({ type: <span
       <p>The API enforces request limits to ensure stability and protect against abuse.</p>
 
       <table>
-        <thead><tr><th>Endpoint</th><th>Limit</th><th>Window</th></tr></thead>
+        <thead><tr><th>Endpoint</th><th>Limit</th><th>Scope</th></tr></thead>
         <tbody>
-          <tr><td>POST /api/checkouts</td><td>30 requests</td><td>per minute, per IP</td></tr>
-          <tr><td>Other endpoints</td><td>Varies</td><td>per endpoint</td></tr>
+          <tr><td>POST /api/checkouts</td><td>30 / min</td><td>per IP</td></tr>
+          <tr><td>GET /api/checkout-page/:id</td><td>30 / min</td><td>per IP (public)</td></tr>
+          <tr><td>GET /api/pay/:id</td><td>60 / min</td><td>per IP (public)</td></tr>
+          <tr><td>POST /api/pay/:id/simulate</td><td>5 / min</td><td>per IP (public, sandbox only)</td></tr>
+          <tr><td>POST /api/merchants/:username/checkout</td><td>10 / min</td><td>per IP (public)</td></tr>
+          <tr><td>POST /api/products/:id/checkout</td><td>10 / min</td><td>per IP (public)</td></tr>
+          <tr><td>GET /api/products/:id/public</td><td>30 / min</td><td>per IP (public)</td></tr>
+          <tr><td>GET /api/merchants/:username/public</td><td>30 / min</td><td>per IP (public)</td></tr>
+          <tr><td>Per merchant (API key)</td><td>Configurable</td><td>applied after auth, on top of the per-IP limit</td></tr>
         </tbody>
       </table>
 
       <ul>
-        <li>For authenticated requests with an API key, the rate limit is applied per <strong>merchant</strong>.</li>
-        <li>For public endpoints, the rate limit is applied per <strong>IP</strong>.</li>
-        <li>When the limit is reached, the API returns status <code>429</code> with a <code>Retry-After</code> header indicating how many seconds to wait.</li>
+        <li>For requests authenticated with an API key, an additional rate limit applies <strong>per merchant</strong> (configurable — contact support if you need it raised).</li>
+        <li>For public endpoints (no auth), the rate limit is applied only <strong>per IP</strong>.</li>
+        <li>When the limit is reached, the API returns status <code>429</code> with the message <code>"Muitas requisições. Tente novamente em 1 minuto."</code> — wait ~60s before retrying.</li>
       </ul>
 
       <div class="alert info">

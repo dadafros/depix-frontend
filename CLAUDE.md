@@ -48,6 +48,9 @@ depix/
 ├── auth.js             # Auth state in localStorage (getToken, setAuth, clearAuth, isLoggedIn)
 ├── api.js              # Fetch wrapper with auto JWT refresh on 401 (apiFetch)
 ├── addresses.js        # Address CRUD in localStorage (add, remove, select, abbreviate)
+├── affiliates.js       # Referral link rendering + commission balance view
+├── image-resize.js     # Client-side logo/product image downscale before R2 upload
+├── qr.js               # QR rendering helper used by deposit and checkout views
 ├── utils.js            # Pure utilities (isAllowedImageUrl, toCents, formatBRL)
 ├── validation.js       # Input validators (validateLiquidAddress, validatePhone)
 ├── style.css           # All styles — dark teal theme, responsive, animations
@@ -78,16 +81,39 @@ Each view is a `<section data-view="name">` in index.html, shown/hidden by the r
 
 | Route | View | Description |
 |-------|------|-------------|
+| `#landing` | Landing | Marketing page (shown to logged-out visitors on `/`) |
 | `#login` | Login | Username + password → JWT auth |
 | `#register` | Register | Name, email, WhatsApp, username, password → create account |
 | `#verify` | Verify Email | 6-digit code input → confirms email |
+| `#forgot-password` | Forgot Password | Email entry → request reset code |
+| `#reset-password` | Reset Password | 6-digit code + new password |
 | `#home` | Home | Toggle between deposit (QR generation) and withdrawal (saque) |
 | `#no-address` | Empty State | Shown when user has no addresses — prompts to add first one |
-| `#reports` | Reports | Date range picker → requests PDF+CSV report via email |
+| `#transactions` | Transactions | Date range → transaction list + PDF/CSV report via email |
+| `#affiliates` | Affiliates | Referral link + referred-user list |
+| `#commissions` | Commissions | Affiliate commission balance + withdrawal request |
+| `#faq` | FAQ | Static help/FAQ content |
+| **Área do Lojista** (unlocked via ≥10 deposits + verification) | | |
+| `#verify-account` | Verify Account | CNPJ + website entry → gate into merchant area |
+| `#merchant` | Merchant Dispatcher | Routes to setup / charge / sales depending on state |
+| `#merchant-charge` | Criar Cobrança | Create on-demand checkout (amount + description) |
+| `#merchant-sales` | Minhas Vendas | List of checkouts with status + filters + polling |
+| `#merchant-account` | Conta / Split | Merchant profile, split address, commission rate |
+| `#merchant-api` | API Keys | Create/list/revoke sk_live_ / sk_test_ keys |
+| `#merchant-products` | Produtos | List of products with activate/deactivate |
+| `#merchant-product-create` | Criar Produto | New product form (name, price, image) |
+| `#merchant-product-edit` | Editar Produto | Edit existing product |
+| `#webhook-logs` | Webhook Logs | Delivery attempts with status + payload inspector |
 
 ### Home screen has two modes (toggle):
 1. **Depósito**: Enter amount → Generate PIX QR code → Copy PIX code
 2. **Saque**: Enter amount + PIX key → Get Liquid deposit address + QR code
+
+### Área do Lojista (merchant area):
+- Gated by `merchantGuard(...)` — redirects to `#verify-account` if the user has no active merchant profile.
+- State machine: novo/unverified → `#verify-account` → setup pending → `#merchant` dispatcher routes to the right child view.
+- Product endpoints and checkout API calls from the dashboard use the user's JWT (the `jwt-or-api` backend auth path). API keys (`sk_live_` / `sk_test_`) are for external integrations.
+- Sales polling: `#merchant-sales` polls `/api/checkouts` every ~10s while visible; `stopSalesPolling()` is called on navigation away (see `script.js` route table).
 
 ## Key Patterns
 
