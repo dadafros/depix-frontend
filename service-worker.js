@@ -1,6 +1,6 @@
 // Service Worker — DePix PWA
 // Bump APP_VERSION on every release. Keep in sync with ?v= query strings in index.html.
-const APP_VERSION = 124;
+const APP_VERSION = 125;
 const CACHE_NAME = `depix-v${APP_VERSION}`;
 
 // ES module imports in script.js use unversioned specifiers (./utils.js),
