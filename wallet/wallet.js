@@ -32,7 +32,9 @@ import {
   destroyDatabase,
   resetFailedPinAttempts,
   incrementFailedPinAttempts,
-  hasCredentials as storeHasCredentials
+  hasCredentials as storeHasCredentials,
+  readSync,
+  writeSync
 } from "./wallet-store.js";
 import {
   assertStrongPin,
@@ -80,13 +82,19 @@ function buildDescriptorFromMnemonic(lwk, mnemonicStr, network) {
   return { signer, mnemonic, descriptor };
 }
 
+// Blockstream public Esplora — the free, open endpoint we hardcode by default.
+// Can be overridden via `esploraUrl` option (tests + alt networks).
+const DEFAULT_ESPLORA_URL_MAINNET = "https://blockstream.info/liquid/api";
+
 export function createWalletModule({
   indexedDbImpl,
   cryptoImpl,
   credentialsImpl,
   lwkLoader,
   clock,
-  network = "mainnet"
+  network = "mainnet",
+  esploraUrl,
+  esploraClientFactory
 } = {}) {
   const lwkLoaderFn = lwkLoader ?? loadLwk;
   const getNow = clock ?? now;
@@ -98,6 +106,8 @@ export function createWalletModule({
   let lwkCache = null;
   let lastActivityAt = 0;
   let rateLimitUntil = 0;
+  let lastScanAt = 0;
+  let appliedCachedUpdate = false;
 
   function db() {
     if (!dbPromise) dbPromise = openDb(indexedDbImpl);
@@ -131,6 +141,7 @@ export function createWalletModule({
     }
     signer = null;
     wollet = null;
+    appliedCachedUpdate = false;
   }
 
   async function hasWallet() {
@@ -455,7 +466,105 @@ export function createWalletModule({
       );
     }
     wollet = await restoreWollet(descriptorStr);
+    // Rehydrate from the cached Update blob if we have one — gives the UI
+    // an instant first paint with last-known balances while a fresh scan
+    // runs in the background. Failure here is non-fatal: corrupt blob is
+    // just dropped on the next successful sync.
+    if (!appliedCachedUpdate) {
+      try {
+        const database = await db();
+        const syncRecord = await readSync(database);
+        if (syncRecord?.updateBlob) {
+          const l = await lwk();
+          const bytes = toUint8(syncRecord.updateBlob);
+          const update = new l.Update(bytes);
+          wollet.applyUpdate(update);
+          if (typeof syncRecord.lastScanAt === "number") {
+            lastScanAt = syncRecord.lastScanAt;
+          }
+        }
+      } catch {
+        // swallow — cached blob is best-effort.
+      }
+      appliedCachedUpdate = true;
+    }
     return wollet;
+  }
+
+  async function esploraClient(l, net) {
+    if (typeof esploraClientFactory === "function") {
+      return esploraClientFactory(l, net);
+    }
+    const url = esploraUrl ?? (network === "mainnet" ? DEFAULT_ESPLORA_URL_MAINNET : null);
+    if (!url) {
+      // Let LWK pick its default for non-mainnet networks (testnet, regtest).
+      return net.defaultEsploraClient();
+    }
+    return new l.EsploraClient(net, url, false, 4, false);
+  }
+
+  // Drives a fresh Esplora scan and persists the resulting Update blob so
+  // the next mount can paint immediately. Idempotent; the UI calls it on
+  // mount and on a 30s timer while the view is visible.
+  async function syncWallet() {
+    const w = await ensureViewWollet();
+    const l = await lwk();
+    const net = makeNetwork(l, network);
+    let client;
+    try {
+      client = await esploraClient(l, net);
+    } catch (err) {
+      throw new WalletError(
+        ERROR_CODES.ESPLORA_UNAVAILABLE,
+        "Failed to create Esplora client",
+        err
+      );
+    }
+    let update;
+    try {
+      update = await client.fullScan(w);
+    } catch (err) {
+      throw new WalletError(
+        ERROR_CODES.ESPLORA_UNAVAILABLE,
+        "Failed to sync with Esplora",
+        err
+      );
+    } finally {
+      if (client?.free) {
+        try { client.free(); } catch { /* best effort */ }
+      }
+    }
+    const scanAt = getNow();
+    if (update) {
+      w.applyUpdate(update);
+      try {
+        const bytes = update.serialize();
+        const database = await db();
+        await writeSync(database, { updateBlob: bytes, lastScanAt: scanAt });
+      } catch {
+        // If persistence fails (quota, private mode), the scan still applied
+        // in memory — next mount just has no warm start.
+      }
+      if (update.free) {
+        try { update.free(); } catch { /* best effort */ }
+      }
+    } else {
+      // No changes since last scan — still bump the timestamp so the UI
+      // can show "synced N seconds ago" accurately.
+      try {
+        const database = await db();
+        await writeSync(database, {
+          updateBlob: (await readSync(database))?.updateBlob ?? null,
+          lastScanAt: scanAt
+        });
+      } catch { /* best effort */ }
+    }
+    lastScanAt = scanAt;
+    return { lastScanAt, changed: Boolean(update) };
+  }
+
+  function getLastScanAt() {
+    return lastScanAt;
   }
 
   async function getReceiveAddress({ index } = {}) {
@@ -603,6 +712,8 @@ export function createWalletModule({
     getReceiveAddress,
     getBalances,
     listTransactions,
+    syncWallet,
+    getLastScanAt,
     getDescriptor,
     exportMnemonic,
     wipeWallet,

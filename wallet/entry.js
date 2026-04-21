@@ -22,4 +22,20 @@ export {
 
 export { registerWalletRoutes } from "./wallet-ui.js";
 
-export const WALLET_BUNDLE_VERSION = "sub3";
+export {
+  ASSETS,
+  DISPLAY_ORDER,
+  isKnownAsset,
+  getAssetByIdentifier,
+  satsToAmount,
+  satsToDecimalNumber,
+  convertSatsToBrl,
+  formatAssetAmount
+} from "./asset-registry.js";
+
+export {
+  createQuotesClient,
+  getDefaultQuotesClient
+} from "./quotes.js";
+
+export const WALLET_BUNDLE_VERSION = "sub4";

@@ -1,6 +1,6 @@
 // Service Worker — DePix PWA
 // Bump APP_VERSION on every release. Keep in sync with ?v= query strings in index.html.
-const APP_VERSION = 127;
+const APP_VERSION = 128;
 const CACHE_NAME = `depix-v${APP_VERSION}`;
 
 // Timeout for WASM fetch before falling back to cache. WASM binaries are large

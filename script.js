@@ -26,6 +26,8 @@ let pendingAddressChange = "";
 let pendingAddressDelete = "";
 let modoSaque = false;
 let modoConvert = false;
+let modoWallet = false;
+let walletHomeActive = false;
 let brswapConfig = null;
 let valorModeIsPix = false;
 let saqueDepositAddress = "";
@@ -728,9 +730,19 @@ function updateAddrDisplay() {
 }
 
 function switchMode(mode) {
-  const modes = ["deposit", "withdraw", "convert"];
-  const buttons = { deposit: "modeDeposit", withdraw: "modeWithdraw", convert: "modeConvert" };
-  const screens = { deposit: "telaDeposito", withdraw: "telaSaque", convert: "telaConverter" };
+  const modes = ["deposit", "withdraw", "convert", "wallet"];
+  const buttons = {
+    deposit: "modeDeposit",
+    withdraw: "modeWithdraw",
+    convert: "modeConvert",
+    wallet: "modeWallet"
+  };
+  const screens = {
+    deposit: "telaDeposito",
+    withdraw: "telaSaque",
+    convert: "telaConverter",
+    wallet: "telaCarteira"
+  };
 
   modes.forEach(m => {
     const btn = document.getElementById(buttons[m]);
@@ -760,9 +772,42 @@ function switchMode(mode) {
 
   modoSaque = mode === "withdraw";
   modoConvert = mode === "convert";
+  modoWallet = mode === "wallet";
+
+  // Remember the user's last mode so returning from a wallet sub-route
+  // (receive, settings, transactions) restores the right tab.
+  try {
+    localStorage.setItem("depix-home-mode", mode);
+  } catch { /* private mode / disabled storage */ }
 
   // Load BRSwap widget when entering convert mode
   if (mode === "convert") loadBrswapWidget();
+
+  // Lazy-load the wallet bundle and kick off a sync when entering wallet mode.
+  if (mode === "wallet") activateWalletHome();
+  else if (walletHomeActive) deactivateWalletHome();
+}
+
+async function activateWalletHome() {
+  walletHomeActive = true;
+  try {
+    await ensureWalletBootstrapped();
+    // registerWalletRoutes exposes a `mountWalletHome` handler that the
+    // script calls to draw balances into #telaCarteira. We fire a custom
+    // event; wallet-ui.js listens for it.
+    window.dispatchEvent(new CustomEvent("wallet-home:mount"));
+  } catch {
+    const msg = document.getElementById("wallet-home-msg");
+    if (msg) {
+      msg.textContent = "Não foi possível carregar a carteira. Verifique sua conexão.";
+      msg.classList.add("error");
+    }
+  }
+}
+
+function deactivateWalletHome() {
+  walletHomeActive = false;
+  window.dispatchEvent(new CustomEvent("wallet-home:unmount"));
 }
 
 let brswapMessageHandler = null;
@@ -893,6 +938,11 @@ document.getElementById("modeConvert")?.addEventListener("click", () => {
     return;
   }
   switchMode("convert");
+});
+
+document.getElementById("modeWallet")?.addEventListener("click", () => {
+  if (modoWallet) return;
+  switchMode("wallet");
 });
 
 document.getElementById("brswap-modal-ok")?.addEventListener("click", () => {
@@ -2298,7 +2348,10 @@ const WALLET_ROUTE_HASHES = [
   "#wallet-restore-input",
   "#wallet-restore-pin",
   "#wallet-restore-biometric",
-  "#wallet-restore-done"
+  "#wallet-restore-done",
+  "#wallet-receive",
+  "#wallet-transactions",
+  "#wallet-settings"
 ];
 
 async function ensureWalletBootstrapped() {
@@ -2309,6 +2362,7 @@ async function ensureWalletBootstrapped() {
         route,
         navigate,
         wallet: bundle.getDefaultWallet(),
+        quotes: bundle.getDefaultQuotesClient(),
         showToast
       });
     })().catch(err => {
@@ -2346,8 +2400,17 @@ for (const hash of WALLET_ROUTE_HASHES) {
   route(hash, makeWalletRouteStub());
 }
 
-document.getElementById("menu-wallet")?.addEventListener("click", () => {
+document.getElementById("menu-wallet")?.addEventListener("click", async () => {
   closeMenu();
+  try {
+    const bundle = await loadWalletBundle();
+    const exists = await bundle.getDefaultWallet().hasWallet();
+    if (exists) {
+      try { localStorage.setItem("depix-home-mode", "wallet"); } catch { /* ignore */ }
+      navigate("#home");
+      return;
+    }
+  } catch { /* bundle unreachable — fall through to gate */ }
   navigate("#wallet-gate");
 });
 
@@ -2580,7 +2643,36 @@ route("#home", () => {
   document.getElementById("converterLoading")?.classList.add("hidden");
   // Fetch BRSwap feature config
   fetchBrswapConfig();
+  // Surface the wallet toggle if a wallet exists on this device, and restore
+  // the last-selected mode so returning from #wallet-receive etc. lands the
+  // user back on Minha Carteira.
+  void refreshWalletModeAvailability();
 });
+
+async function refreshWalletModeAvailability() {
+  const walletBtn = document.getElementById("modeWallet");
+  if (!walletBtn) return;
+  let walletExists = false;
+  try {
+    const bundle = await loadWalletBundle();
+    walletExists = await bundle.getDefaultWallet().hasWallet();
+  } catch {
+    walletExists = false;
+  }
+  if (!walletExists) {
+    walletBtn.classList.add("hidden");
+    if (modoWallet) switchMode("deposit");
+    return;
+  }
+  walletBtn.classList.remove("hidden");
+  let preferred = null;
+  try {
+    preferred = localStorage.getItem("depix-home-mode");
+  } catch { /* private mode */ }
+  if (preferred === "wallet" && !modoWallet) {
+    switchMode("wallet");
+  }
+}
 
 route("#login", () => {
   stopTransactionsPolling();
