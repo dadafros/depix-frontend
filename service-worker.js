@@ -23,7 +23,8 @@ const JS_MODULES = [
   "affiliates.js",
   "qr.js",
   "qr-print.js",
-  "image-resize.js"
+  "image-resize.js",
+  "wallet-bundle-loader.js"
 ];
 
 const STATIC_FILES = [
