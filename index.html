@@ -142,16 +142,16 @@
   }
   </script>
 
-  <link rel="manifest" href="manifest.json?v=127" />
-  <link rel="icon" href="icon-192.png?v=127" />
-  <link rel="apple-touch-icon" href="icon-192.png?v=127" />
+  <link rel="manifest" href="manifest.json?v=128" />
+  <link rel="icon" href="icon-192.png?v=128" />
+  <link rel="apple-touch-icon" href="icon-192.png?v=128" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
   <!-- Asset version must match APP_VERSION in service-worker.js -->
-  <link rel="stylesheet" href="style.css?v=127" />
+  <link rel="stylesheet" href="style.css?v=128" />
 </head>
 <body>
 
@@ -160,7 +160,7 @@
 
   <nav class="landing-nav">
     <div class="landing-nav-inner">
-      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=127" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
+      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=128" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
       <div class="landing-nav-right">
         <a href="https://blog.depixapp.com/" class="landing-nav-link">Blog</a>
         <a href="#login" class="landing-nav-cta">Entrar</a>
@@ -797,6 +797,7 @@
         <button class="mode-toggle-option active" id="modeDeposit" role="radio" aria-checked="true">Receber pagamento<br><small>(Comprar DePix)</small></button>
         <button class="mode-toggle-option" id="modeWithdraw" role="radio" aria-checked="false">Realizar pagamento<br><small>(Sacar DePix)</small></button>
         <button class="mode-toggle-option hidden" id="modeConvert" role="radio" aria-checked="false">Converter DePix<br><small>(BRSwap)</small></button>
+        <button class="mode-toggle-option hidden" id="modeWallet" role="radio" aria-checked="false">Minha Carteira<br><small>(Liquid)</small></button>
       </div>
     </div>
 
@@ -905,6 +906,41 @@
       <div id="converterLoading" class="converter-loading hidden"><span class="spinner"></span> Carregando…</div>
       <p id="converterError" class="converter-error hidden">Serviço indisponível no momento.<br>Tente novamente mais tarde.</p>
       <div id="converterContent" class="converter-container"></div>
+    </div>
+
+    <!-- ===== TELA: MINHA CARTEIRA (view-only, Liquid) ===== -->
+    <div id="telaCarteira" class="hidden">
+      <div class="wallet-home-total">
+        <span class="wallet-home-total-label">Saldo total</span>
+        <strong id="wallet-home-total-brl" class="wallet-home-total-value">R$ —</strong>
+        <span id="wallet-home-sync-state" class="wallet-home-sync-state" aria-live="polite"></span>
+      </div>
+
+      <div id="wallet-home-assets" class="wallet-home-assets" aria-label="Saldos por ativo">
+        <!-- populated by wallet-ui.js -->
+      </div>
+
+      <div class="wallet-home-actions">
+        <button id="wallet-home-receive" class="wallet-home-action" type="button">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><polyline points="19 12 12 19 5 12"/></svg>
+          <span>Receber</span>
+        </button>
+        <button id="wallet-home-send" class="wallet-home-action" type="button" disabled aria-disabled="true" title="Disponível na próxima fase">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><polyline points="5 12 12 5 19 12"/></svg>
+          <span>Pagar</span>
+        </button>
+        <button id="wallet-home-qr" class="wallet-home-action" type="button">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3"/><path d="M20 14v.01"/><path d="M14 20h.01"/><path d="M17 17h4v4h-4z"/></svg>
+          <span>QR</span>
+        </button>
+      </div>
+
+      <div id="wallet-home-msg" class="mensagem"></div>
+
+      <div class="wallet-home-links">
+        <button id="wallet-home-transactions" class="link-btn" type="button">Histórico</button>
+        <button id="wallet-home-settings" class="link-btn" type="button">Configurações da carteira</button>
+      </div>
     </div>
 
   </div>
@@ -2127,6 +2163,137 @@
   </div>
 </section>
 
+<!-- ===== WALLET: RECEBER (endereço Liquid) ===== -->
+<section data-view="wallet-receive" class="page hidden">
+  <div class="card wallet-receive-card">
+    <h2 class="view-title">Receber</h2>
+    <p class="info-text">Este endereço aceita DePix, USDt e L-BTC na rede Liquid.</p>
+
+    <div id="wallet-receive-qr" class="wallet-receive-qr" aria-label="QR do endereço Liquid">
+      <span class="spinner"></span>
+    </div>
+
+    <div class="wallet-receive-address">
+      <span id="wallet-receive-address-text" class="wallet-receive-address-text" aria-label="Endereço Liquid">Carregando…</span>
+      <button id="wallet-receive-copy" class="wallet-receive-copy" aria-label="Copiar endereço">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      </button>
+    </div>
+
+    <div id="wallet-receive-msg" class="mensagem"></div>
+
+    <div class="wallet-action-row">
+      <button id="wallet-receive-qr-fullscreen" class="secondary">Tela cheia</button>
+      <button id="wallet-receive-back" class="secondary">Voltar</button>
+    </div>
+  </div>
+</section>
+
+<!-- ===== WALLET: EXTRATO (histórico on-chain) ===== -->
+<section data-view="wallet-transactions" class="page hidden">
+  <div class="card wallet-transactions-card">
+    <h2 class="view-title">Movimentações da carteira</h2>
+
+    <div class="wallet-tx-filters" role="radiogroup" aria-label="Filtrar por ativo">
+      <button class="wallet-tx-pill active" data-wallet-filter="all" type="button">Todos</button>
+      <button class="wallet-tx-pill" data-wallet-filter="DEPIX" type="button">DePix</button>
+      <button class="wallet-tx-pill" data-wallet-filter="USDT" type="button">USDt</button>
+      <button class="wallet-tx-pill" data-wallet-filter="LBTC" type="button">L-BTC</button>
+    </div>
+
+    <div id="wallet-tx-msg" class="mensagem"></div>
+    <div id="wallet-tx-loading" class="hidden"><span class="spinner"></span> Sincronizando…</div>
+    <div id="wallet-tx-empty" class="hidden">
+      <p class="info-text">Nenhuma transação encontrada.</p>
+    </div>
+    <div id="wallet-tx-list" class="wallet-tx-list"></div>
+
+    <div class="wallet-action-row">
+      <button id="wallet-tx-back" class="secondary">Voltar</button>
+    </div>
+  </div>
+</section>
+
+<!-- ===== WALLET: CONFIGURAÇÕES ===== -->
+<section data-view="wallet-settings" class="page hidden">
+  <div class="card">
+    <h2 class="view-title">Configurações da carteira</h2>
+
+    <div class="wallet-setting-row">
+      <div class="wallet-setting-body">
+        <strong>Biometria</strong>
+        <p class="info-text" id="wallet-settings-biometric-status">Verificando…</p>
+      </div>
+      <button id="wallet-settings-biometric-toggle" class="secondary" type="button">Ativar</button>
+    </div>
+
+    <div class="wallet-setting-row">
+      <div class="wallet-setting-body">
+        <strong>Backup das 12 palavras</strong>
+        <p class="info-text">Para ver e reanotar sua seed. Pede o PIN.</p>
+      </div>
+      <button id="wallet-settings-export" class="secondary" type="button">Mostrar</button>
+    </div>
+
+    <div class="wallet-setting-row danger">
+      <div class="wallet-setting-body">
+        <strong>Apagar carteira deste aparelho</strong>
+        <p class="info-text">Requer PIN. Fundos só podem ser recuperados com as 12 palavras.</p>
+      </div>
+      <button id="wallet-settings-wipe" class="wallet-settings-danger" type="button">Apagar</button>
+    </div>
+
+    <div id="wallet-settings-msg" class="mensagem"></div>
+
+    <div class="wallet-action-row">
+      <button id="wallet-settings-back" class="secondary" style="width:100%">Voltar</button>
+    </div>
+  </div>
+</section>
+
+<!-- ===== MODAL: FULLSCREEN QR (endereço da carteira) ===== -->
+<div id="wallet-qr-fullscreen" class="modal wallet-qr-fullscreen hidden" role="dialog" aria-modal="true" aria-labelledby="wallet-qr-fullscreen-title">
+  <div class="wallet-qr-fullscreen-inner">
+    <h2 id="wallet-qr-fullscreen-title" class="wallet-qr-fullscreen-title">Meu endereço</h2>
+    <div id="wallet-qr-fullscreen-qr" class="wallet-qr-fullscreen-qr" aria-label="QR code do endereço Liquid em tela cheia">
+      <span class="spinner"></span>
+    </div>
+    <p id="wallet-qr-fullscreen-address" class="wallet-qr-fullscreen-address"></p>
+    <button id="wallet-qr-fullscreen-close" class="wallet-qr-fullscreen-close" type="button">Fechar</button>
+  </div>
+</div>
+
+<!-- ===== MODAL: EXPORTAR MNEMONIC (backup) ===== -->
+<div id="wallet-export-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="wallet-export-title">
+  <div class="modal-box">
+    <h2 id="wallet-export-title">Backup das 12 palavras</h2>
+    <p class="info-text">Digite seu PIN. As palavras serão mostradas apenas nesta tela — anote em papel antes de fechar.</p>
+    <label for="wallet-export-pin">PIN</label>
+    <input id="wallet-export-pin" type="password" inputmode="numeric" pattern="\d*" autocomplete="off" maxlength="6" />
+    <div id="wallet-export-words" class="wallet-seed-grid hidden" style="margin-top:12px"></div>
+    <div id="wallet-export-msg" class="mensagem"></div>
+    <div class="wallet-action-row">
+      <button id="wallet-export-cancel" class="secondary">Fechar</button>
+      <button id="wallet-export-confirm">Mostrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: APAGAR CARTEIRA ===== -->
+<div id="wallet-wipe-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="wallet-wipe-title">
+  <div class="modal-box">
+    <h2 id="wallet-wipe-title">Apagar carteira deste aparelho</h2>
+    <p class="info-text">Digite seu PIN para confirmar. Sem as 12 palavras, os fundos ficam inacessíveis depois desta ação.</p>
+    <label for="wallet-wipe-pin">PIN</label>
+    <input id="wallet-wipe-pin" type="password" inputmode="numeric" pattern="\d*" autocomplete="off" maxlength="6" />
+    <div id="wallet-wipe-msg" class="mensagem"></div>
+    <div class="wallet-action-row">
+      <button id="wallet-wipe-cancel" class="secondary">Cancelar</button>
+      <button id="wallet-wipe-confirm" class="wallet-settings-danger">Apagar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== MODAL: WELCOME MERCHANT ===== -->
 <div id="merchant-welcome-modal" class="modal hidden">
   <div class="modal-box" style="text-align:left">
@@ -2706,6 +2873,6 @@
 
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 <!-- Asset version must match APP_VERSION in service-worker.js -->
-<script type="module" src="script.js?v=127"></script>
+<script type="module" src="script.js?v=128"></script>
 </body>
 </html>

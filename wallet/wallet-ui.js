@@ -23,6 +23,12 @@ import {
   MIN_PIN_LENGTH,
   MAX_PIN_LENGTH
 } from "./constants.js";
+import {
+  DISPLAY_ORDER,
+  getAssetByIdentifier,
+  convertSatsToBrl,
+  formatAssetAmount
+} from "./asset-registry.js";
 
 // --------------------------------------------------------------------------
 // Pure helpers — exported for tests.
@@ -169,9 +175,11 @@ export function registerWalletRoutes({
   route,
   navigate,
   wallet,
+  quotes = null,
   showToast = null,
   getRandom = null,
-  doc = null
+  doc = null,
+  win = null
 } = {}) {
   if (typeof route !== "function") throw new TypeError("route");
   if (typeof navigate !== "function") throw new TypeError("navigate");
@@ -180,6 +188,7 @@ export function registerWalletRoutes({
   }
   const rand = getRandom ?? Math.random;
   const d = doc ?? (typeof document !== "undefined" ? document : null);
+  const w = win ?? (typeof window !== "undefined" ? window : null);
   if (!d) throw new Error("registerWalletRoutes: document not available");
 
   // Scratch state carried across create/restore screens. Cleared at the end
@@ -495,6 +504,7 @@ export function registerWalletRoutes({
 
   q("wallet-create-done-home")?.addEventListener("click", () => {
     resetFlowState();
+    persistHomeMode("wallet");
     navigate("#home");
   });
 
@@ -748,6 +758,716 @@ export function registerWalletRoutes({
 
   q("wallet-restore-done-home")?.addEventListener("click", () => {
     resetFlowState();
+    persistHomeMode("wallet");
     navigate("#home");
+  });
+
+  // ====================================================================
+  // Wallet home panel — lives inside #home (telaCarteira). Driven by
+  // CustomEvents `wallet-home:mount` / `wallet-home:unmount` dispatched
+  // by script.js when the user toggles the 4-mode home switch.
+  // ====================================================================
+  const SYNC_INTERVAL_MS = 30_000;
+  let homeSyncTimer = null;
+  let homeMounted = false;
+  let homeFilter = "all";
+  let lastBalancesRender = 0;
+
+  function persistHomeMode(mode) {
+    try {
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem("depix-home-mode", mode);
+      }
+    } catch { /* private mode / disabled */ }
+  }
+
+  function formatBrlNumber(n) {
+    if (typeof n !== "number" || !Number.isFinite(n)) return "—";
+    return n.toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  }
+
+  // LWK wasm returns balances as a Map<AssetId, bigint|number>. Normalize
+  // to a plain object keyed by asset id hex string so the rest of the UI
+  // can iterate predictably in both the real bundle and the test mocks.
+  function normalizeBalances(raw) {
+    const out = Object.create(null);
+    if (!raw) return out;
+    const entries = typeof raw.entries === "function"
+      ? raw.entries()
+      : Array.isArray(raw) ? raw : null;
+    if (entries) {
+      for (const [k, v] of entries) {
+        const keyStr = (k && typeof k.toString === "function") ? k.toString() : String(k);
+        out[keyStr] = (typeof v === "bigint") ? v : BigInt(v ?? 0);
+      }
+      return out;
+    }
+    if (typeof raw === "object") {
+      for (const [k, v] of Object.entries(raw)) {
+        out[k] = (typeof v === "bigint") ? v : BigInt(v ?? 0);
+      }
+    }
+    return out;
+  }
+
+  async function renderWalletHomeBalances({ background = false } = {}) {
+    const assetsHost = q("wallet-home-assets");
+    const totalEl = q("wallet-home-total-brl");
+    if (!assetsHost || !totalEl) return;
+    if (!background) showMsg("wallet-home-msg", "", null);
+
+    let balancesRaw;
+    try {
+      balancesRaw = await wallet.getBalances();
+    } catch (err) {
+      if (!background) renderError("wallet-home-msg", err);
+      return;
+    }
+    const balances = normalizeBalances(balancesRaw);
+
+    let quoteResult = null;
+    if (quotes && typeof quotes.getQuotes === "function") {
+      try {
+        quoteResult = await quotes.getQuotes();
+      } catch { /* quote fetch is best-effort */ }
+    }
+    const quoteValues = quoteResult?.quotes ?? null;
+
+    assetsHost.textContent = "";
+    let totalBrl = 0;
+    let anyBrl = false;
+    for (const asset of DISPLAY_ORDER) {
+      const sats = balances[asset.id] ?? 0n;
+      const brl = convertSatsToBrl(sats, asset, quoteValues);
+      if (typeof brl === "number") {
+        totalBrl += brl;
+        anyBrl = true;
+      }
+      const row = d.createElement("div");
+      row.className = "wallet-home-asset";
+      const icon = d.createElement("div");
+      icon.className = "wallet-home-asset-icon";
+      icon.style.background = asset.color;
+      icon.textContent = asset.symbol.charAt(0);
+      const body = d.createElement("div");
+      body.className = "wallet-home-asset-body";
+      const name = d.createElement("div");
+      name.className = "wallet-home-asset-name";
+      name.textContent = asset.symbol;
+      const sub = d.createElement("div");
+      sub.className = "wallet-home-asset-sub";
+      sub.textContent = asset.name;
+      body.appendChild(name);
+      body.appendChild(sub);
+      const amounts = d.createElement("div");
+      amounts.className = "wallet-home-asset-amounts";
+      const amount = d.createElement("div");
+      amount.className = "wallet-home-asset-amount";
+      amount.textContent = `${formatAssetAmount(sats, asset)} ${asset.symbol}`;
+      const brlEl = d.createElement("div");
+      brlEl.className = "wallet-home-asset-brl";
+      brlEl.textContent = typeof brl === "number" ? formatBrlNumber(brl) : "—";
+      amounts.appendChild(amount);
+      amounts.appendChild(brlEl);
+      row.appendChild(icon);
+      row.appendChild(body);
+      row.appendChild(amounts);
+      assetsHost.appendChild(row);
+    }
+    totalEl.textContent = anyBrl ? formatBrlNumber(totalBrl) : "R$ —";
+    lastBalancesRender = Date.now();
+
+    if (quoteResult?.stale) {
+      showMsg("wallet-home-msg", "Cotação com atraso. Valores em BRL podem estar desatualizados.", "warning");
+    }
+  }
+
+  function updateSyncState(text, kind) {
+    const el = q("wallet-home-sync-state");
+    if (!el) return;
+    el.textContent = text || "";
+    el.classList.remove("success", "error", "warning");
+    if (text && kind) el.classList.add(kind);
+  }
+
+  async function syncAndRender({ background = false } = {}) {
+    if (!homeMounted) return;
+    if (!background) updateSyncState("Sincronizando…", null);
+    try {
+      await wallet.syncWallet();
+      updateSyncState("Atualizado agora", "success");
+    } catch (err) {
+      if (isWalletError(err, ERROR_CODES.ESPLORA_UNAVAILABLE)) {
+        updateSyncState("Sem conexão com o servidor. Mostrando último saldo conhecido.", "warning");
+      } else {
+        updateSyncState("Falha na sincronização.", "error");
+      }
+    }
+    await renderWalletHomeBalances({ background });
+  }
+
+  function startHomeSyncTimer() {
+    stopHomeSyncTimer();
+    if (!w || typeof w.setInterval !== "function") return;
+    homeSyncTimer = w.setInterval(() => {
+      if (!homeMounted) return;
+      if (d.visibilityState && d.visibilityState !== "visible") return;
+      void syncAndRender({ background: true });
+    }, SYNC_INTERVAL_MS);
+  }
+
+  function stopHomeSyncTimer() {
+    if (homeSyncTimer != null && w && typeof w.clearInterval === "function") {
+      w.clearInterval(homeSyncTimer);
+    }
+    homeSyncTimer = null;
+  }
+
+  async function onWalletHomeMount() {
+    homeMounted = true;
+    showMsg("wallet-home-msg", "", null);
+    updateSyncState("Sincronizando…", null);
+    // First paint from the cached Update blob (instant, offline-safe).
+    try {
+      await renderWalletHomeBalances({ background: true });
+    } catch { /* noop */ }
+    // Then trigger a fresh scan in the background.
+    void syncAndRender({ background: false });
+    startHomeSyncTimer();
+  }
+
+  function onWalletHomeUnmount() {
+    homeMounted = false;
+    stopHomeSyncTimer();
+  }
+
+  if (w && typeof w.addEventListener === "function") {
+    w.addEventListener("wallet-home:mount", () => { void onWalletHomeMount(); });
+    w.addEventListener("wallet-home:unmount", () => { onWalletHomeUnmount(); });
+    // Also respond to visibility changes so a hidden-then-visible PWA
+    // kicks a fresh sync immediately.
+    d.addEventListener?.("visibilitychange", () => {
+      if (homeMounted && d.visibilityState === "visible") {
+        void syncAndRender({ background: true });
+      }
+    });
+  }
+
+  // Home panel action buttons.
+  q("wallet-home-receive")?.addEventListener("click", () => {
+    navigate("#wallet-receive");
+  });
+  q("wallet-home-qr")?.addEventListener("click", () => {
+    void openFullscreenQr();
+  });
+  q("wallet-home-transactions")?.addEventListener("click", () => {
+    navigate("#wallet-transactions");
+  });
+  q("wallet-home-settings")?.addEventListener("click", () => {
+    navigate("#wallet-settings");
+  });
+
+  // ====================================================================
+  // #wallet-receive — address + QR.
+  // ====================================================================
+  let cachedReceiveAddress = null;
+
+  async function ensureReceiveAddress() {
+    if (cachedReceiveAddress) return cachedReceiveAddress;
+    cachedReceiveAddress = await wallet.getReceiveAddress();
+    return cachedReceiveAddress;
+  }
+
+  async function renderReceiveQr() {
+    const host = q("wallet-receive-qr");
+    const addrEl = q("wallet-receive-address-text");
+    if (!host || !addrEl) return;
+    showMsg("wallet-receive-msg", "", null);
+    host.textContent = "";
+    const loading = d.createElement("span");
+    loading.className = "spinner";
+    host.appendChild(loading);
+    addrEl.textContent = "Carregando…";
+    let address;
+    try {
+      address = await ensureReceiveAddress();
+    } catch (err) {
+      host.textContent = "";
+      const errSpan = d.createElement("div");
+      errSpan.className = "error";
+      errSpan.textContent = "Não foi possível carregar o endereço.";
+      host.appendChild(errSpan);
+      renderError("wallet-receive-msg", err);
+      return;
+    }
+    addrEl.textContent = address;
+    host.textContent = "";
+    const img = d.createElement("img");
+    img.className = "wallet-receive-qr-img";
+    img.alt = "QR code do endereço Liquid";
+    img.style.width = "100%";
+    img.style.height = "auto";
+    host.appendChild(img);
+    const loadingEl = d.createElement("span");
+    loadingEl.className = "spinner";
+    host.appendChild(loadingEl);
+    const errorEl = d.createElement("div");
+    errorEl.className = "error hidden";
+    errorEl.textContent = "Falha ao gerar QR.";
+    host.appendChild(errorEl);
+    try {
+      const mod = await import("../qr.js");
+      mod.renderBrandedQr(address, img, { loadingEl, errorEl });
+    } catch {
+      loadingEl.classList.add("hidden");
+      errorEl.classList.remove("hidden");
+    }
+  }
+
+  route("#wallet-receive", () => {
+    void renderReceiveQr();
+  });
+
+  q("wallet-receive-copy")?.addEventListener("click", async () => {
+    const addr = q("wallet-receive-address-text")?.textContent?.trim() || "";
+    if (!addr || addr === "Carregando…") return;
+    try {
+      await (navigator.clipboard?.writeText?.(addr));
+      if (showToast) showToast("Endereço copiado.");
+      else showMsg("wallet-receive-msg", "Endereço copiado.", "success");
+    } catch {
+      showMsg("wallet-receive-msg", "Não foi possível copiar automaticamente.", "error");
+    }
+  });
+
+  q("wallet-receive-qr-fullscreen")?.addEventListener("click", () => {
+    void openFullscreenQr();
+  });
+
+  q("wallet-receive-back")?.addEventListener("click", () => {
+    persistHomeMode("wallet");
+    navigate("#home");
+  });
+
+  // ====================================================================
+  // Fullscreen QR modal.
+  // ====================================================================
+  async function openFullscreenQr() {
+    const modal = q("wallet-qr-fullscreen");
+    const host = q("wallet-qr-fullscreen-qr");
+    const addrEl = q("wallet-qr-fullscreen-address");
+    if (!modal || !host || !addrEl) return;
+    modal.classList.remove("hidden");
+    host.textContent = "";
+    const loading = d.createElement("span");
+    loading.className = "spinner";
+    host.appendChild(loading);
+    addrEl.textContent = "";
+    let address;
+    try {
+      address = await ensureReceiveAddress();
+    } catch {
+      host.textContent = "Erro ao carregar endereço.";
+      return;
+    }
+    addrEl.textContent = address;
+    host.textContent = "";
+    const img = d.createElement("img");
+    img.style.width = "100%";
+    img.style.height = "auto";
+    img.alt = "QR fullscreen";
+    host.appendChild(img);
+    const loadingEl = d.createElement("span");
+    loadingEl.className = "spinner";
+    host.appendChild(loadingEl);
+    const errorEl = d.createElement("div");
+    errorEl.className = "error hidden";
+    errorEl.textContent = "Falha ao gerar QR.";
+    host.appendChild(errorEl);
+    try {
+      const mod = await import("../qr.js");
+      mod.renderBrandedQr(address, img, { loadingEl, errorEl });
+    } catch {
+      loadingEl.classList.add("hidden");
+      errorEl.classList.remove("hidden");
+    }
+  }
+
+  function closeFullscreenQr() {
+    q("wallet-qr-fullscreen")?.classList.add("hidden");
+  }
+
+  q("wallet-qr-fullscreen-close")?.addEventListener("click", closeFullscreenQr);
+  q("wallet-qr-fullscreen")?.addEventListener("click", evt => {
+    if (evt.target?.id === "wallet-qr-fullscreen") closeFullscreenQr();
+  });
+
+  // ====================================================================
+  // #wallet-transactions — on-chain history with asset filter.
+  // ====================================================================
+  function extractTxAssets(tx) {
+    // Defensive: LWK `WalletTx.balance()` returns a Map<AssetId, number|bigint>.
+    // If either the wasm changes or a test stubs it differently we fall
+    // back to empty rather than crashing the history list.
+    try {
+      const raw = typeof tx?.balance === "function" ? tx.balance() : null;
+      return normalizeBalances(raw);
+    } catch {
+      return {};
+    }
+  }
+
+  function rowMatchesFilter(tx, filter) {
+    if (filter === "all") return true;
+    const assets = extractTxAssets(tx);
+    for (const assetId of Object.keys(assets)) {
+      const asset = getAssetByIdentifier(assetId);
+      if (!asset) continue;
+      if (filter === "DEPIX" && asset.symbol === "DePix") return true;
+      if (filter === "USDT" && asset.symbol === "USDt") return true;
+      if (filter === "LBTC" && asset.symbol === "L-BTC") return true;
+    }
+    return false;
+  }
+
+  function formatTxTimestamp(ts) {
+    if (typeof ts !== "number" || !Number.isFinite(ts) || ts <= 0) return "—";
+    const millis = ts < 1e12 ? ts * 1000 : ts;
+    try {
+      return new Date(millis).toLocaleString("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+    } catch {
+      return "—";
+    }
+  }
+
+  function safeCall(obj, name) {
+    try {
+      const fn = obj?.[name];
+      if (typeof fn === "function") return fn.call(obj);
+    } catch { /* fallthrough */ }
+    return undefined;
+  }
+
+  async function renderTransactions() {
+    const listEl = q("wallet-tx-list");
+    const loadingEl = q("wallet-tx-loading");
+    const emptyEl = q("wallet-tx-empty");
+    if (!listEl || !loadingEl || !emptyEl) return;
+    showMsg("wallet-tx-msg", "", null);
+    listEl.textContent = "";
+    loadingEl.classList.remove("hidden");
+    emptyEl.classList.add("hidden");
+    let txs;
+    try {
+      txs = await wallet.listTransactions();
+    } catch (err) {
+      loadingEl.classList.add("hidden");
+      renderError("wallet-tx-msg", err);
+      return;
+    }
+    loadingEl.classList.add("hidden");
+    const filtered = (txs || []).filter(t => rowMatchesFilter(t, homeFilter));
+    if (filtered.length === 0) {
+      emptyEl.classList.remove("hidden");
+      return;
+    }
+    for (const tx of filtered) {
+      const row = d.createElement("div");
+      row.className = "wallet-tx-row";
+      const body = d.createElement("div");
+      body.className = "wallet-tx-row-body";
+      const type = safeCall(tx, "type") ?? "tx";
+      const label = d.createElement("div");
+      label.className = "wallet-tx-row-label";
+      label.textContent = type === "incoming"
+        ? "Recebido"
+        : type === "outgoing"
+          ? "Enviado"
+          : String(type);
+      const meta = d.createElement("div");
+      meta.className = "wallet-tx-row-meta";
+      const ts = safeCall(tx, "timestamp");
+      const txid = safeCall(tx, "txid");
+      const txidStr = (txid && typeof txid.toString === "function") ? txid.toString() : String(txid ?? "");
+      const short = txidStr ? `${txidStr.slice(0, 10)}…${txidStr.slice(-6)}` : "";
+      meta.textContent = `${formatTxTimestamp(ts)}${short ? " · " + short : ""}`;
+      body.appendChild(label);
+      body.appendChild(meta);
+
+      const amountCol = d.createElement("div");
+      amountCol.className = "wallet-tx-row-amount";
+      const assets = extractTxAssets(tx);
+      const lines = [];
+      for (const assetId of Object.keys(assets)) {
+        const asset = getAssetByIdentifier(assetId);
+        if (!asset) continue;
+        const sats = assets[assetId];
+        const display = formatAssetAmount(sats < 0n ? -sats : sats, asset);
+        const sign = sats < 0n ? "-" : "+";
+        lines.push(`${sign}${display} ${asset.symbol}`);
+      }
+      amountCol.textContent = lines.length > 0 ? lines.join(" · ") : "—";
+      // Colour cue: if any positive → in; if all negative → out.
+      const anyPositive = Object.values(assets).some(v => v > 0n);
+      const anyNegative = Object.values(assets).some(v => v < 0n);
+      if (anyPositive && !anyNegative) amountCol.classList.add("in");
+      else if (anyNegative && !anyPositive) amountCol.classList.add("out");
+
+      row.appendChild(body);
+      row.appendChild(amountCol);
+      listEl.appendChild(row);
+    }
+  }
+
+  route("#wallet-transactions", () => {
+    void renderTransactions();
+  });
+
+  q("wallet-tx-back")?.addEventListener("click", () => {
+    persistHomeMode("wallet");
+    navigate("#home");
+  });
+
+  for (const pill of d.querySelectorAll?.("[data-wallet-filter]") ?? []) {
+    pill.addEventListener("click", () => {
+      const filter = pill.getAttribute("data-wallet-filter") || "all";
+      homeFilter = filter;
+      for (const other of d.querySelectorAll("[data-wallet-filter]")) {
+        other.classList.toggle("active", other === pill);
+      }
+      void renderTransactions();
+    });
+  }
+
+  // ====================================================================
+  // #wallet-settings — biometric toggle + export + wipe.
+  // ====================================================================
+  async function refreshBiometricRow() {
+    const status = q("wallet-settings-biometric-status");
+    const toggle = q("wallet-settings-biometric-toggle");
+    if (!status || !toggle) return;
+    try {
+      const supported = await wallet.biometricSupported();
+      if (!supported) {
+        status.textContent = "Seu aparelho não suporta biometria compatível (PRF).";
+        toggle.disabled = true;
+        toggle.textContent = "Indisponível";
+        return;
+      }
+      const enrolled = await wallet.hasBiometric();
+      if (enrolled) {
+        status.textContent = "Biometria ativa neste aparelho.";
+        toggle.disabled = false;
+        toggle.textContent = "Remover";
+        toggle.dataset.action = "remove";
+      } else {
+        status.textContent = "Biometria não configurada.";
+        toggle.disabled = false;
+        toggle.textContent = "Ativar";
+        toggle.dataset.action = "add";
+      }
+    } catch {
+      status.textContent = "Não foi possível verificar biometria.";
+      toggle.disabled = true;
+    }
+  }
+
+  route("#wallet-settings", () => {
+    showMsg("wallet-settings-msg", "", null);
+    void refreshBiometricRow();
+  });
+
+  q("wallet-settings-back")?.addEventListener("click", () => {
+    persistHomeMode("wallet");
+    navigate("#home");
+  });
+
+  q("wallet-settings-biometric-toggle")?.addEventListener("click", async () => {
+    const toggle = q("wallet-settings-biometric-toggle");
+    if (!toggle) return;
+    const action = toggle.dataset.action;
+    showMsg("wallet-settings-msg", "", null);
+    if (action === "remove") {
+      toggle.disabled = true;
+      try {
+        await wallet.removeBiometric();
+        if (showToast) showToast("Biometria removida.");
+      } catch (err) {
+        renderError("wallet-settings-msg", err);
+      } finally {
+        await refreshBiometricRow();
+      }
+      return;
+    }
+    // Add requires PIN — reuse export modal input pattern inline.
+    const pin = prompt("Digite seu PIN para ativar biometria:");
+    if (!pin) return;
+    toggle.disabled = true;
+    try {
+      await wallet.addBiometric(pin);
+      if (showToast) showToast("Biometria ativada.");
+    } catch (err) {
+      if (isWalletError(err, ERROR_CODES.BIOMETRIC_REJECTED)) {
+        showMsg("wallet-settings-msg", "Autenticação cancelada.", "warning");
+      } else {
+        renderError("wallet-settings-msg", err);
+      }
+    } finally {
+      await refreshBiometricRow();
+    }
+  });
+
+  // --- Export mnemonic modal ---
+  function resetExportModal() {
+    const pin = q("wallet-export-pin");
+    const words = q("wallet-export-words");
+    if (pin) pin.value = "";
+    if (words) {
+      words.textContent = "";
+      words.classList.add("hidden");
+    }
+    clearMsg("wallet-export-msg");
+    const confirm = q("wallet-export-confirm");
+    if (confirm) {
+      confirm.textContent = "Mostrar";
+      confirm.disabled = false;
+      confirm.dataset.shown = "";
+    }
+  }
+
+  q("wallet-settings-export")?.addEventListener("click", () => {
+    resetExportModal();
+    q("wallet-export-modal")?.classList.remove("hidden");
+  });
+
+  q("wallet-export-cancel")?.addEventListener("click", () => {
+    q("wallet-export-modal")?.classList.add("hidden");
+    resetExportModal();
+  });
+
+  q("wallet-export-confirm")?.addEventListener("click", async () => {
+    const pin = q("wallet-export-pin")?.value ?? "";
+    const confirm = q("wallet-export-confirm");
+    const wordsEl = q("wallet-export-words");
+    clearMsg("wallet-export-msg");
+    if (confirm?.dataset.shown === "1") {
+      q("wallet-export-modal")?.classList.add("hidden");
+      resetExportModal();
+      return;
+    }
+    if (!isPinInputValid(pin)) {
+      showMsg("wallet-export-msg", "Informe um PIN de 6 dígitos.", "error");
+      return;
+    }
+    if (confirm) confirm.disabled = true;
+    try {
+      const mnemonic = await wallet.exportMnemonic(pin);
+      if (!wordsEl) return;
+      wordsEl.textContent = "";
+      wordsEl.classList.remove("hidden");
+      splitMnemonic(mnemonic).forEach((word, i) => {
+        const cell = d.createElement("div");
+        cell.className = "wallet-seed-cell";
+        cell.setAttribute("aria-label", `Palavra ${i + 1}: ${word}`);
+        const n = d.createElement("span");
+        n.className = "wallet-seed-index";
+        n.textContent = String(i + 1);
+        const w = d.createElement("span");
+        w.className = "wallet-seed-word";
+        w.textContent = word;
+        cell.appendChild(n);
+        cell.appendChild(w);
+        wordsEl.appendChild(cell);
+      });
+      if (confirm) {
+        confirm.textContent = "Fechar";
+        confirm.disabled = false;
+        confirm.dataset.shown = "1";
+      }
+    } catch (err) {
+      if (isWalletError(err, ERROR_CODES.WALLET_WIPED)) {
+        showMsg("wallet-export-msg", "Muitas tentativas erradas. Carteira apagada deste aparelho.", "error");
+        setTimeout(() => {
+          q("wallet-export-modal")?.classList.add("hidden");
+          navigate("#wallet-gate");
+        }, 2000);
+      } else if (isWalletError(err, ERROR_CODES.WRONG_PIN)) {
+        showMsg("wallet-export-msg", err.message || "PIN incorreto.", "error");
+      } else {
+        renderError("wallet-export-msg", err);
+      }
+      if (confirm) confirm.disabled = false;
+    }
+  });
+
+  // --- Wipe wallet modal ---
+  function resetWipeModal() {
+    const pin = q("wallet-wipe-pin");
+    if (pin) pin.value = "";
+    clearMsg("wallet-wipe-msg");
+    const btn = q("wallet-wipe-confirm");
+    if (btn) btn.disabled = false;
+  }
+
+  q("wallet-settings-wipe")?.addEventListener("click", () => {
+    resetWipeModal();
+    q("wallet-wipe-modal")?.classList.remove("hidden");
+  });
+
+  q("wallet-wipe-cancel")?.addEventListener("click", () => {
+    q("wallet-wipe-modal")?.classList.add("hidden");
+    resetWipeModal();
+  });
+
+  q("wallet-wipe-confirm")?.addEventListener("click", async () => {
+    const pin = q("wallet-wipe-pin")?.value ?? "";
+    const btn = q("wallet-wipe-confirm");
+    clearMsg("wallet-wipe-msg");
+    if (!isPinInputValid(pin)) {
+      showMsg("wallet-wipe-msg", "Informe um PIN de 6 dígitos.", "error");
+      return;
+    }
+    if (btn) btn.disabled = true;
+    try {
+      await wallet.wipeWallet(pin);
+      q("wallet-wipe-modal")?.classList.add("hidden");
+      resetWipeModal();
+      persistHomeMode("deposit");
+      if (showToast) showToast("Carteira apagada deste aparelho.");
+      navigate("#wallet-gate");
+    } catch (err) {
+      if (isWalletError(err, ERROR_CODES.WALLET_WIPED)) {
+        showMsg("wallet-wipe-msg", "Muitas tentativas erradas. Carteira apagada.", "warning");
+        setTimeout(() => {
+          q("wallet-wipe-modal")?.classList.add("hidden");
+          persistHomeMode("deposit");
+          navigate("#wallet-gate");
+        }, 1500);
+      } else {
+        renderError("wallet-wipe-msg", err);
+      }
+      if (btn) btn.disabled = false;
+    }
+  });
+
+  // Expose a small handle for tests + potential future callers. Read-only.
+  return Object.freeze({
+    _mountWalletHome: onWalletHomeMount,
+    _unmountWalletHome: onWalletHomeUnmount,
+    _renderReceiveQr: renderReceiveQr,
+    _renderTransactions: renderTransactions,
+    _refreshBiometricRow: refreshBiometricRow,
+    _lastBalancesRender: () => lastBalancesRender
   });
 }
