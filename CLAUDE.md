@@ -23,13 +23,13 @@ All new code must be written in English — variable names, function names, tabl
 - **Language**: Vanilla JavaScript with ES Modules (`type="module"`)
 - **Styling**: Custom CSS (no framework — dark teal theme, mobile-first, responsive)
 - **Routing**: Hash-based SPA router (`#login`, `#home`, `#reports`, etc.)
-- **Storage**: `localStorage` for addresses and auth tokens
+- **Storage**: `localStorage` for addresses and auth tokens; IndexedDB for wallet (Phase 1)
 - **PWA**: Service Worker for offline caching + Web App Manifest for installability
-- **Build step**: None. Zero bundler, zero framework, zero npm runtime dependencies.
+- **Build step**: Scoped to `wallet/` only. esbuild bundles `wallet/entry.js` to `dist/wallet-bundle-<hash>.js` + copies the LWK WASM binary with a hashed filename. All other files (`script.js`, `utils.js`, `style.css`, icons) are served directly with no build. CI runs `npm run build` before deploying to Pages; `dist/` is not committed to `main`.
 - **Backend**: Communicates with `https://depix-backend.vercel.app` via authenticated fetch
 
 ### Design Philosophy
-This project is intentionally zero-dependency and framework-free. All JS is vanilla ES modules loaded directly by the browser. No build step — files are served as-is.
+Legacy surface stays zero-dependency and framework-free — vanilla ES modules loaded directly by the browser. The wallet bundle is the single exception: LWK WASM cannot ship unbundled, so esbuild is scoped strictly to `wallet/` and its output is content-hashed (no `?v=` tracking needed for wallet assets; each build rotates the filename).
 
 ### Module Dependency Flow
 `script.js` is the single entry point imported by `index.html`. It imports everything else:
@@ -156,6 +156,9 @@ npm test                           # Run all tests (vitest)
 npm run test:watch                 # Watch mode
 npm run test:coverage              # Tests with coverage report
 npx vitest run tests/auth.test.js  # Run a single test file
+npm run build                      # Build wallet bundle into dist/
+npm run build:watch                # Rebuild on wallet/ changes
+npm run build:check                # One-shot build used by CI
 ```
 
 Requires Node.js >= 22.
@@ -371,12 +374,22 @@ Images, icons, and the manifest remain cache-first because they don't cross-vers
 
 ### CRITICAL: Deploy checklist
 
-**Every time you change ANY frontend file (JS, CSS, HTML), you MUST do both of these steps before pushing:**
+Two distinct cache-busting regimes live side by side — do not confuse them:
 
-1. **Bump `APP_VERSION`** in `service-worker.js` (line 3): e.g. `const APP_VERSION = 124;` → `const APP_VERSION = 125;`
-2. **Update `?v=` query strings** in `index.html` to match the new version number. Search for `?v=` — there are ~6 occurrences (script.js, style.css, manifest.json, icons). Change all from `?v=124` to `?v=125`.
+**A. Legacy files (`script.js`, `style.css`, `manifest.json`, icons, etc.)** — must be bumped manually every time you edit one:
 
-**Both steps are required.** If you only bump `APP_VERSION` but not the HTML query strings, the HTML will reference the old version. If you only bump the HTML but not `APP_VERSION`, the SW won't reinstall.
+1. **Bump `APP_VERSION`** in `service-worker.js` (line 3): e.g. `const APP_VERSION = 125;` → `const APP_VERSION = 126;`
+2. **Update `?v=` query strings** in `index.html` to match the new version number. Search for `?v=` — there are ~6 occurrences (script.js, style.css, manifest.json, icons). Change all from `?v=125` to `?v=126`.
+
+Both steps are required. If you only bump `APP_VERSION` but not the HTML query strings, the HTML will reference the old version. If you only bump the HTML but not `APP_VERSION`, the SW won't reinstall.
+
+**B. Wallet bundle (`dist/wallet-bundle-<hash>.js`, `dist/lwk_wasm-<hash>.wasm`)** — no manual action required:
+
+- esbuild stamps the filename with a content hash on every build. Any change in `wallet/` produces a new filename, so the browser treats it as a new resource and bypasses the cache automatically.
+- `index.html` does NOT hardcode the hashed filename. Instead, the loader reads `dist/manifest.json` at runtime and imports the file it points to.
+- You never edit `?v=` for anything under `dist/`.
+
+The SW bump from regime A still controls the cache **namespace** (`depix-v${APP_VERSION}`), so a legacy-file edit invalidates the wallet cache too. If you only touch `wallet/`, you don't need to bump `APP_VERSION` — the content hash already does the job, and the SW precache doesn't include `dist/` (the loader fetches lazily).
 
 ### What happens if you forget
 

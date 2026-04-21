@@ -1,0 +1,119 @@
+// Wallet bundle build — esbuild + content-hash naming.
+//
+// Usage:
+//   npm run build          # one-shot build into dist/
+//   npm run build:watch    # rebuild on file changes
+//   npm run build:check    # same as build; CI uses this to verify toolchain
+//
+// Output:
+//   dist/wallet-bundle-<hash>.js     bundled wallet entry (ESM)
+//   dist/<asset>-<hash>.wasm         LWK WASM binary
+//   dist/manifest.json               { walletBundle, walletWasm } — logical → hashed filename
+//
+// index.html does NOT reference the bundle directly by filename. script.js
+// reads dist/manifest.json at runtime when the wallet is first needed, then
+// dynamic-imports the hashed bundle. That keeps the source index.html cache-
+// stable while the bundle name rotates every build.
+
+import * as esbuild from "esbuild";
+import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const projectRoot = __dirname;
+const outDir = path.join(projectRoot, "dist");
+const entryPoint = path.join(projectRoot, "wallet", "entry.js");
+
+const args = new Set(process.argv.slice(2));
+const watch = args.has("--watch");
+const check = args.has("--check");
+
+async function cleanOutDir() {
+  await rm(outDir, { recursive: true, force: true });
+  await mkdir(outDir, { recursive: true });
+}
+
+/** @returns {import("esbuild").BuildOptions} */
+function buildOptions() {
+  return {
+    entryPoints: [entryPoint],
+    outdir: outDir,
+    entryNames: "wallet-bundle-[hash]",
+    assetNames: "[name]-[hash]",
+    chunkNames: "chunks/[name]-[hash]",
+    bundle: true,
+    format: "esm",
+    target: "es2022",
+    platform: "browser",
+    minify: true,
+    sourcemap: false,
+    metafile: true,
+    legalComments: "linked",
+    loader: {
+      ".wasm": "file"
+    },
+    logLevel: "info"
+  };
+}
+
+async function writeManifest(metafile) {
+  const outputs = Object.keys(metafile.outputs);
+  const bundle = outputs.find(
+    f => /wallet-bundle-[A-Z0-9]+\.js$/i.test(path.basename(f))
+  );
+  const wasm = outputs.find(f => path.basename(f).endsWith(".wasm"));
+  if (!bundle) {
+    throw new Error("build: wallet bundle not found in esbuild outputs");
+  }
+  const rel = absPath => path.relative(projectRoot, absPath).split(path.sep).join("/");
+  const manifest = {
+    builtAt: new Date().toISOString(),
+    walletBundle: rel(bundle),
+    walletWasm: wasm ? rel(wasm) : null
+  };
+  await writeFile(
+    path.join(outDir, "manifest.json"),
+    JSON.stringify(manifest, null, 2) + "\n",
+    "utf8"
+  );
+  return manifest;
+}
+
+async function oneShot() {
+  await cleanOutDir();
+  const result = await esbuild.build(buildOptions());
+  const manifest = await writeManifest(result.metafile);
+  const files = await readdir(outDir);
+  console.log(`build: ${files.length} files in dist/`);
+  console.log(`build: walletBundle = ${manifest.walletBundle}`);
+  if (manifest.walletWasm) {
+    console.log(`build: walletWasm   = ${manifest.walletWasm}`);
+  }
+  return manifest;
+}
+
+async function watchMode() {
+  await cleanOutDir();
+  const ctx = await esbuild.context(buildOptions());
+  await ctx.watch();
+  console.log("build: watching wallet/ for changes…");
+  // Manifest regeneration after each rebuild is done via a plugin in a
+  // future revision. For now, run `npm run build` manually after edits you
+  // want reflected in the manifest.
+}
+
+try {
+  if (watch) {
+    await watchMode();
+  } else {
+    await oneShot();
+  }
+  if (check) {
+    // `build:check` is just a successful one-shot. CI exits non-zero on
+    // thrown errors; nothing else to assert.
+  }
+} catch (err) {
+  console.error("build failed:", err);
+  process.exit(1);
+}
