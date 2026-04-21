@@ -14,6 +14,7 @@ import { showToast, setMsg, goToAppropriateScreen as _goToAppropriateScreen } fr
 import { captureReferralCode, buildRegistrationBody, clearReferralCode, buildAffiliateLink, renderReferralsHTML, generateFingerprint } from "./affiliates.js";
 import { renderBrandedQr, renderPrintableQr } from "./qr.js";
 import { resizeImage } from "./image-resize.js";
+import { loadWalletBundle } from "./wallet-bundle-loader.js";
 
 // ===== Constants =====
 const MIN_VALOR_CENTS = 500;
@@ -2275,6 +2276,73 @@ document.addEventListener("visibilitychange", () => {
 document.getElementById("menu-transactions")?.addEventListener("click", () => {
   closeMenu();
   navigate("#transactions");
+});
+
+// ===== Wallet bundle — lazy bootstrap =====
+//
+// The wallet bundle is large (~5MB of LWK WASM) and only needed once the
+// user actually opens the wallet. We lazy-load it on first entry to a
+// `#wallet-*` route: the stubs below fire once, load the bundle, register
+// the real handlers (which overwrite these stubs), and re-dispatch the
+// hashchange so the real handler runs.
+let walletBootstrapPromise = null;
+const WALLET_ROUTE_HASHES = [
+  "#wallet-gate",
+  "#wallet-create-intro",
+  "#wallet-create-seed",
+  "#wallet-create-verify",
+  "#wallet-create-pin",
+  "#wallet-create-biometric",
+  "#wallet-create-done",
+  "#wallet-restore-input",
+  "#wallet-restore-pin",
+  "#wallet-restore-biometric",
+  "#wallet-restore-done"
+];
+
+async function ensureWalletBootstrapped() {
+  if (!walletBootstrapPromise) {
+    walletBootstrapPromise = (async () => {
+      const bundle = await loadWalletBundle();
+      bundle.registerWalletRoutes({
+        route,
+        navigate,
+        wallet: bundle.getDefaultWallet(),
+        showToast
+      });
+    })().catch(err => {
+      walletBootstrapPromise = null;
+      throw err;
+    });
+  }
+  return walletBootstrapPromise;
+}
+
+function makeWalletRouteStub() {
+  return async () => {
+    try {
+      await ensureWalletBootstrapped();
+      // registerWalletRoutes overwrote the handler for this hash; fire a
+      // synthetic hashchange so the real handler runs for the current view.
+      window.dispatchEvent(new Event("hashchange"));
+    } catch (err) {
+      const msg = document.getElementById("wallet-gate-msg");
+      if (msg) {
+        msg.textContent = "Não foi possível carregar a carteira. Verifique sua conexão e tente novamente.";
+        msg.classList.add("error");
+      }
+      console.error("wallet bundle load failed", err);
+    }
+  };
+}
+
+for (const hash of WALLET_ROUTE_HASHES) {
+  route(hash, makeWalletRouteStub());
+}
+
+document.getElementById("menu-wallet")?.addEventListener("click", () => {
+  closeMenu();
+  navigate("#wallet-gate");
 });
 
 // Shared: collapse a filter panel after selection

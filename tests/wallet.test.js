@@ -264,6 +264,7 @@ describe("public API surface", () => {
       "hasBiometric",
       "biometricSupported",
       "isUnlocked",
+      "generateMnemonic",
       "createWallet",
       "restoreWallet",
       "unlock",

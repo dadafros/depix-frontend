@@ -20,4 +20,6 @@ export {
   isWalletError
 } from "./wallet-errors.js";
 
-export const WALLET_BUNDLE_VERSION = "sub2";
+export { registerWalletRoutes } from "./wallet-ui.js";
+
+export const WALLET_BUNDLE_VERSION = "sub3";

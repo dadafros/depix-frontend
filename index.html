@@ -142,16 +142,16 @@
   }
   </script>
 
-  <link rel="manifest" href="manifest.json?v=126" />
-  <link rel="icon" href="icon-192.png?v=126" />
-  <link rel="apple-touch-icon" href="icon-192.png?v=126" />
+  <link rel="manifest" href="manifest.json?v=127" />
+  <link rel="icon" href="icon-192.png?v=127" />
+  <link rel="apple-touch-icon" href="icon-192.png?v=127" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
   <!-- Asset version must match APP_VERSION in service-worker.js -->
-  <link rel="stylesheet" href="style.css?v=126" />
+  <link rel="stylesheet" href="style.css?v=127" />
 </head>
 <body>
 
@@ -160,7 +160,7 @@
 
   <nav class="landing-nav">
     <div class="landing-nav-inner">
-      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=126" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
+      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=127" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
       <div class="landing-nav-right">
         <a href="https://blog.depixapp.com/" class="landing-nav-link">Blog</a>
         <a href="#login" class="landing-nav-cta">Entrar</a>
@@ -924,6 +924,10 @@
         <button id="menu-select-addr" class="menu-item">Trocar endereço</button>
         <button id="menu-add-addr" class="menu-item">Adicionar endereço</button>
       </div>
+    </div>
+
+    <div class="menu-section">
+      <h3 class="menu-section-link" id="menu-wallet"><svg class="menu-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h16v4"/><path d="M21 12H3v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z"/><circle cx="17" cy="16" r="1"/></svg>Carteira Liquid</h3>
     </div>
 
     <div id="menu-merchant-section" class="menu-section">
@@ -1957,6 +1961,172 @@
   </div>
 </section>
 
+<!-- ===== WALLET — gate / onboarding (Fase 1 Sub-fase 3) ===== -->
+<section data-view="wallet-gate" class="page hidden">
+  <div class="card">
+    <h2 class="view-title">Carteira Liquid</h2>
+    <div id="wallet-gate-msg" class="mensagem"></div>
+
+    <div id="wallet-gate-new" class="hidden">
+      <p class="info-text">Uma carteira não-custodial, aqui no seu aparelho. Você guarda as 12 palavras; elas são a única forma de recuperar seu dinheiro.</p>
+      <button id="wallet-gate-create" style="width:100%;margin-top:12px">Criar nova carteira</button>
+      <button id="wallet-gate-restore" class="secondary" style="width:100%;margin-top:8px">Restaurar com 12 palavras</button>
+    </div>
+
+    <div id="wallet-gate-existing" class="hidden">
+      <p class="info-text">Você já tem uma carteira neste aparelho.</p>
+      <button id="wallet-gate-existing-home" style="width:100%;margin-top:12px">Ir pra início</button>
+    </div>
+  </div>
+</section>
+
+<section data-view="wallet-create-intro" class="page hidden">
+  <div class="card">
+    <h2 class="view-title">Vamos criar sua carteira</h2>
+    <p class="info-text">Sua carteira é protegida por 12 palavras que só você tem. Anote em papel — <strong>não tire print, não escreva em nota do celular</strong>.</p>
+    <p class="info-text">Celular pode ser roubado, hackeado, quebrado ou o app pode ser desinstalado. Se isso acontecer, as 12 palavras no papel são a única forma de recuperar seu dinheiro.</p>
+    <p class="info-text wallet-warning">No iPhone, quando você instala o app na tela inicial, os dados da carteira <strong>não</strong> entram no backup do iCloud. Trocou de celular? Se você não tem as 12 palavras, perde o acesso.</p>
+
+    <label class="wallet-consent-row">
+      <input type="checkbox" id="wallet-create-consent-1" />
+      <span>Tenho papel e caneta à mão</span>
+    </label>
+    <label class="wallet-consent-row">
+      <input type="checkbox" id="wallet-create-consent-2" />
+      <span>Estou em local privado, ninguém me olhando</span>
+    </label>
+
+    <div id="wallet-create-intro-msg" class="mensagem"></div>
+    <button id="wallet-create-intro-continue" disabled style="width:100%;margin-top:12px">Mostrar palavras</button>
+    <button id="wallet-create-intro-back" class="secondary" style="width:100%;margin-top:8px">Cancelar</button>
+  </div>
+</section>
+
+<section data-view="wallet-create-seed" class="page hidden">
+  <div class="card">
+    <h2 class="view-title">Suas 12 palavras</h2>
+    <p class="info-text">Anote todas as 12 palavras na <strong>ordem exata</strong>. Ideal: faça 2 cópias em locais diferentes (caixa fechada, cofre, gaveta trancada).</p>
+    <p class="info-text wallet-warning">Nunca digite essas palavras em outro app ou site. Ninguém da DepixApp vai pedir elas.</p>
+
+    <div id="wallet-create-seed-grid" class="wallet-seed-grid" role="list"></div>
+
+    <div id="wallet-create-seed-msg" class="mensagem"></div>
+    <button id="wallet-create-seed-continue" style="width:100%;margin-top:12px">Já anotei em papel, próximo</button>
+    <button id="wallet-create-seed-back" class="secondary" style="width:100%;margin-top:8px">Voltar</button>
+  </div>
+</section>
+
+<section data-view="wallet-create-verify" class="page hidden">
+  <div class="card">
+    <h2 class="view-title">Confirme 4 palavras</h2>
+    <p class="info-text">Toque na palavra correta em cada posição pra confirmar que sua anotação está certa.</p>
+
+    <div id="wallet-create-verify-host"></div>
+
+    <div id="wallet-create-verify-msg" class="mensagem"></div>
+    <button id="wallet-create-verify-back" class="secondary" style="width:100%;margin-top:8px">Ver palavras novamente</button>
+  </div>
+</section>
+
+<div id="wallet-create-verify-modal" class="modal hidden">
+  <div class="modal-box">
+    <h2>Revise sua anotação</h2>
+    <p class="info-text">Você precisa anotar suas 12 palavras em papel e guardar em local seguro. Elas são a única forma de recuperar sua carteira. Revise sua anotação agora.</p>
+    <button id="wallet-create-verify-modal-dismiss" style="width:100%;margin-top:12px">Entendi</button>
+  </div>
+</div>
+
+<section data-view="wallet-create-pin" class="page hidden">
+  <div class="card">
+    <h2 class="view-title">Crie seu PIN</h2>
+    <p class="info-text">Seu PIN de 6 dígitos autoriza envios. Ele é <strong>diferente da senha do app</strong>.</p>
+    <p class="info-text wallet-warning">Se errar o PIN 5 vezes seguidas, a carteira é apagada deste aparelho — mas os fundos ficam seguros. Basta restaurar com as 12 palavras.</p>
+
+    <label for="wallet-create-pin-input">PIN (6 dígitos)</label>
+    <input id="wallet-create-pin-input" type="password" inputmode="numeric" autocomplete="new-password" maxlength="6" pattern="[0-9]{6}" />
+    <label for="wallet-create-pin-confirm">Confirme o PIN</label>
+    <input id="wallet-create-pin-confirm" type="password" inputmode="numeric" autocomplete="new-password" maxlength="6" pattern="[0-9]{6}" />
+
+    <div id="wallet-create-pin-msg" class="mensagem"></div>
+    <button id="wallet-create-pin-submit" style="width:100%;margin-top:12px">Criar carteira</button>
+    <button id="wallet-create-pin-back" class="secondary" style="width:100%;margin-top:8px">Voltar</button>
+  </div>
+</section>
+
+<section data-view="wallet-create-biometric" class="page hidden">
+  <div class="card">
+    <h2 class="view-title">Ativar biometria</h2>
+    <p class="info-text">Use Face ID ou Touch ID pra enviar sem digitar o PIN toda vez. Sua chave fica protegida pelo hardware do celular.</p>
+
+    <div id="wallet-create-biometric-unavailable" class="info-text wallet-warning hidden">Seu aparelho não tem biometria compatível com esta carteira. Você segue só com o PIN — tudo funciona normalmente.</div>
+
+    <div id="wallet-create-biometric-msg" class="mensagem"></div>
+    <button id="wallet-create-biometric-enroll" style="width:100%;margin-top:12px">Ativar biometria</button>
+    <button id="wallet-create-biometric-skip" class="secondary" style="width:100%;margin-top:8px">Pular por enquanto</button>
+  </div>
+</section>
+
+<section data-view="wallet-create-done" class="page hidden">
+  <div class="card">
+    <h2 class="view-title">Carteira ativa</h2>
+    <p class="info-text">Pronto. Sua carteira já está funcionando neste aparelho.</p>
+    <p class="info-text">Faça o primeiro teste: envie R$1 pra você mesmo em 24h pra se familiarizar com o fluxo.</p>
+
+    <button id="wallet-create-done-home" style="width:100%;margin-top:12px">Ir pra início</button>
+  </div>
+</section>
+
+<section data-view="wallet-restore-input" class="page hidden">
+  <div class="card">
+    <h2 class="view-title">Restaurar carteira</h2>
+    <p class="info-text">Digite as 12 palavras na ordem exata. Não cole — digite cada palavra pra conferir sua anotação letra por letra.</p>
+
+    <div id="wallet-restore-grid" class="wallet-restore-grid"></div>
+
+    <div id="wallet-restore-input-msg" class="mensagem"></div>
+    <button id="wallet-restore-input-continue" style="width:100%;margin-top:12px">Validar e avançar</button>
+    <button id="wallet-restore-input-back" class="secondary" style="width:100%;margin-top:8px">Cancelar</button>
+  </div>
+</section>
+
+<section data-view="wallet-restore-pin" class="page hidden">
+  <div class="card">
+    <h2 class="view-title">Crie um PIN</h2>
+    <p class="info-text">Seu PIN de 6 dígitos autoriza envios. Ele é <strong>diferente da senha do app</strong>.</p>
+
+    <label for="wallet-restore-pin-input">PIN (6 dígitos)</label>
+    <input id="wallet-restore-pin-input" type="password" inputmode="numeric" autocomplete="new-password" maxlength="6" pattern="[0-9]{6}" />
+    <label for="wallet-restore-pin-confirm">Confirme o PIN</label>
+    <input id="wallet-restore-pin-confirm" type="password" inputmode="numeric" autocomplete="new-password" maxlength="6" pattern="[0-9]{6}" />
+
+    <div id="wallet-restore-pin-msg" class="mensagem"></div>
+    <button id="wallet-restore-pin-submit" style="width:100%;margin-top:12px">Restaurar carteira</button>
+    <button id="wallet-restore-pin-back" class="secondary" style="width:100%;margin-top:8px">Voltar</button>
+  </div>
+</section>
+
+<section data-view="wallet-restore-biometric" class="page hidden">
+  <div class="card">
+    <h2 class="view-title">Ativar biometria</h2>
+    <p class="info-text">Use Face ID ou Touch ID pra enviar sem digitar o PIN toda vez.</p>
+
+    <div id="wallet-restore-biometric-unavailable" class="info-text wallet-warning hidden">Seu aparelho não tem biometria compatível com esta carteira. Você segue só com o PIN — tudo funciona normalmente.</div>
+
+    <div id="wallet-restore-biometric-msg" class="mensagem"></div>
+    <button id="wallet-restore-biometric-enroll" style="width:100%;margin-top:12px">Ativar biometria</button>
+    <button id="wallet-restore-biometric-skip" class="secondary" style="width:100%;margin-top:8px">Pular por enquanto</button>
+  </div>
+</section>
+
+<section data-view="wallet-restore-done" class="page hidden">
+  <div class="card">
+    <h2 class="view-title">Carteira restaurada</h2>
+    <p class="info-text">Pronto. Sua carteira foi restaurada neste aparelho.</p>
+
+    <button id="wallet-restore-done-home" style="width:100%;margin-top:12px">Ir pra início</button>
+  </div>
+</section>
+
 <!-- ===== MODAL: WELCOME MERCHANT ===== -->
 <div id="merchant-welcome-modal" class="modal hidden">
   <div class="modal-box" style="text-align:left">
@@ -2536,6 +2706,6 @@
 
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 <!-- Asset version must match APP_VERSION in service-worker.js -->
-<script type="module" src="script.js?v=126"></script>
+<script type="module" src="script.js?v=127"></script>
 </body>
 </html>
