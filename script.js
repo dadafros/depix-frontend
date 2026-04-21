@@ -15,6 +15,24 @@ import { captureReferralCode, buildRegistrationBody, clearReferralCode, buildAff
 import { renderBrandedQr, renderPrintableQr } from "./qr.js";
 import { resizeImage } from "./image-resize.js";
 import { loadWalletBundle } from "./wallet-bundle-loader.js";
+import { getDefaultConfigClient } from "./wallet/config.js";
+
+// Resolve the current user's preferred deposit address. If a wallet exists on
+// this device we deposit straight into it — no more copy-paste. Otherwise we
+// fall back to the legacy selected-address picker (`addresses.js`). Failing
+// silently here is intentional: the caller already handles a null return by
+// surfacing "selecione um endereço".
+async function resolveWalletReceiveAddress() {
+  try {
+    const bundle = await loadWalletBundle();
+    const w = bundle.getDefaultWallet();
+    if (!(await w.hasWallet())) return null;
+    const addr = await w.getReceiveAddress();
+    return typeof addr === "string" && addr.length > 0 ? addr : null;
+  } catch {
+    return null;
+  }
+}
 
 // ===== Constants =====
 const MIN_VALOR_CENTS = 500;
@@ -257,6 +275,9 @@ document.getElementById("closeModal")?.addEventListener("click", () => {
 // Wallet guide modal
 document.getElementById("wallet-guide-link")?.addEventListener("click", (e) => {
   e.preventDefault();
+  document.getElementById("wallet-guide-modal")?.classList.remove("hidden");
+});
+document.getElementById("wallet-maintenance-help")?.addEventListener("click", () => {
   document.getElementById("wallet-guide-modal")?.classList.remove("hidden");
 });
 document.getElementById("btn-wallet-guide-register")?.addEventListener("click", () => {
@@ -987,7 +1008,11 @@ document.getElementById("btnGerar")?.addEventListener("click", async () => {
   setMsg("mensagem", "");
 
   const valorInput = document.getElementById("valor");
-  const addr = getSelectedAddress();
+  // Prefer the wallet's receive address when a wallet exists on this device.
+  // Falls back to the selected external address, preserving the legacy flow
+  // byte-identically for users without a wallet.
+  const walletAddr = await resolveWalletReceiveAddress();
+  const addr = walletAddr || getSelectedAddress();
 
   if (!valorInput.value) {
     setMsg("mensagem", "Informe o valor");
@@ -1234,7 +1259,13 @@ document.getElementById("btnSacar")?.addEventListener("click", async () => {
 
   const valorSaqueInput = document.getElementById("valorSaque");
   const pixKeyInput = document.getElementById("pixKey");
-  const addr = getSelectedAddress();
+  // Prefer the wallet's receive address for the `depixAddress` payload so the
+  // Eulen-side ingest address can be correlated with the in-app broadcast via
+  // the new /api/withdraw/txid archive endpoint. Legacy external-picker flow
+  // stays intact when no wallet exists.
+  const walletAddr = await resolveWalletReceiveAddress();
+  const addr = walletAddr || getSelectedAddress();
+  const hasWallet = !!walletAddr;
 
   if (!valorSaqueInput.value || !pixKeyInput.value.trim()) {
     setMsg("mensagemSaque", "Preencha todos os campos");
@@ -1306,6 +1337,21 @@ document.getElementById("btnSacar")?.addEventListener("click", async () => {
 
     const r = data.response;
     lastWithdrawalId = r.id;
+
+    if (hasWallet) {
+      window.dispatchEvent(new CustomEvent("wallet-send:prefill", {
+        detail: {
+          assetKey: "DEPIX",
+          amountBrl: r.depositAmountInCents / 100,
+          dest: r.depositAddress,
+          withdrawalId: r.id
+        }
+      }));
+      try { localStorage.setItem("depix-home-mode", "wallet"); } catch { /* ignore */ }
+      document.getElementById("formSaque").classList.add("hidden");
+      navigate("#wallet-send");
+      return;
+    }
 
     document.getElementById("saqueDepositAmount").innerText = formatDePix(r.depositAmountInCents);
     document.getElementById("saquePayoutAmount").innerText = formatBRL(r.payoutAmountInCents);
@@ -2655,6 +2701,22 @@ async function refreshWalletModeAvailability() {
   } catch {
     walletExists = false;
   }
+  const walletEnabled = await isWalletFeatureEnabled();
+  const banner = document.getElementById("wallet-maintenance-banner");
+  if (!walletEnabled) {
+    // Kill switch on. New users can't reach create flow; users with an existing
+    // wallet still get view-only access + maintenance banner linking the guide.
+    if (!walletExists) {
+      walletBtn.classList.add("hidden");
+      banner?.classList.add("hidden");
+      if (modoWallet) switchMode("deposit");
+      return;
+    }
+    walletBtn.classList.remove("hidden");
+    banner?.classList.remove("hidden");
+  } else {
+    banner?.classList.add("hidden");
+  }
   if (!walletExists) {
     walletBtn.classList.add("hidden");
     if (modoWallet) switchMode("deposit");
@@ -2667,6 +2729,14 @@ async function refreshWalletModeAvailability() {
   } catch { /* private mode */ }
   if (preferred === "wallet" && !modoWallet) {
     switchMode("wallet");
+  }
+}
+
+async function isWalletFeatureEnabled() {
+  try {
+    return await getDefaultConfigClient().isWalletEnabled();
+  } catch {
+    return true; // fail-open
   }
 }
 

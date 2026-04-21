@@ -25,12 +25,21 @@ import {
   MAX_LOAD_RETRIES,
   WASM_FETCH_TIMEOUT_MS
 } from "./constants.js";
+import { getDefaultTelemetryClient, TELEMETRY_EVENTS } from "./telemetry.js";
 
 import * as lwkBg from "lwk_wasm/lwk_wasm_bg.js";
 // esbuild's `file` loader rewrites this to the hashed URL at build time.
 import lwkWasmUrl from "lwk_wasm/lwk_wasm_bg.wasm";
 
 let loadPromise = null;
+
+function isTimeoutError(err) {
+  if (!err) return false;
+  if (err.name === "AbortError") return true;
+  if (err.name === "TimeoutError") return true;
+  const msg = String(err.message ?? "");
+  return /timed?.out|aborted/i.test(msg);
+}
 
 function fetchWithTimeout(url, ms, fetchImpl) {
   const f = fetchImpl ?? fetch;
@@ -58,16 +67,28 @@ async function instantiate(url, fetchImpl) {
 
 async function tryLoad(url, fetchImpl) {
   let lastErr = null;
+  let sawTimeout = false;
   for (let attempt = 0; attempt < MAX_LOAD_RETRIES; attempt++) {
     try {
       return await instantiate(url, fetchImpl);
     } catch (err) {
       lastErr = err;
+      if (isTimeoutError(err)) sawTimeout = true;
       const delay = LOAD_BACKOFF_SCHEDULE_MS[attempt] ?? 0;
       if (attempt < MAX_LOAD_RETRIES - 1 && delay > 0) {
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
+  }
+  // Anonymous signal for ops dashboards: every retry hit the 10s timeout.
+  // This is the one event that is NOT wired from the UI — by the time we get
+  // here, the wallet bundle never booted, so no UI handler ever sees the error.
+  if (sawTimeout) {
+    try {
+      getDefaultTelemetryClient().track(TELEMETRY_EVENTS.WASM_LOAD_TIMEOUT, {
+        errorCode: String(lastErr?.name ?? "unknown")
+      });
+    } catch { /* best-effort */ }
   }
   throw new WalletError(
     ERROR_CODES.LWK_LOAD_FAILED,

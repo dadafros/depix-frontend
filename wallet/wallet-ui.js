@@ -31,6 +31,9 @@ import {
   formatAssetAmount
 } from "./asset-registry.js";
 import { validateLiquidAddress } from "../validation.js";
+import { getDefaultTelemetryClient, TELEMETRY_EVENTS } from "./telemetry.js";
+import { archiveWithdrawTxid } from "./withdraw-archive.js";
+import { getDefaultConfigClient } from "./config.js";
 
 // --------------------------------------------------------------------------
 // Pure helpers — exported for tests.
@@ -233,11 +236,29 @@ export function registerWalletRoutes({
     state.error = "";
   }
 
+  async function killSwitchBlocksCreate() {
+    // Kill switch off → new wallet creation is blocked. Existing wallets are
+    // allowed to continue (view-only + restore flows) so users can still reach
+    // their funds.
+    try {
+      const enabled = await getDefaultConfigClient().isWalletEnabled();
+      if (enabled) return false;
+      const exists = await wallet.hasWallet();
+      return !exists;
+    } catch {
+      return false; // fail-open
+    }
+  }
+
   // ====================================================================
   // #wallet-gate — root of the flow. Branches into create/restore/existing.
   // ====================================================================
   route("#wallet-gate", async () => {
     clearMsg("wallet-gate-msg");
+    if (await killSwitchBlocksCreate()) {
+      navigate("#home");
+      return;
+    }
     const gateExisting = q("wallet-gate-existing");
     const gateNew = q("wallet-gate-new");
     try {
@@ -269,7 +290,11 @@ export function registerWalletRoutes({
   // ====================================================================
   // #wallet-create-intro — consent checkboxes. Both must be ticked.
   // ====================================================================
-  route("#wallet-create-intro", () => {
+  route("#wallet-create-intro", async () => {
+    if (await killSwitchBlocksCreate()) {
+      navigate("#home");
+      return;
+    }
     const cb1 = q("wallet-create-consent-1");
     const cb2 = q("wallet-create-consent-2");
     const btn = q("wallet-create-intro-continue");
@@ -448,6 +473,7 @@ export function registerWalletRoutes({
         mnemonic: state.createPendingMnemonic,
         enrollBiometric: false
       });
+      try { getDefaultTelemetryClient().track(TELEMETRY_EVENTS.WALLET_CREATED); } catch { /* best-effort */ }
       state.createPendingPin = pin;
       navigate("#wallet-create-biometric");
     } catch (err) {
@@ -500,8 +526,14 @@ export function registerWalletRoutes({
     if (btn) btn.disabled = true;
     try {
       await wallet.addBiometric(pin);
+      try { getDefaultTelemetryClient().track(TELEMETRY_EVENTS.BIOMETRIC_ENROLL_SUCCESS); } catch { /* best-effort */ }
       navigate("#wallet-create-done");
     } catch (err) {
+      try {
+        getDefaultTelemetryClient().track(TELEMETRY_EVENTS.BIOMETRIC_ENROLL_FAILED, {
+          errorCode: String(err?.code ?? err?.name ?? "unknown")
+        });
+      } catch { /* best-effort */ }
       if (isWalletError(err, ERROR_CODES.BIOMETRIC_REJECTED)) {
         showMsg("wallet-create-biometric-msg", "Autenticação cancelada. Você pode ativar mais tarde.", "warning");
       } else {
@@ -696,6 +728,7 @@ export function registerWalletRoutes({
         pin,
         enrollBiometric: false
       });
+      try { getDefaultTelemetryClient().track(TELEMETRY_EVENTS.WALLET_CREATED); } catch { /* best-effort */ }
       state.createPendingPin = pin;
       navigate("#wallet-restore-biometric");
     } catch (err) {
@@ -754,8 +787,14 @@ export function registerWalletRoutes({
     if (btn) btn.disabled = true;
     try {
       await wallet.addBiometric(pin);
+      try { getDefaultTelemetryClient().track(TELEMETRY_EVENTS.BIOMETRIC_ENROLL_SUCCESS); } catch { /* best-effort */ }
       navigate("#wallet-restore-done");
     } catch (err) {
+      try {
+        getDefaultTelemetryClient().track(TELEMETRY_EVENTS.BIOMETRIC_ENROLL_FAILED, {
+          errorCode: String(err?.code ?? err?.name ?? "unknown")
+        });
+      } catch { /* best-effort */ }
       if (isWalletError(err, ERROR_CODES.BIOMETRIC_REJECTED)) {
         showMsg("wallet-restore-biometric-msg", "Autenticação cancelada. Você pode ativar mais tarde.", "warning");
       } else {
@@ -1421,12 +1460,16 @@ export function registerWalletRoutes({
       }
     } catch (err) {
       if (isWalletError(err, ERROR_CODES.WALLET_WIPED)) {
+        try {
+          getDefaultTelemetryClient().track(TELEMETRY_EVENTS.WALLET_WIPED, { errorCode: "pin-exhausted" });
+        } catch { /* best-effort */ }
         showMsg("wallet-export-msg", "Muitas tentativas erradas. Carteira apagada deste aparelho.", "error");
         setTimeout(() => {
           q("wallet-export-modal")?.classList.add("hidden");
           navigate("#wallet-gate");
         }, 2000);
       } else if (isWalletError(err, ERROR_CODES.WRONG_PIN)) {
+        try { getDefaultTelemetryClient().track(TELEMETRY_EVENTS.UNLOCK_PIN_WRONG); } catch { /* best-effort */ }
         showMsg("wallet-export-msg", err.message || "PIN incorreto.", "error");
       } else {
         renderError("wallet-export-msg", err);
@@ -1465,6 +1508,9 @@ export function registerWalletRoutes({
     if (btn) btn.disabled = true;
     try {
       await wallet.wipeWallet(pin);
+      try {
+        getDefaultTelemetryClient().track(TELEMETRY_EVENTS.WALLET_WIPED, { errorCode: "user-initiated" });
+      } catch { /* best-effort */ }
       q("wallet-wipe-modal")?.classList.add("hidden");
       resetWipeModal();
       persistHomeMode("deposit");
@@ -1472,12 +1518,20 @@ export function registerWalletRoutes({
       navigate("#wallet-gate");
     } catch (err) {
       if (isWalletError(err, ERROR_CODES.WALLET_WIPED)) {
+        try {
+          getDefaultTelemetryClient().track(TELEMETRY_EVENTS.WALLET_WIPED, { errorCode: "pin-exhausted" });
+        } catch { /* best-effort */ }
         showMsg("wallet-wipe-msg", "Muitas tentativas erradas. Carteira apagada.", "warning");
         setTimeout(() => {
           q("wallet-wipe-modal")?.classList.add("hidden");
           persistHomeMode("deposit");
           navigate("#wallet-gate");
         }, 1500);
+      } else if (isWalletError(err, ERROR_CODES.WRONG_PIN)) {
+        try {
+          getDefaultTelemetryClient().track(TELEMETRY_EVENTS.UNLOCK_PIN_WRONG);
+        } catch { /* best-effort */ }
+        renderError("wallet-wipe-msg", err);
       } else {
         renderError("wallet-wipe-msg", err);
       }
@@ -1684,12 +1738,27 @@ export function registerWalletRoutes({
     if (confirmBtn) confirmBtn.disabled = true;
     try {
       const { txid } = await wallet.confirmSend(sendState.preview.psetBase64);
+      if (pendingWithdrawalId) {
+        const id = pendingWithdrawalId;
+        pendingWithdrawalId = null;
+        void archiveWithdrawTxid({ withdrawalId: id, liquidTxid: txid });
+      }
       closeUnlockModal();
       showSendSuccess(txid);
     } catch (err) {
       if (isWalletError(err, ERROR_CODES.BROADCAST_FAILED)) {
+        try {
+          getDefaultTelemetryClient().track(TELEMETRY_EVENTS.SEND_BROADCAST_FAILED, {
+            errorCode: "broadcast"
+          });
+        } catch { /* best-effort */ }
         showMsg("wallet-unlock-msg", "A rede recusou a transação. Verifique conexão e tente novamente.", "error");
       } else if (isWalletError(err, ERROR_CODES.ESPLORA_UNAVAILABLE)) {
+        try {
+          getDefaultTelemetryClient().track(TELEMETRY_EVENTS.SEND_BROADCAST_FAILED, {
+            errorCode: "esplora"
+          });
+        } catch { /* best-effort */ }
         showMsg("wallet-unlock-msg", "Não foi possível alcançar o Esplora. Tente novamente.", "error");
       } else {
         renderError("wallet-unlock-msg", err);
@@ -1766,10 +1835,14 @@ export function registerWalletRoutes({
       await wallet.unlockWithPin(pin);
     } catch (err) {
       if (isWalletError(err, ERROR_CODES.WRONG_PIN)) {
+        try { getDefaultTelemetryClient().track(TELEMETRY_EVENTS.UNLOCK_PIN_WRONG); } catch { /* best-effort */ }
         showMsg("wallet-unlock-msg", err.message || "PIN incorreto.", "error");
         return;
       }
       if (isWalletError(err, ERROR_CODES.WALLET_WIPED)) {
+        try {
+          getDefaultTelemetryClient().track(TELEMETRY_EVENTS.WALLET_WIPED, { errorCode: "pin-exhausted" });
+        } catch { /* best-effort */ }
         showMsg("wallet-unlock-msg", "Muitas tentativas. Carteira apagada deste aparelho.", "error");
         setTimeout(() => {
           closeUnlockModal();
@@ -1807,6 +1880,24 @@ export function registerWalletRoutes({
     resetSendState();
   }
 
+  // Pending prefill captured from an external dispatcher (e.g. the withdraw
+  // handler in script.js). The actual form population happens when the route
+  // mounts; until then the params sit here. Nulled after consumption so a
+  // manual "#wallet-send" visit afterwards uses the fresh reset.
+  let pendingSendPrefill = null;
+  let pendingWithdrawalId = null;
+
+  window.addEventListener("wallet-send:prefill", evt => {
+    const detail = evt?.detail || {};
+    const { assetKey, amountBrl, dest, withdrawalId } = detail;
+    pendingSendPrefill = {
+      assetKey: assetKey || "DEPIX",
+      amountBrl: typeof amountBrl === "number" ? amountBrl : null,
+      dest: typeof dest === "string" ? dest : ""
+    };
+    pendingWithdrawalId = typeof withdrawalId === "string" ? withdrawalId : null;
+  });
+
   route("#wallet-send", async () => {
     clearMsg("wallet-send-msg");
     const amountInput = q("wallet-send-amount");
@@ -1824,6 +1915,22 @@ export function registerWalletRoutes({
     refreshSendFieldsForAsset();
     await loadSendBalances();
     refreshSendFieldsForAsset();
+
+    if (pendingSendPrefill) {
+      const prefill = pendingSendPrefill;
+      pendingSendPrefill = null;
+      if (prefill.assetKey && ASSETS[prefill.assetKey]) {
+        selectSendAsset(prefill.assetKey);
+      }
+      if (prefill.dest && destInput) {
+        destInput.value = prefill.dest;
+        destInput.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      if (amountInput && typeof prefill.amountBrl === "number") {
+        amountInput.value = prefill.amountBrl.toFixed(2);
+        amountInput.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    }
   });
 
   route("#wallet-send-success", () => {

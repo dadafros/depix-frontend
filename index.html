@@ -142,16 +142,16 @@
   }
   </script>
 
-  <link rel="manifest" href="manifest.json?v=129" />
-  <link rel="icon" href="icon-192.png?v=129" />
-  <link rel="apple-touch-icon" href="icon-192.png?v=129" />
+  <link rel="manifest" href="manifest.json?v=130" />
+  <link rel="icon" href="icon-192.png?v=130" />
+  <link rel="apple-touch-icon" href="icon-192.png?v=130" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
   <!-- Asset version must match APP_VERSION in service-worker.js -->
-  <link rel="stylesheet" href="style.css?v=129" />
+  <link rel="stylesheet" href="style.css?v=130" />
 </head>
 <body>
 
@@ -160,7 +160,7 @@
 
   <nav class="landing-nav">
     <div class="landing-nav-inner">
-      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=129" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
+      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=130" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
       <div class="landing-nav-right">
         <a href="https://blog.depixapp.com/" class="landing-nav-link">Blog</a>
         <a href="#login" class="landing-nav-cta">Entrar</a>
@@ -789,6 +789,14 @@
         <p>Aumente seu limite, receba DePix instantaneamente e desbloqueie a Área do Lojista.</p>
       </div>
       <a href="#verify-account" class="home-verify-banner-link">Saiba mais →</a>
+    </div>
+
+    <div id="wallet-maintenance-banner" class="wallet-maintenance-banner hidden">
+      <div class="wallet-maintenance-banner-text">
+        <strong>Carteira temporariamente em manutenção</strong>
+        <p>Para mover seu dinheiro agora, use suas 12 palavras no SideSwap.</p>
+      </div>
+      <button type="button" id="wallet-maintenance-help" class="wallet-maintenance-banner-link">Como faço?</button>
     </div>
 
     <!-- ===== SWITCH MODO ===== -->
@@ -2991,6 +2999,6 @@
 
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 <!-- Asset version must match APP_VERSION in service-worker.js -->
-<script type="module" src="script.js?v=129"></script>
+<script type="module" src="script.js?v=130"></script>
 </body>
 </html>
