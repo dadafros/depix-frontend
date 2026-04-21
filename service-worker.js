@@ -1,7 +1,11 @@
 // Service Worker — DePix PWA
 // Bump APP_VERSION on every release. Keep in sync with ?v= query strings in index.html.
-const APP_VERSION = 125;
+const APP_VERSION = 126;
 const CACHE_NAME = `depix-v${APP_VERSION}`;
+
+// Timeout for WASM fetch before falling back to cache. WASM binaries are large
+// (~5 MB for lwk_wasm). Cellular networks can stall; we refuse to spin forever.
+const WASM_FETCH_TIMEOUT_MS = 10000;
 
 // ES module imports in script.js use unversioned specifiers (./utils.js),
 // so the browser requests unversioned URLs. We must pre-cache BOTH the
@@ -59,6 +63,14 @@ self.addEventListener("activate", event => {
   self.clients.claim();
 });
 
+function fetchWithTimeout(req, ms) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  return fetch(req, { signal: controller.signal }).finally(() =>
+    clearTimeout(timer)
+  );
+}
+
 // Fetch — strategy depends on request type
 self.addEventListener("fetch", event => {
   const req = event.request;
@@ -85,6 +97,25 @@ self.addEventListener("fetch", event => {
           return response;
         })
         .catch(() => caches.match(req))
+    );
+    return;
+  }
+
+  // Wallet bundle + WASM — cache-first (content-hashed filename, so a new
+  // build always produces a new URL). Timeout on the network fallback so a
+  // stalled cellular fetch does not block wallet init forever.
+  if (/\/dist\/.*\.(wasm|js)$/.test(url.pathname)) {
+    event.respondWith(
+      caches.match(req).then(cached => {
+        if (cached) return cached;
+        return fetchWithTimeout(req, WASM_FETCH_TIMEOUT_MS).then(response => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(req, clone));
+          }
+          return response;
+        });
+      })
     );
     return;
   }
