@@ -1,14 +1,23 @@
-// Wallet bundle entry point. Sub-fase 1 ships this as a stub so the esbuild
-// pipeline has something to bundle and the CI deploy stays green before the
-// real module lands.
+// Wallet bundle entry point — this is the file esbuild bundles.
 //
-// Sub-fase 2 replaces the body with actual wallet exports (createWallet,
-// restoreWallet, unlock, buildAndSignTx, broadcast, etc.) — see
-// PLANO-FASE-1-WALLET.md. Do NOT import lwk_wasm here yet; Sub-fase 2
-// introduces the lazy loader.
+// Anything exported from here is reachable by `script.js` via the dynamic
+// import of the hashed bundle (see `dist/manifest.json`). Keep the surface
+// area tight: the rest of the app imports `getDefaultWallet()` and the error
+// types; the factory `createWalletModule` is available for tests that need
+// to inject mocks.
+//
+// Sub-fase 2 wires the module + crypto + store + biometric + lwk loader. UI
+// (Sub-fase 3) and send/receive (Sub-fase 4+) consume these exports.
 
-export const WALLET_BUNDLE_VERSION = "sub1-stub";
+export {
+  createWalletModule,
+  getDefaultWallet
+} from "./wallet.js";
 
-export function hasWallet() {
-  return false;
-}
+export {
+  WalletError,
+  ERROR_CODES,
+  isWalletError
+} from "./wallet-errors.js";
+
+export const WALLET_BUNDLE_VERSION = "sub2";

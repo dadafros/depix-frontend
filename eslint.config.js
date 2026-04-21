@@ -17,6 +17,7 @@ const baseRules = {
 
 const browserGlobals = {
   AbortController: "readonly",
+  DOMException: "readonly",
   HTMLCanvasElement: "readonly",
   Image: "readonly",
   IntersectionObserver: "readonly",
