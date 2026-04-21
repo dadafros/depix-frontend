@@ -52,6 +52,7 @@ import {
   isPrfCredential
 } from "./wallet-biometric.js";
 import { loadLwk } from "./lwk-loader.js";
+import { ASSETS } from "./asset-registry.js";
 
 const AUTO_LOCK_MS = AUTO_LOCK_MINUTES * 60 * 1000;
 
@@ -696,6 +697,238 @@ export function createWalletModule({
     }
   }
 
+  function resolveAsset(assetKey) {
+    if (!assetKey) return null;
+    const normalized = String(assetKey).toUpperCase();
+    if (normalized === "LBTC" || normalized === "L-BTC") return ASSETS.LBTC;
+    if (normalized === "DEPIX") return ASSETS.DEPIX;
+    if (normalized === "USDT") return ASSETS.USDT;
+    return null;
+  }
+
+  function assertPositiveSats(value) {
+    if (value === null || value === undefined) {
+      throw new WalletError(
+        ERROR_CODES.INVALID_AMOUNT,
+        "amountSats is required"
+      );
+    }
+    let asBig;
+    try {
+      if (typeof value === "bigint") {
+        asBig = value;
+      } else if (typeof value === "number") {
+        if (!Number.isFinite(value)) {
+          throw new Error("not finite");
+        }
+        asBig = BigInt(Math.trunc(value));
+      } else {
+        asBig = BigInt(value);
+      }
+    } catch (err) {
+      throw new WalletError(
+        ERROR_CODES.INVALID_AMOUNT,
+        "amountSats must be a positive integer (BigInt or Number)",
+        err
+      );
+    }
+    if (asBig <= 0n) {
+      throw new WalletError(
+        ERROR_CODES.INVALID_AMOUNT,
+        "amountSats must be greater than zero"
+      );
+    }
+    return asBig;
+  }
+
+  function extractFeeFromPset(pset, w) {
+    try {
+      const details = w.psetDetails(pset);
+      const bal = details?.balance?.();
+      const fee = bal?.fee?.();
+      if (typeof fee === "bigint") return fee;
+    } catch {
+      // Fee introspection is best-effort; the UI shows "—" when it fails.
+    }
+    return 0n;
+  }
+
+  // Builds an unsigned PSET for a send without requiring unlock. Running
+  // coin selection and computing the fee is a view-only operation — we only
+  // need the descriptor-based Wollet, not the Signer. The returned pset is
+  // meant to be handed to `confirmSend()` after the user authorizes the send.
+  async function prepareSend({ asset, amountSats, destAddr, sendAll = false, feeRate } = {}) {
+    const hasW = await hasWallet();
+    if (!hasW) {
+      throw new WalletError(
+        ERROR_CODES.WALLET_NOT_FOUND,
+        "No wallet on this device"
+      );
+    }
+    const resolved = resolveAsset(asset);
+    if (!resolved) {
+      throw new WalletError(
+        ERROR_CODES.UNSUPPORTED_ASSET,
+        `Asset "${asset}" is not supported`
+      );
+    }
+    if (sendAll && resolved !== ASSETS.LBTC) {
+      throw new WalletError(
+        ERROR_CODES.UNSUPPORTED_ASSET,
+        "sendAll is only supported for L-BTC"
+      );
+    }
+    let amount = null;
+    if (!sendAll) {
+      amount = assertPositiveSats(amountSats);
+    }
+    if (typeof destAddr !== "string" || !destAddr.trim()) {
+      throw new WalletError(
+        ERROR_CODES.INVALID_ADDRESS,
+        "destAddr must be a non-empty string"
+      );
+    }
+    const l = await lwk();
+    const net = makeNetwork(l, network);
+    let addr;
+    try {
+      addr = new l.Address(destAddr.trim());
+    } catch (err) {
+      throw new WalletError(
+        ERROR_CODES.INVALID_ADDRESS,
+        "Destination address is not a valid Liquid address",
+        err
+      );
+    }
+    const w = await ensureViewWollet();
+    const builder = new l.TxBuilder(net);
+    if (typeof feeRate === "number" && Number.isFinite(feeRate) && feeRate > 0) {
+      builder.feeRate(feeRate);
+    }
+    if (sendAll) {
+      builder.drainLbtcWallet();
+      builder.drainLbtcTo(addr);
+    } else if (resolved === ASSETS.LBTC) {
+      builder.addLbtcRecipient(addr, amount);
+    } else {
+      const assetId = new l.AssetId(resolved.id);
+      builder.addRecipient(addr, amount, assetId);
+    }
+    let pset;
+    try {
+      pset = builder.finish(w);
+    } catch (err) {
+      const msg = String(err?.message ?? err ?? "").toLowerCase();
+      if (msg.includes("insufficient") || msg.includes("not enough")) {
+        throw new WalletError(
+          ERROR_CODES.INSUFFICIENT_FUNDS,
+          "Not enough funds for this send",
+          err
+        );
+      }
+      throw new WalletError(
+        ERROR_CODES.UNKNOWN,
+        "Failed to build the transaction",
+        err
+      );
+    }
+    const feeSats = extractFeeFromPset(pset, w);
+    return {
+      psetBase64: pset.toString(),
+      feeSats,
+      amountSats: amount,
+      assetId: resolved.id,
+      assetSymbol: resolved.symbol,
+      destAddr: destAddr.trim(),
+      sendAll: Boolean(sendAll)
+    };
+  }
+
+  // Signs a previously-prepared PSET with the in-memory Signer, finalizes via
+  // the view Wollet, and broadcasts through Esplora. Requires unlock — the
+  // Signer lives only in the closure and is nulled by `lock()`.
+  async function confirmSend(psetBase64) {
+    if (!isUnlocked()) {
+      throw new WalletError(
+        ERROR_CODES.WALLET_LOCKED,
+        "Wallet must be unlocked before confirming a send"
+      );
+    }
+    if (typeof psetBase64 !== "string" || !psetBase64) {
+      throw new WalletError(
+        ERROR_CODES.UNKNOWN,
+        "psetBase64 must be a non-empty string"
+      );
+    }
+    const l = await lwk();
+    const net = makeNetwork(l, network);
+    let pset;
+    try {
+      pset = new l.Pset(psetBase64);
+    } catch (err) {
+      throw new WalletError(
+        ERROR_CODES.UNKNOWN,
+        "Invalid PSET string",
+        err
+      );
+    }
+    const w = await ensureViewWollet();
+    let signed;
+    try {
+      signed = signer.sign(pset);
+    } catch (err) {
+      throw new WalletError(
+        ERROR_CODES.UNKNOWN,
+        "Failed to sign the transaction",
+        err
+      );
+    }
+    let finalized;
+    try {
+      finalized = w.finalize(signed);
+    } catch (err) {
+      throw new WalletError(
+        ERROR_CODES.UNKNOWN,
+        "Failed to finalize the signed transaction",
+        err
+      );
+    }
+    let client;
+    try {
+      client = await esploraClient(l, net);
+    } catch (err) {
+      throw new WalletError(
+        ERROR_CODES.ESPLORA_UNAVAILABLE,
+        "Failed to create Esplora client",
+        err
+      );
+    }
+    let txidStr;
+    try {
+      const txid = await client.broadcast(finalized);
+      txidStr = typeof txid === "string" ? txid : txid?.toString?.() ?? "";
+    } catch (err) {
+      throw new WalletError(
+        ERROR_CODES.BROADCAST_FAILED,
+        "Broadcast rejected by the network",
+        err
+      );
+    } finally {
+      if (client?.free) {
+        try { client.free(); } catch { /* best effort */ }
+      }
+    }
+    touch();
+    // Kick off a resync so the new outgoing tx shows up. Failures here are
+    // non-fatal — the broadcast already succeeded.
+    try {
+      await syncWallet();
+    } catch {
+      // swallow
+    }
+    return { txid: txidStr };
+  }
+
   return Object.freeze({
     hasWallet,
     hasBiometric,
@@ -715,6 +948,8 @@ export function createWalletModule({
     syncWallet,
     getLastScanAt,
     getDescriptor,
+    prepareSend,
+    confirmSend,
     exportMnemonic,
     wipeWallet,
     addBiometric,

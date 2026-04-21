@@ -24,11 +24,13 @@ import {
   MAX_PIN_LENGTH
 } from "./constants.js";
 import {
+  ASSETS,
   DISPLAY_ORDER,
   getAssetByIdentifier,
   convertSatsToBrl,
   formatAssetAmount
 } from "./asset-registry.js";
+import { validateLiquidAddress } from "../validation.js";
 
 // --------------------------------------------------------------------------
 // Pure helpers — exported for tests.
@@ -110,6 +112,28 @@ export function isPinInputValid(pin) {
   if (typeof pin !== "string") return false;
   if (pin.length < MIN_PIN_LENGTH || pin.length > MAX_PIN_LENGTH) return false;
   return /^\d+$/.test(pin);
+}
+
+/**
+ * Parse a user-typed amount like "1.5", "1,5", "0.00000001" into an integer
+ * sats BigInt given the asset's `decimals`. Throws RangeError on any invalid
+ * shape (non-numeric, too many decimals, non-positive, empty). Matches the
+ * format the wallet send form accepts.
+ */
+export function parseAmountToSats(input, decimals) {
+  if (typeof input !== "string") throw new TypeError("input");
+  if (typeof decimals !== "number" || decimals < 0) throw new RangeError("decimals");
+  const normalized = input.trim().replace(",", ".");
+  if (!normalized || !/^\d+(\.\d+)?$/.test(normalized)) {
+    throw new RangeError("invalid amount");
+  }
+  const [whole, frac = ""] = normalized.split(".");
+  if (frac.length > decimals) throw new RangeError("too many decimals");
+  const padded = frac.padEnd(decimals, "0");
+  const combined = (whole + padded).replace(/^0+/, "") || "0";
+  const n = BigInt(combined);
+  if (n <= 0n) throw new RangeError("amount must be positive");
+  return n;
 }
 
 /**
@@ -1588,6 +1612,420 @@ export function registerWalletRoutes({
     }
   });
 
+  // ====================================================================
+  // #wallet-send — asset picker + preview + unlock + broadcast.
+  //
+  // prepareSend is view-only (no unlock required) so the fee preview shows
+  // BEFORE we demand biometric / PIN. The unlock modal then gates the
+  // confirmSend call. Success navigates to #wallet-send-success.
+  // ====================================================================
+  const sendState = {
+    assetKey: "DEPIX",
+    amountSats: null,
+    destAddr: "",
+    sendAll: false,
+    preview: null,
+    balances: null
+  };
+
+  function resetSendState() {
+    sendState.assetKey = "DEPIX";
+    sendState.amountSats = null;
+    sendState.destAddr = "";
+    sendState.sendAll = false;
+    sendState.preview = null;
+  }
+
+  function currentSendAsset() {
+    return ASSETS[sendState.assetKey];
+  }
+
+  function assetKeyFromObject(asset) {
+    for (const key of Object.keys(ASSETS)) {
+      if (ASSETS[key] === asset) return key;
+    }
+    return null;
+  }
+
+  async function loadSendBalances() {
+    try {
+      sendState.balances = await wallet.getBalances();
+    } catch {
+      sendState.balances = null;
+    }
+  }
+
+  function renderSendAssets() {
+    const host = q("wallet-send-assets");
+    if (!host) return;
+    host.textContent = "";
+    for (const asset of DISPLAY_ORDER) {
+      const key = assetKeyFromObject(asset);
+      const btn = d.createElement("button");
+      btn.type = "button";
+      btn.className = "wallet-send-asset";
+      btn.setAttribute("role", "radio");
+      btn.dataset.assetKey = key;
+      const selected = sendState.assetKey === key;
+      btn.setAttribute("aria-checked", selected ? "true" : "false");
+      if (selected) btn.classList.add("selected");
+      const dot = d.createElement("span");
+      dot.className = "wallet-send-asset-dot";
+      dot.style.background = asset.color;
+      btn.appendChild(dot);
+      const name = d.createElement("span");
+      name.className = "wallet-send-asset-name";
+      name.textContent = asset.symbol;
+      btn.appendChild(name);
+      btn.addEventListener("click", () => selectSendAsset(key));
+      host.appendChild(btn);
+    }
+  }
+
+  function selectSendAsset(key) {
+    sendState.assetKey = key;
+    if (key !== "LBTC") sendState.sendAll = false;
+    renderSendAssets();
+    refreshSendFieldsForAsset();
+    clearSendPreview();
+  }
+
+  function refreshSendFieldsForAsset() {
+    const asset = currentSendAsset();
+    const suffix = q("wallet-send-amount-suffix");
+    if (suffix) suffix.textContent = asset.symbol;
+    const sendAllWrap = q("wallet-send-sendall-wrap");
+    if (sendAllWrap) sendAllWrap.classList.toggle("hidden", sendState.assetKey !== "LBTC");
+    const sendAllInput = q("wallet-send-sendall");
+    if (sendAllInput) sendAllInput.checked = sendState.sendAll;
+    const amountInput = q("wallet-send-amount");
+    if (amountInput) amountInput.disabled = sendState.sendAll;
+    const balMap = sendState.balances;
+    let bal = 0n;
+    if (balMap && typeof balMap === "object") {
+      const val = balMap[asset.id];
+      if (typeof val === "bigint") bal = val;
+      else if (typeof val === "number") bal = BigInt(val);
+    }
+    const balEl = q("wallet-send-balance");
+    if (balEl) balEl.textContent = `Saldo disponível: ${formatAssetAmount(bal, asset)} ${asset.symbol}`;
+  }
+
+  function clearSendPreview() {
+    sendState.preview = null;
+    q("wallet-send-preview")?.classList.add("hidden");
+    q("wallet-send-confirm")?.classList.add("hidden");
+    const btn = q("wallet-send-preview-btn");
+    if (btn) {
+      btn.classList.remove("hidden");
+      btn.disabled = false;
+    }
+  }
+
+  function renderSendPreview(preview) {
+    const asset = getAssetByIdentifier(preview.assetId);
+    const lbtc = ASSETS.LBTC;
+    const amountEl = q("wallet-send-preview-amount");
+    const feeEl = q("wallet-send-preview-fee");
+    const totalEl = q("wallet-send-preview-total");
+    const destEl = q("wallet-send-preview-dest");
+    const amountSats = preview.amountSats ?? 0n;
+    if (amountEl) {
+      if (preview.sendAll) amountEl.textContent = `Tudo (${asset?.symbol ?? ""})`;
+      else amountEl.textContent = `${formatAssetAmount(amountSats, asset)} ${asset?.symbol ?? ""}`;
+    }
+    if (feeEl) {
+      feeEl.textContent = `${formatAssetAmount(preview.feeSats, lbtc)} ${lbtc.symbol}`;
+    }
+    if (totalEl) {
+      if (asset === lbtc) {
+        const total = (amountSats ?? 0n) + preview.feeSats;
+        totalEl.textContent = preview.sendAll
+          ? `Tudo + taxa (${lbtc.symbol})`
+          : `${formatAssetAmount(total, lbtc)} ${lbtc.symbol}`;
+      } else {
+        totalEl.textContent = `${formatAssetAmount(amountSats, asset)} ${asset?.symbol ?? ""} + ${formatAssetAmount(preview.feeSats, lbtc)} ${lbtc.symbol}`;
+      }
+    }
+    if (destEl) destEl.textContent = preview.destAddr;
+    q("wallet-send-preview")?.classList.remove("hidden");
+    q("wallet-send-preview-btn")?.classList.add("hidden");
+    q("wallet-send-confirm")?.classList.remove("hidden");
+  }
+
+  async function onSendPreviewClick() {
+    clearMsg("wallet-send-msg");
+    const asset = currentSendAsset();
+    const destVal = (q("wallet-send-dest")?.value ?? "").trim();
+    if (!sendState.sendAll) {
+      const raw = q("wallet-send-amount")?.value ?? "";
+      try {
+        sendState.amountSats = parseAmountToSats(raw, asset.decimals);
+      } catch {
+        showMsg("wallet-send-msg", "Informe um valor válido (ex.: 10,50).", "error");
+        return;
+      }
+    } else {
+      sendState.amountSats = null;
+    }
+    const { valid, error } = validateLiquidAddress(destVal);
+    if (!valid) {
+      showMsg("wallet-send-msg", error || "Endereço Liquid inválido.", "error");
+      return;
+    }
+    sendState.destAddr = destVal;
+    const previewBtn = q("wallet-send-preview-btn");
+    if (previewBtn) previewBtn.disabled = true;
+    try {
+      const preview = await wallet.prepareSend({
+        asset: sendState.assetKey,
+        amountSats: sendState.amountSats ?? undefined,
+        destAddr: destVal,
+        sendAll: sendState.sendAll
+      });
+      sendState.preview = preview;
+      renderSendPreview(preview);
+    } catch (err) {
+      if (isWalletError(err, ERROR_CODES.INSUFFICIENT_FUNDS)) {
+        showMsg("wallet-send-msg", "Saldo insuficiente para este envio.", "error");
+      } else if (isWalletError(err, ERROR_CODES.INVALID_ADDRESS)) {
+        showMsg("wallet-send-msg", "Endereço Liquid inválido para esta rede.", "error");
+      } else if (isWalletError(err, ERROR_CODES.INVALID_AMOUNT)) {
+        showMsg("wallet-send-msg", "Informe um valor válido (ex.: 10,50).", "error");
+      } else if (isWalletError(err, ERROR_CODES.ESPLORA_UNAVAILABLE)) {
+        showMsg("wallet-send-msg", "Sem resposta do Esplora. Tente novamente.", "error");
+      } else {
+        renderError("wallet-send-msg", err);
+      }
+    } finally {
+      if (previewBtn) previewBtn.disabled = false;
+    }
+  }
+
+  async function doBroadcastAfterUnlock() {
+    if (!sendState.preview) {
+      showMsg("wallet-unlock-msg", "Sessão expirada. Reveja o envio.", "error");
+      return;
+    }
+    const confirmBtn = q("wallet-unlock-confirm");
+    if (confirmBtn) confirmBtn.disabled = true;
+    try {
+      const { txid } = await wallet.confirmSend(sendState.preview.psetBase64);
+      closeUnlockModal();
+      showSendSuccess(txid);
+    } catch (err) {
+      if (isWalletError(err, ERROR_CODES.BROADCAST_FAILED)) {
+        showMsg("wallet-unlock-msg", "A rede recusou a transação. Verifique conexão e tente novamente.", "error");
+      } else if (isWalletError(err, ERROR_CODES.ESPLORA_UNAVAILABLE)) {
+        showMsg("wallet-unlock-msg", "Não foi possível alcançar o Esplora. Tente novamente.", "error");
+      } else {
+        renderError("wallet-unlock-msg", err);
+      }
+    } finally {
+      if (confirmBtn) confirmBtn.disabled = false;
+    }
+  }
+
+  async function openUnlockModal() {
+    const modal = q("wallet-unlock-modal");
+    if (!modal) return;
+    clearMsg("wallet-unlock-msg");
+    const pinEl = q("wallet-unlock-pin");
+    if (pinEl) pinEl.value = "";
+    const bioSection = q("wallet-unlock-biometric");
+    const pinSection = q("wallet-unlock-pin-section");
+    bioSection?.classList.add("hidden");
+    pinSection?.classList.remove("hidden");
+    modal.classList.remove("hidden");
+    try {
+      const [has, supported] = await Promise.all([
+        wallet.hasBiometric(),
+        wallet.biometricSupported()
+      ]);
+      if (has && supported) {
+        bioSection?.classList.remove("hidden");
+        pinSection?.classList.add("hidden");
+        q("wallet-unlock-biometric-btn")?.focus();
+      } else {
+        q("wallet-unlock-pin")?.focus();
+      }
+    } catch {
+      q("wallet-unlock-pin")?.focus();
+    }
+  }
+
+  function closeUnlockModal() {
+    q("wallet-unlock-modal")?.classList.add("hidden");
+    const pin = q("wallet-unlock-pin");
+    if (pin) pin.value = "";
+    clearMsg("wallet-unlock-msg");
+  }
+
+  async function unlockWithBiometricAndBroadcast() {
+    clearMsg("wallet-unlock-msg");
+    const btn = q("wallet-unlock-biometric-btn");
+    if (btn) btn.disabled = true;
+    try {
+      await wallet.unlockWithBiometric();
+    } catch (err) {
+      if (isWalletError(err, ERROR_CODES.BIOMETRIC_REJECTED)) {
+        showMsg("wallet-unlock-msg", "Autenticação cancelada.", "warning");
+      } else if (isWalletError(err, ERROR_CODES.BIOMETRIC_UNAVAILABLE)) {
+        showMsg("wallet-unlock-msg", "Biometria indisponível. Use o PIN.", "warning");
+      } else {
+        renderError("wallet-unlock-msg", err);
+      }
+      if (btn) btn.disabled = false;
+      return;
+    }
+    await doBroadcastAfterUnlock();
+    if (btn) btn.disabled = false;
+  }
+
+  async function unlockWithPinAndBroadcast() {
+    clearMsg("wallet-unlock-msg");
+    const pin = q("wallet-unlock-pin")?.value ?? "";
+    if (!isPinInputValid(pin)) {
+      showMsg("wallet-unlock-msg", "Informe um PIN de 6 dígitos.", "error");
+      return;
+    }
+    try {
+      await wallet.unlockWithPin(pin);
+    } catch (err) {
+      if (isWalletError(err, ERROR_CODES.WRONG_PIN)) {
+        showMsg("wallet-unlock-msg", err.message || "PIN incorreto.", "error");
+        return;
+      }
+      if (isWalletError(err, ERROR_CODES.WALLET_WIPED)) {
+        showMsg("wallet-unlock-msg", "Muitas tentativas. Carteira apagada deste aparelho.", "error");
+        setTimeout(() => {
+          closeUnlockModal();
+          persistHomeMode("deposit");
+          navigate("#wallet-gate");
+        }, 2000);
+        return;
+      }
+      if (isWalletError(err, ERROR_CODES.PIN_RATE_LIMITED)) {
+        showMsg("wallet-unlock-msg", err.message || "Aguarde alguns segundos antes de tentar novamente.", "warning");
+        return;
+      }
+      renderError("wallet-unlock-msg", err);
+      return;
+    }
+    await doBroadcastAfterUnlock();
+  }
+
+  function onUnlockConfirmClick() {
+    if (wallet.isUnlocked()) {
+      void doBroadcastAfterUnlock();
+      return;
+    }
+    void unlockWithPinAndBroadcast();
+  }
+
+  function showSendSuccess(txid) {
+    navigate("#wallet-send-success");
+    const txEl = q("wallet-send-success-txid-text");
+    if (txEl) txEl.textContent = txid;
+    const explorer = q("wallet-send-success-explorer");
+    if (explorer && typeof txid === "string" && txid) {
+      explorer.setAttribute("href", `https://blockstream.info/liquid/tx/${encodeURIComponent(txid)}`);
+    }
+    resetSendState();
+  }
+
+  route("#wallet-send", async () => {
+    clearMsg("wallet-send-msg");
+    const amountInput = q("wallet-send-amount");
+    const destInput = q("wallet-send-dest");
+    if (amountInput) { amountInput.value = ""; amountInput.disabled = false; }
+    if (destInput) destInput.value = "";
+    q("wallet-send-dest-hint")?.classList.add("hidden");
+    clearSendPreview();
+    sendState.assetKey = "DEPIX";
+    sendState.sendAll = false;
+    sendState.destAddr = "";
+    sendState.amountSats = null;
+    sendState.preview = null;
+    renderSendAssets();
+    refreshSendFieldsForAsset();
+    await loadSendBalances();
+    refreshSendFieldsForAsset();
+  });
+
+  route("#wallet-send-success", () => {
+    clearMsg("wallet-send-success-msg");
+  });
+
+  q("wallet-home-send")?.addEventListener("click", () => {
+    navigate("#wallet-send");
+  });
+  q("wallet-send-back")?.addEventListener("click", () => {
+    persistHomeMode("wallet");
+    navigate("#home");
+  });
+  q("wallet-send-sendall")?.addEventListener("change", evt => {
+    sendState.sendAll = Boolean(evt.target?.checked);
+    refreshSendFieldsForAsset();
+    clearSendPreview();
+  });
+  q("wallet-send-amount")?.addEventListener("input", () => clearSendPreview());
+  q("wallet-send-dest")?.addEventListener("input", () => {
+    const v = (q("wallet-send-dest")?.value ?? "").trim();
+    const hint = q("wallet-send-dest-hint");
+    if (!hint) return;
+    if (!v) {
+      hint.classList.add("hidden");
+      hint.textContent = "";
+      hint.classList.remove("success", "error");
+      return;
+    }
+    const { valid, error } = validateLiquidAddress(v);
+    if (valid) {
+      hint.textContent = "Endereço válido.";
+      hint.classList.remove("hidden", "error");
+      hint.classList.add("success");
+    } else {
+      hint.textContent = error || "Endereço inválido.";
+      hint.classList.remove("hidden", "success");
+      hint.classList.add("error");
+    }
+    clearSendPreview();
+  });
+  q("wallet-send-preview-btn")?.addEventListener("click", () => { void onSendPreviewClick(); });
+  q("wallet-send-confirm")?.addEventListener("click", () => { void openUnlockModal(); });
+
+  q("wallet-unlock-cancel")?.addEventListener("click", closeUnlockModal);
+  q("wallet-unlock-confirm")?.addEventListener("click", () => onUnlockConfirmClick());
+  q("wallet-unlock-biometric-btn")?.addEventListener("click", () => { void unlockWithBiometricAndBroadcast(); });
+  q("wallet-unlock-use-pin")?.addEventListener("click", () => {
+    q("wallet-unlock-biometric")?.classList.add("hidden");
+    q("wallet-unlock-pin-section")?.classList.remove("hidden");
+    q("wallet-unlock-pin")?.focus();
+  });
+  q("wallet-unlock-pin")?.addEventListener("keydown", evt => {
+    if (evt.key === "Enter") {
+      evt.preventDefault();
+      onUnlockConfirmClick();
+    }
+  });
+
+  q("wallet-send-success-copy")?.addEventListener("click", async () => {
+    const txid = q("wallet-send-success-txid-text")?.textContent?.trim() || "";
+    if (!txid) return;
+    try {
+      await (navigator.clipboard?.writeText?.(txid));
+      if (showToast) showToast("ID copiado.");
+      else showMsg("wallet-send-success-msg", "ID copiado.", "success");
+    } catch {
+      showMsg("wallet-send-success-msg", "Não foi possível copiar automaticamente.", "error");
+    }
+  });
+  q("wallet-send-success-done")?.addEventListener("click", () => {
+    persistHomeMode("wallet");
+    navigate("#home");
+  });
+
   // Expose a small handle for tests + potential future callers. Read-only.
   return Object.freeze({
     _mountWalletHome: onWalletHomeMount,
@@ -1595,6 +2033,10 @@ export function registerWalletRoutes({
     _renderReceiveQr: renderReceiveQr,
     _renderTransactions: renderTransactions,
     _refreshBiometricRow: refreshBiometricRow,
-    _lastBalancesRender: () => lastBalancesRender
+    _lastBalancesRender: () => lastBalancesRender,
+    _openUnlockModal: openUnlockModal,
+    _closeUnlockModal: closeUnlockModal,
+    _onSendPreviewClick: onSendPreviewClick,
+    _sendState: () => ({ ...sendState })
   });
 }
