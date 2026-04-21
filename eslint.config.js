@@ -33,6 +33,7 @@ const browserGlobals = {
   clearTimeout: "readonly",
   clients: "readonly",
   CustomEvent: "readonly",
+  Event: "readonly",
   console: "readonly",
   crypto: "readonly",
   document: "readonly",

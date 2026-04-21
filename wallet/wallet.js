@@ -551,11 +551,20 @@ export function createWalletModule({
     });
   }
 
+  // Generates a fresh BIP39 mnemonic WITHOUT persisting it. Used by the
+  // onboarding UI so the user can see/verify the 12 words before committing
+  // anything to IndexedDB. `createWallet({ mnemonic })` persists it later.
+  async function generateMnemonic() {
+    const l = await lwk();
+    return l.Mnemonic.fromRandom(12).toString();
+  }
+
   return Object.freeze({
     hasWallet,
     hasBiometric,
     biometricSupported,
     isUnlocked,
+    generateMnemonic,
     createWallet,
     restoreWallet,
     unlock,

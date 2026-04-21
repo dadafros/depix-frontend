@@ -4339,3 +4339,194 @@ textarea:focus {
 .deposit-limit-info .link {
   font-size: inherit;
 }
+
+/* ===== Wallet — onboarding (Fase 1 Sub-fase 3) ===== */
+
+.mensagem.warning {
+  color: var(--color-warning);
+}
+.mensagem.warning:not(:empty) {
+  background: rgba(212, 168, 68, 0.1);
+  border-left-color: var(--color-warning);
+}
+
+.wallet-warning {
+  color: var(--color-warning);
+}
+
+.wallet-consent-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--accent-subtle);
+  cursor: pointer;
+  line-height: 1.4;
+}
+.wallet-consent-row input[type="checkbox"] {
+  margin-top: 3px;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+.wallet-consent-row span {
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+/* Seed word display — create flow */
+.wallet-seed-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 14px 0;
+}
+.wallet-seed-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 8px;
+  border-radius: 8px;
+  background: var(--bg-input, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  min-width: 0;
+}
+.wallet-seed-index {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  min-width: 18px;
+}
+.wallet-seed-word {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 14px;
+  color: var(--text-primary);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Verification — create flow */
+.wallet-verify-block {
+  margin: 14px 0;
+}
+.wallet-verify-label {
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+.wallet-verify-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.wallet-verify-option {
+  padding: 12px 8px;
+  border-radius: 8px;
+  background: var(--bg-input, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  color: var(--text-primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 14px;
+  cursor: pointer;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.wallet-verify-option:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+}
+.wallet-verify-option.selected {
+  border-color: var(--accent);
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+.wallet-verify-option:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Restore flow — 12 input grid with BIP39 autocomplete */
+.wallet-restore-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 14px 0;
+}
+.wallet-restore-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.wallet-restore-index {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  min-width: 18px;
+}
+.wallet-restore-input-wrapper {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.wallet-restore-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 6px;
+  border-radius: 8px;
+  background: var(--bg-input, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  color: var(--text-primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  outline: none;
+}
+.wallet-restore-input:focus {
+  border-color: var(--accent);
+}
+.wallet-restore-input.invalid {
+  border-color: var(--color-error);
+}
+.wallet-restore-dropdown {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  z-index: 10;
+  max-height: 160px;
+  overflow-y: auto;
+  background: var(--bg-card);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  border-radius: 8px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+}
+.wallet-restore-option {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  cursor: pointer;
+}
+.wallet-restore-option:hover {
+  background: var(--accent-subtle);
+  color: var(--accent);
+}
