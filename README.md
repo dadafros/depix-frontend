@@ -100,13 +100,22 @@ depix/
 git clone git@github.com:dadafros/depix.git
 cd depix
 
+# Install dev deps + build the wallet bundle once (required for the wallet
+# feature; the rest of the app still runs without it).
+npm ci
+npm run build
+
 # Serve locally (any static server works)
 npx serve .
 # or
 python3 -m http.server 8000
 ```
 
-No build step required. Open `index.html` in a browser or deploy to any static hosting.
+**Build step — scoped to the wallet bundle only.** Everything under `wallet/`
+is bundled to `dist/wallet-bundle-<hash>.js` via esbuild. The rest of the app
+(`script.js`, `style.css`, icons) is served as-is with no build. If you only
+touch the legacy files, you don't need to re-run `npm run build` locally —
+CI rebuilds on every push to `main`.
 
 ## Testing
 
