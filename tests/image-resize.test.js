@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/* global File, Blob */
+/* global File */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { resizeImage } from "../image-resize.js";
 
