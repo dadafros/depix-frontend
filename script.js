@@ -2349,6 +2349,8 @@ const WALLET_ROUTE_HASHES = [
   "#wallet-restore-biometric",
   "#wallet-restore-done",
   "#wallet-receive",
+  "#wallet-send",
+  "#wallet-send-success",
   "#wallet-transactions",
   "#wallet-settings"
 ];
