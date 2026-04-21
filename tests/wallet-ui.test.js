@@ -14,7 +14,8 @@ import {
   filterBip39Words,
   isPinInputValid,
   classifyLockoutState,
-  computeFingerprint
+  computeFingerprint,
+  parseAmountToSats
 } from "../wallet/wallet-ui.js";
 import { BIP39_WORDLIST } from "../wallet/bip39-wordlist.js";
 
@@ -199,5 +200,47 @@ describe("computeFingerprint", () => {
     expect(await computeFingerprint(null)).toBe("");
     expect(await computeFingerprint(undefined)).toBe("");
     expect(await computeFingerprint(42)).toBe("");
+  });
+});
+
+describe("parseAmountToSats", () => {
+  it("converts whole numbers with the configured decimals", () => {
+    expect(parseAmountToSats("1", 8)).toBe(100_000_000n);
+    expect(parseAmountToSats("10", 8)).toBe(1_000_000_000n);
+  });
+
+  it("handles fractional amounts with trailing zero padding", () => {
+    expect(parseAmountToSats("1.5", 8)).toBe(150_000_000n);
+    expect(parseAmountToSats("0.00000001", 8)).toBe(1n);
+    expect(parseAmountToSats("12.3", 8)).toBe(1_230_000_000n);
+  });
+
+  it("accepts comma as the decimal separator", () => {
+    expect(parseAmountToSats("1,5", 8)).toBe(150_000_000n);
+    expect(parseAmountToSats("0,25", 2)).toBe(25n);
+  });
+
+  it("trims surrounding whitespace", () => {
+    expect(parseAmountToSats("  2.5  ", 8)).toBe(250_000_000n);
+  });
+
+  it("rejects non-positive, empty, or malformed inputs", () => {
+    expect(() => parseAmountToSats("", 8)).toThrow(RangeError);
+    expect(() => parseAmountToSats("0", 8)).toThrow(RangeError);
+    expect(() => parseAmountToSats("0,0", 8)).toThrow(RangeError);
+    expect(() => parseAmountToSats("abc", 8)).toThrow(RangeError);
+    expect(() => parseAmountToSats("1.2.3", 8)).toThrow(RangeError);
+    expect(() => parseAmountToSats("-1", 8)).toThrow(RangeError);
+  });
+
+  it("rejects more fractional digits than allowed", () => {
+    expect(() => parseAmountToSats("0.000000001", 8)).toThrow(RangeError);
+    expect(() => parseAmountToSats("1.234", 2)).toThrow(RangeError);
+  });
+
+  it("rejects non-string input and invalid decimals", () => {
+    expect(() => parseAmountToSats(1, 8)).toThrow(TypeError);
+    expect(() => parseAmountToSats("1", -1)).toThrow(RangeError);
+    expect(() => parseAmountToSats("1", "8")).toThrow(RangeError);
   });
 });

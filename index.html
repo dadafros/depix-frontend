@@ -142,16 +142,16 @@
   }
   </script>
 
-  <link rel="manifest" href="manifest.json?v=130" />
-  <link rel="icon" href="icon-192.png?v=130" />
-  <link rel="apple-touch-icon" href="icon-192.png?v=130" />
+  <link rel="manifest" href="manifest.json?v=131" />
+  <link rel="icon" href="icon-192.png?v=131" />
+  <link rel="apple-touch-icon" href="icon-192.png?v=131" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
   <!-- Asset version must match APP_VERSION in service-worker.js -->
-  <link rel="stylesheet" href="style.css?v=130" />
+  <link rel="stylesheet" href="style.css?v=131" />
 </head>
 <body>
 
@@ -160,7 +160,7 @@
 
   <nav class="landing-nav">
     <div class="landing-nav-inner">
-      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=130" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
+      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=131" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
       <div class="landing-nav-right">
         <a href="https://blog.depixapp.com/" class="landing-nav-link">Blog</a>
         <a href="#login" class="landing-nav-cta">Entrar</a>
@@ -944,7 +944,7 @@
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><polyline points="19 12 12 19 5 12"/></svg>
           <span>Receber</span>
         </button>
-        <button id="wallet-home-send" class="wallet-home-action" type="button" disabled aria-disabled="true" title="Disponível na próxima fase">
+        <button id="wallet-home-send" class="wallet-home-action" type="button">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><polyline points="5 12 12 5 19 12"/></svg>
           <span>Pagar</span>
         </button>
@@ -2300,6 +2300,124 @@
   </div>
 </section>
 
+<!-- ===== WALLET: ENVIAR (PSET + assinar + broadcast) ===== -->
+<section data-view="wallet-send" class="page hidden">
+  <div class="card wallet-send-card">
+    <h2 class="view-title">Enviar</h2>
+    <p class="info-text">Envie DePix, USDt ou L-BTC para um endereço Liquid externo.</p>
+
+    <div class="wallet-send-field">
+      <label class="wallet-send-field-label">Ativo</label>
+      <div id="wallet-send-assets" class="wallet-send-assets" role="radiogroup" aria-label="Escolher ativo">
+        <!-- populated by wallet-ui.js -->
+      </div>
+    </div>
+
+    <div class="wallet-send-field">
+      <div class="wallet-send-field-head">
+        <label for="wallet-send-amount" class="wallet-send-field-label">Valor</label>
+        <label class="wallet-send-sendall hidden" id="wallet-send-sendall-wrap">
+          <input type="checkbox" id="wallet-send-sendall" />
+          <span>Enviar tudo</span>
+        </label>
+      </div>
+      <div class="wallet-send-amount-wrap">
+        <input id="wallet-send-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0,00" />
+        <span id="wallet-send-amount-suffix" class="wallet-send-amount-suffix">DePix</span>
+      </div>
+      <p id="wallet-send-balance" class="wallet-send-balance">Saldo disponível: —</p>
+    </div>
+
+    <div class="wallet-send-field">
+      <label for="wallet-send-dest" class="wallet-send-field-label">Endereço de destino</label>
+      <input id="wallet-send-dest" type="text" autocomplete="off" spellcheck="false" placeholder="lq1... ou ex1..." />
+      <p id="wallet-send-dest-hint" class="wallet-send-dest-hint hidden"></p>
+    </div>
+
+    <div id="wallet-send-preview" class="wallet-send-preview hidden">
+      <div class="wallet-send-preview-row">
+        <span>Valor</span>
+        <strong id="wallet-send-preview-amount">—</strong>
+      </div>
+      <div class="wallet-send-preview-row">
+        <span>Taxa de rede</span>
+        <strong id="wallet-send-preview-fee">—</strong>
+      </div>
+      <div class="wallet-send-preview-row total">
+        <span>Total debitado</span>
+        <strong id="wallet-send-preview-total">—</strong>
+      </div>
+      <div class="wallet-send-preview-dest">
+        <span>Destino</span>
+        <code id="wallet-send-preview-dest">—</code>
+      </div>
+    </div>
+
+    <div id="wallet-send-msg" class="mensagem"></div>
+
+    <div class="wallet-action-row">
+      <button id="wallet-send-back" class="secondary">Voltar</button>
+      <button id="wallet-send-preview-btn" type="button">Revisar</button>
+      <button id="wallet-send-confirm" type="button" class="hidden">Confirmar envio</button>
+    </div>
+  </div>
+</section>
+
+<!-- ===== WALLET: ENVIO BEM-SUCEDIDO ===== -->
+<section data-view="wallet-send-success" class="page hidden">
+  <div class="card wallet-send-success-card">
+    <div class="wallet-send-success-icon" aria-hidden="true">
+      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-6"/></svg>
+    </div>
+    <h2 class="view-title">Transação enviada</h2>
+    <p class="info-text">Seu pagamento foi transmitido à rede Liquid. Normalmente confirma em até 1 minuto.</p>
+
+    <div class="wallet-send-success-field">
+      <label>ID da transação</label>
+      <div class="wallet-send-success-txid">
+        <code id="wallet-send-success-txid-text">—</code>
+        <button id="wallet-send-success-copy" type="button" class="wallet-receive-copy" aria-label="Copiar txid">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <a id="wallet-send-success-explorer" class="wallet-send-success-explorer" href="#" target="_blank" rel="noopener noreferrer">Ver no explorador</a>
+
+    <div id="wallet-send-success-msg" class="mensagem"></div>
+
+    <div class="wallet-action-row">
+      <button id="wallet-send-success-done" type="button">Voltar para a carteira</button>
+    </div>
+  </div>
+</section>
+
+<!-- ===== MODAL: DESBLOQUEAR PARA ENVIO (biometria + PIN fallback) ===== -->
+<div id="wallet-unlock-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="wallet-unlock-title">
+  <div class="modal-box">
+    <h2 id="wallet-unlock-title">Autorizar envio</h2>
+    <p id="wallet-unlock-summary" class="info-text">Confirme sua identidade para assinar e transmitir a transação.</p>
+
+    <div id="wallet-unlock-biometric" class="wallet-unlock-biometric hidden">
+      <p class="info-text">Use biometria para autorizar.</p>
+      <button id="wallet-unlock-biometric-btn" type="button">Usar biometria</button>
+      <button id="wallet-unlock-use-pin" type="button" class="link-btn">Usar PIN</button>
+    </div>
+
+    <div id="wallet-unlock-pin-section" class="wallet-unlock-pin-section">
+      <label for="wallet-unlock-pin">PIN</label>
+      <input id="wallet-unlock-pin" type="password" inputmode="numeric" pattern="\d*" autocomplete="off" maxlength="6" />
+    </div>
+
+    <div id="wallet-unlock-msg" class="mensagem"></div>
+
+    <div class="wallet-action-row">
+      <button id="wallet-unlock-cancel" class="secondary" type="button">Cancelar</button>
+      <button id="wallet-unlock-confirm" type="button">Confirmar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== MODAL: FULLSCREEN QR (endereço da carteira) ===== -->
 <div id="wallet-qr-fullscreen" class="modal wallet-qr-fullscreen hidden" role="dialog" aria-modal="true" aria-labelledby="wallet-qr-fullscreen-title">
   <div class="wallet-qr-fullscreen-inner">
@@ -2945,6 +3063,6 @@
 
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 <!-- Asset version must match APP_VERSION in service-worker.js -->
-<script type="module" src="script.js?v=130"></script>
+<script type="module" src="script.js?v=131"></script>
 </body>
 </html>
