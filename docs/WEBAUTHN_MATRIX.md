@@ -181,6 +181,7 @@ Fill a row per device tested. One row is enough to unblock Sub-fase 2. Sub-fase 
 |------------|-------------------|---------|---------|--------|--------|--------|--------|-------|
 | 2026-04-22 | iPhone 15 Pro Max | 26.2.1  | 26.2.1  | pass   | pass   | pass   | fail   | **Run 1.** Fresh enroll + 1 cold unlock + 1 reboot cycle. Pre-reboot `f4eef31bee01a096`, post-reboot `f4ccf31bcc01a096` — bytes 1 and 4 differ by `0x22`. Setup had a leftover passkey on the same RP from an earlier aborted attempt. |
 | 2026-04-22 | iPhone 15 Pro Max | 26.2.1  | 26.2.1  | pass   | pass   | pass   | pass   | **Run 2** (replication, clean setup). Deleted the run-1 passkey from iOS Settings → Passwords + cleared `localStorage` before enroll. Enroll produced `14c64dda2b889b35`. Cold unlock (after force-quit) + 3 successive reboot cycles all returned `14c64dda2b889b35` — `MATCH` every time. Run 1 concluded as anomaly (likely iCloud Keychain sync conflict triggered by the leftover passkey). |
+| 2026-04-22 | iPhone 14 Pro Max | 26.3.1 (a) | 26.3.1  | pass   | pass   | pass   | pass   | Clean setup. Enroll produced `4bcf30b0bf276f01`. Cold unlock (after force-quit) + 2 successive reboot cycles all returned `4bcf30b0bf276f01` — `MATCH` every time. Confirms Run 2 behaviour on different hardware (A16 vs A17 Pro) and a newer iOS point release (includes Rapid Security Response `(a)`). |
 
 ## Interpretation
 
