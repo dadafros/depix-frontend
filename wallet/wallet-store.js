@@ -129,7 +129,7 @@ export async function patchCredentials(db, patch) {
         "No credentials to patch"
       );
     }
-    const next = { ...existing, ...patch, id: MAIN_KEY };
+    const next = { ...existing, ...patch, id: MAIN_KEY, version: SCHEMA_VERSION };
     await promisifyRequest(store.put(next));
     return next;
   });
@@ -163,7 +163,10 @@ export async function deleteSync(db) {
 
 export async function hasCredentials(db) {
   const record = await readCredentials(db);
-  return record !== null && record.encryptedSeed != null;
+  if (record === null || record.encryptedSeed == null) return false;
+  const seed = record.encryptedSeed;
+  const len = seed.byteLength ?? seed.length ?? 0;
+  return len > 0;
 }
 
 // Partial wipe — plan Sub-fase 2 "Wipe seletivo". Zeroes the sensitive fields
@@ -194,23 +197,29 @@ export async function wipeSensitiveCredentials(db) {
 }
 
 export async function resetFailedPinAttempts(db) {
-  const existing = await readCredentials(db);
-  if (!existing) return;
-  if ((existing.failedPinAttempts ?? 0) === 0) return;
-  await patchCredentials(db, { failedPinAttempts: 0 });
+  return withStore(db, CREDENTIALS_STORE, "readwrite", async store => {
+    const existing = await promisifyRequest(store.get(MAIN_KEY));
+    if (!existing) return;
+    if ((existing.failedPinAttempts ?? 0) === 0) return;
+    const next = { ...existing, id: MAIN_KEY, version: SCHEMA_VERSION, failedPinAttempts: 0 };
+    await promisifyRequest(store.put(next));
+  });
 }
 
 export async function incrementFailedPinAttempts(db) {
-  const existing = await readCredentials(db);
-  if (!existing) {
-    throw new WalletError(
-      ERROR_CODES.WALLET_NOT_FOUND,
-      "Cannot increment counter for missing wallet"
-    );
-  }
-  const next = (existing.failedPinAttempts ?? 0) + 1;
-  await patchCredentials(db, { failedPinAttempts: next });
-  return next;
+  return withStore(db, CREDENTIALS_STORE, "readwrite", async store => {
+    const existing = await promisifyRequest(store.get(MAIN_KEY));
+    if (!existing) {
+      throw new WalletError(
+        ERROR_CODES.WALLET_NOT_FOUND,
+        "Cannot increment counter for missing wallet"
+      );
+    }
+    const nextCount = (existing.failedPinAttempts ?? 0) + 1;
+    const next = { ...existing, id: MAIN_KEY, version: SCHEMA_VERSION, failedPinAttempts: nextCount };
+    await promisifyRequest(store.put(next));
+    return nextCount;
+  });
 }
 
 // Full teardown used by `wipeWallet(pin)` — removes the DB entirely after PIN

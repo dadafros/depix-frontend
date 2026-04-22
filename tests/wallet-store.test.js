@@ -48,16 +48,19 @@ describe("wallet-store", () => {
   });
 
   it("throws STORAGE_UNAVAILABLE when indexedDB is missing", async () => {
+    const originalIdb = globalThis.indexedDB;
+    // Force the 'no indexedDB available' branch by both omitting the impl
+    // arg AND removing the global. This is the exact path we want to pin:
+    // openDb must surface WalletError(STORAGE_UNAVAILABLE), not a bare Error.
+    delete globalThis.indexedDB;
     try {
-      await openDb(null);
+      await openDb();
       throw new Error("expected throw");
     } catch (err) {
-      // openDb uses global indexedDB when `null` is passed; jsdom has no
-      // real indexedDB, so we expect it to throw STORAGE_UNAVAILABLE only
-      // when the global is absent. In jsdom the global exists but is
-      // unusable — we can't assert a specific code here. Accept either
-      // our WalletError or any thrown error.
-      expect(err).toBeInstanceOf(Error);
+      expect(err).toBeInstanceOf(WalletError);
+      expect(err.code).toBe(ERROR_CODES.STORAGE_UNAVAILABLE);
+    } finally {
+      if (originalIdb !== undefined) globalThis.indexedDB = originalIdb;
     }
   });
 
