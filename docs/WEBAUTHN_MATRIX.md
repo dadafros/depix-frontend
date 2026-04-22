@@ -48,37 +48,61 @@ If `false`, stop. The device is below the floor.
 
 ### 3. Enroll credential with PRF
 
+The blocks below wrap everything in an async IIFE because Safari's Web
+Inspector console does not accept top-level `await` — without the IIFE
+the parser treats `await` as an identifier and throws `SyntaxError:
+Unexpected identifier 'navigator'`.
+
 Run (paste the whole block):
 
 ```js
-const salt = crypto.getRandomValues(new Uint8Array(32));
-const cred = await navigator.credentials.create({
-  publicKey: {
-    rp: { name: "DePix", id: location.hostname },
-    user: {
-      id: crypto.getRandomValues(new Uint8Array(16)),
-      name: "smoke@depixapp.com",
-      displayName: "Smoke Test"
-    },
-    challenge: crypto.getRandomValues(new Uint8Array(32)),
-    pubKeyCredParams: [
-      { type: "public-key", alg: -7 },
-      { type: "public-key", alg: -257 }
-    ],
-    authenticatorSelection: {
-      authenticatorAttachment: "platform",
-      userVerification: "required",
-      residentKey: "discouraged"
-    },
-    extensions: { prf: { eval: { first: salt } } }
+(async () => {
+  const salt = crypto.getRandomValues(new Uint8Array(32));
+  const cred = await navigator.credentials.create({
+    publicKey: {
+      rp: { name: "DePix", id: location.hostname },
+      user: {
+        id: crypto.getRandomValues(new Uint8Array(16)),
+        name: "smoke@depixapp.com",
+        displayName: "Smoke Test"
+      },
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      pubKeyCredParams: [
+        { type: "public-key", alg: -7 },
+        { type: "public-key", alg: -257 }
+      ],
+      authenticatorSelection: {
+        authenticatorAttachment: "platform",
+        userVerification: "required",
+        residentKey: "discouraged"
+      },
+      extensions: { prf: { eval: { first: salt } } }
+    }
+  });
+  const prf = cred.getClientExtensionResults().prf;
+  console.log("PRF at enroll:", prf);
+  // Persist to localStorage so steps 4 and 5 still have access after the
+  // PWA is force-quit or the device reboots — window globals do not
+  // survive process kill.
+  localStorage.setItem("smokeSalt", [...salt].join(","));
+  localStorage.setItem("smokeCredId", [...new Uint8Array(cred.rawId)].join(","));
+  if (prf?.results?.first) {
+    const first8 = [...new Uint8Array(prf.results.first)]
+      .slice(0, 8)
+      .map(b => b.toString(16).padStart(2, "0"))
+      .join("");
+    localStorage.setItem("smokePrfFirst8", first8);
+    console.log("enroll PRF first 8 bytes hex:", first8);
   }
-});
-console.log("PRF at enroll:", cred.getClientExtensionResults().prf);
-window.__smokeCred = cred;
-window.__smokeSalt = salt;
+})();
 ```
 
-Expected: Face ID prompt → `prf.results.first` is a `ArrayBuffer` of 32 bytes.
+Expected: iOS passkey sheet → Face ID prompt → `prf.results.first` is an
+`ArrayBuffer` of 32 bytes. iOS 18+ always shows the "Add a Passkey?" sheet
+for a platform authenticator even with `residentKey: "discouraged"` —
+tap "Add Passkey" and continue. The resulting `smoke@depixapp.com` entry
+lives in iOS Settings → Passwords and should be deleted after step 5 (see
+Cleanup below).
 
 Failure modes to flag below:
 - Prompt never appears → PRF not supported (document the iOS version).
@@ -87,31 +111,67 @@ Failure modes to flag below:
 
 ### 4. Unlock — cold (fresh session)
 
-Force-quit the PWA (swipe up) and reopen. Then:
+Force-quit the PWA (swipe up and drag off screen), reopen from the home
+screen, reopen Web Inspector via
+`Mac Safari → Develop → <iPhone> → DePix`, then paste:
 
 ```js
-const out = await navigator.credentials.get({
-  publicKey: {
-    challenge: crypto.getRandomValues(new Uint8Array(32)),
-    rpId: location.hostname,
-    userVerification: "required",
-    allowCredentials: [{ type: "public-key", id: window.__smokeCred.rawId }],
-    extensions: { prf: { eval: { first: window.__smokeSalt } } }
+(async () => {
+  const salt = new Uint8Array(localStorage.getItem("smokeSalt").split(",").map(Number));
+  const credId = new Uint8Array(localStorage.getItem("smokeCredId").split(",").map(Number));
+  const out = await navigator.credentials.get({
+    publicKey: {
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      rpId: location.hostname,
+      userVerification: "required",
+      allowCredentials: [{ type: "public-key", id: credId }],
+      extensions: { prf: { eval: { first: salt } } }
+    }
+  });
+  const prf = out.getClientExtensionResults().prf;
+  console.log("PRF at unlock:", prf);
+  if (prf?.results?.first) {
+    const first8 = [...new Uint8Array(prf.results.first)]
+      .slice(0, 8)
+      .map(b => b.toString(16).padStart(2, "0"))
+      .join("");
+    const expected = localStorage.getItem("smokePrfFirst8");
+    console.log(
+      "unlock PRF first 8 bytes hex:",
+      first8,
+      "expected:",
+      expected,
+      first8 === expected ? "MATCH" : "MISMATCH"
+    );
   }
-});
-console.log("PRF at unlock:", out.getClientExtensionResults().prf);
+})();
 ```
 
-Expected: same 32-byte value as enroll. Determinism is what makes PRF
-useful as a seed-wrap key.
+Expected: same 32-byte value as enroll (`MATCH`). Determinism is what
+makes PRF useful as a seed-wrap key.
 
 ### 5. Restart test
 
-- Force-quit. Kill Safari. Reboot iPhone. Reopen PWA from the home screen.
-- Run step 4 again with a fresh challenge. Same value?
+- Force-quit PWA, kill Safari, reboot iPhone, reopen PWA from the home
+  screen, reopen Web Inspector.
+- Run the step 4 block again (salt + credential id are in `localStorage`,
+  which survives reboot).
 
-Expected: yes. If no, the authenticator lost state across reboot — biometric
-wrap cannot be trusted on this device class.
+Expected: `MATCH`. If `MISMATCH`, the authenticator lost state across
+reboot — biometric wrap cannot be trusted on this device class.
+
+### 6. Cleanup
+
+After filling the results row:
+
+```js
+localStorage.removeItem("smokeSalt");
+localStorage.removeItem("smokeCredId");
+localStorage.removeItem("smokePrfFirst8");
+```
+
+Then iOS Settings → Passwords → search `depixapp.com` → delete the
+`smoke@depixapp.com` entry.
 
 ## Results log
 
