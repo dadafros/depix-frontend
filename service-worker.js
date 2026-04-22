@@ -24,7 +24,8 @@ const JS_MODULES = [
   "qr.js",
   "qr-print.js",
   "image-resize.js",
-  "wallet-bundle-loader.js"
+  "wallet-bundle-loader.js",
+  "wallet-home-gate.js"
 ];
 
 // Brand logos for the wallet asset rows. DePix reuses icon-192.png above
