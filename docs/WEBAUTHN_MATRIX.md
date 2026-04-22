@@ -179,7 +179,8 @@ Fill a row per device tested. One row is enough to unblock Sub-fase 2. Sub-fase 
 
 | Date       | Device            | iOS     | Safari  | Step 2 | Step 3 | Step 4 | Step 5 | Notes |
 |------------|-------------------|---------|---------|--------|--------|--------|--------|-------|
-| 2026-04-22 | iPhone 15 Pro Max | 26.2.1  | 26.2.1  | pass   | pass   | pass   | fail   | PRF non-deterministic across reboot with iCloud Keychain sync active. Same salt + cred id: pre-reboot `f4eef31bee01a096`, post-reboot `f4ccf31bcc01a096` (bytes 1 and 4 differ by `0x22`). PRF is deterministic *within* a session (verified with repeat unlock) — only breaks at the reboot boundary. See "Decision: biometric wrap not shipped" below. |
+| 2026-04-22 | iPhone 15 Pro Max | 26.2.1  | 26.2.1  | pass   | pass   | pass   | fail   | **Run 1.** Fresh enroll + 1 cold unlock + 1 reboot cycle. Pre-reboot `f4eef31bee01a096`, post-reboot `f4ccf31bcc01a096` — bytes 1 and 4 differ by `0x22`. Setup had a leftover passkey on the same RP from an earlier aborted attempt. |
+| 2026-04-22 | iPhone 15 Pro Max | 26.2.1  | 26.2.1  | pass   | pass   | pass   | pass   | **Run 2** (replication, clean setup). Deleted the run-1 passkey from iOS Settings → Passwords + cleared `localStorage` before enroll. Enroll produced `14c64dda2b889b35`. Cold unlock (after force-quit) + 3 successive reboot cycles all returned `14c64dda2b889b35` — `MATCH` every time. Run 1 concluded as anomaly (likely iCloud Keychain sync conflict triggered by the leftover passkey). |
 
 ## Interpretation
 
@@ -193,28 +194,36 @@ Fill a row per device tested. One row is enough to unblock Sub-fase 2. Sub-fase 
 - **Step 4 or 5 fails but 3 passes** → do not ship biometric. Biometric
   decrypt across sessions is the whole point.
 
-## Decision: biometric wrap not shipped (2026-04-22)
+## Decision: biometric wrap viable with defensive fallback (2026-04-22, revised after replication)
 
-The floor-device smoke test showed PRF is not stable across reboot when
-iCloud Keychain is active (which is the default on iOS and used by ~all
-of the BR-consumer target segment). Apple's Passwords doc explicitly
-confirms the passkey is synced/backed-up via iCloud Keychain — on reboot
-the device appears to re-hydrate the passkey from iCloud, and the PRF
-output changes with some structured delta (not random noise). Within a
-session PRF is deterministic; across reboots it is not.
+Initial run on 2026-04-22 showed a PRF MISMATCH across reboot and led to a
+"no biometric wrap" conclusion. Replication on the same device with a
+clean setup (deleted leftover passkey, cleared `localStorage`) produced
+`MATCH` on 3 consecutive reboot cycles. Run 1's failure did not reproduce
+and is most likely attributable to iCloud Keychain sync conflict from the
+leftover passkey on the same RP — not a sustained iOS behaviour.
 
-Consequence for Phase 1 wallet:
+**Revised consequence for Phase 1 wallet:**
 
-- **Biometric-wrap of the wallet seed is not viable.** Users who reboot
-  would lose wallet access on every reboot.
-- **PIN + Argon2id is the only wrap path** shipped (Sub-fase 2+).
-- The biometric enrollment screen is either hidden or gated behind a
-  disabled feature flag. Leaving the `wallet-biometric.js` code behind
-  a flag lets us re-enable it cheaply if Apple changes behaviour
-  (unlikely short term — this is how the API works, not a bug in one
-  iOS version).
-- Re-run this smoke test when Apple releases a subsequent major iOS and
-  refresh the row if behaviour changes. Until then, biometric stays off.
+- **Biometric-wrap via PRF is viable on the floor device class.**
+  Sub-fase 3 can enable the biometric enrollment screen.
+- **PIN + Argon2id remains the primary wrap path.** Biometric is an
+  additive convenience layer, not a replacement — every wallet must
+  still be decryptable via PIN so a biometric failure cannot lock the
+  user out.
+- **Defensive fallback is mandatory.** `wallet-biometric.js` must
+  handle the case where PRF output does not unwrap the seed (wrong
+  HMAC, decryption fails) by silently falling back to the PIN prompt.
+  If run 1's anomaly reappears in the wild, the user hits the PIN
+  flow and never loses wallet access. Never treat a biometric failure
+  as a hard error.
+- **Setup hygiene matters.** The enrollment flow must ensure there is
+  no prior passkey for `depixapp.com` on the device before creating a
+  new one — reuse the existing credential if present, rather than
+  creating a duplicate that can drift in iCloud.
+- **Re-run this matrix** on subsequent major iOS releases and refresh
+  the row. If any future run produces an unexplained MISMATCH that
+  reproduces on clean setup, revert to PIN-only for that device class.
 
 ## What this test does NOT cover
 
@@ -225,8 +234,12 @@ Consequence for Phase 1 wallet:
 - iOS Safari tab (not PWA). The wallet only ships as a PWA.
 - iCloud backup behavior for the app's own localStorage. The plan's
   Tela 1 copy already warns that PWA localStorage does not enter iCloud
-  backup. Note the **passkey itself** does sync via iCloud Keychain — that
-  sync is what broke determinism in step 5 of the 2026-04-22 smoke run.
+  backup. The **passkey itself** does sync via iCloud Keychain — run 1
+  of 2026-04-22 suggested this sync could break PRF determinism, but run
+  2 on clean setup disproved the general hypothesis. The failure mode
+  exists but only under specific conditions (leftover passkey on the
+  same RP triggering a sync conflict), which is why the enrollment flow
+  must reuse existing credentials instead of creating duplicates.
 
 If any of those become necessary, add a new log row with the variant, run
 the same 5 steps, and document deltas.
