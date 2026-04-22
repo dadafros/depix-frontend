@@ -1,9 +1,11 @@
 // Unit tests for the pure helpers exported from wallet/wallet-ui.js.
 //
-// The DOM-registration surface (`registerWalletRoutes`) is covered by the
-// integration test suite (jsdom + full router + fake wallet module). These
-// tests target the pure functions — they have no DOM dependency and should
-// run in plain Node without jsdom overhead.
+// DOM-registration (`registerWalletRoutes`) is intentionally NOT covered
+// here; its happy path is validated manually per the PR test plan. A jsdom
+// integration test (fake wallet module + full router + create/verify/PIN
+// happy path + restore BIP39 validation branch) is tracked as follow-up.
+// These tests target the pure functions — no DOM dependency, no jsdom
+// overhead.
 
 import { describe, it, expect } from "vitest";
 import {

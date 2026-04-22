@@ -24,11 +24,14 @@ async function fetchManifest() {
 
 async function loadOnce() {
   const manifest = await fetchManifest();
-  const entry = manifest["wallet-bundle.js"];
+  const entry = manifest.walletBundle;
   if (!entry) {
-    throw new Error("wallet manifest missing wallet-bundle.js entry");
+    throw new Error("wallet manifest missing walletBundle entry");
   }
-  const url = new URL(`./dist/${entry}`, import.meta.url).href;
+  // `entry` is a project-relative path like "dist/wallet-bundle-<hash>.js",
+  // emitted by build.mjs. Resolve against the loader's own URL so it works
+  // both at the site root and in the Docker dev volume.
+  const url = new URL(`./${entry}`, import.meta.url).href;
   return import(/* @vite-ignore */ url);
 }
 

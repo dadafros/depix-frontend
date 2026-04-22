@@ -4,11 +4,17 @@ import { IDBFactory } from "fake-indexeddb";
 
 import { createWalletModule } from "../wallet/wallet.js";
 import { WalletError, ERROR_CODES } from "../wallet/wallet-errors.js";
+import { BIP39_WORDLIST } from "../wallet/bip39-wordlist.js";
 
 // LWK is too heavy to load in jsdom. The wallet module delegates all crypto-
 // currency-specific work to the lwk namespace returned by `loadLwk`, so we
 // inject a fake namespace via the `lwkLoader` dependency — no vi.mock needed.
 function makeFakeLwk() {
+  // Closure-scoped counter so each call to `Mnemonic.fromRandom` returns a
+  // distinct mnemonic — the real LWK entropy is random, tests should not rely
+  // on a specific seed value. Incrementing from the wordlist keeps each
+  // token a valid BIP39 word.
+  let fromRandomCounter = 0;
   class Mnemonic {
     constructor(str) {
       const words = String(str).trim().split(/\s+/);
@@ -19,10 +25,16 @@ function makeFakeLwk() {
     }
     toString() { return this._str; }
     static fromRandom(_bits) {
-      // Deterministic "random" for test reproducibility.
-      const word = "abandon";
-      const words = Array(11).fill(word).concat("about").join(" ");
-      return new Mnemonic(words);
+      fromRandomCounter++;
+      const words = [];
+      for (let i = 0; i < 11; i++) {
+        const idx = (fromRandomCounter * 37 + i * 17) % BIP39_WORDLIST.length;
+        words.push(BIP39_WORDLIST[idx]);
+      }
+      // End with "about" so the 12th word is stable across calls — matches
+      // the classic "abandon ... about" convention used elsewhere in tests.
+      words.push("about");
+      return new Mnemonic(words.join(" "));
     }
   }
 
@@ -284,6 +296,42 @@ describe("exportMnemonic + wipeWallet", () => {
     });
     expect(await wallet.hasWallet()).toBe(true);
   }, 60_000);
+});
+
+describe("wallet.generateMnemonic", () => {
+  it("returns a string of 12 space-separated tokens", async () => {
+    const { wallet } = makeModule();
+    const mnemonic = await wallet.generateMnemonic();
+    expect(typeof mnemonic).toBe("string");
+    const tokens = mnemonic.split(" ");
+    expect(tokens).toHaveLength(12);
+    for (const t of tokens) {
+      expect(t).toMatch(/^[a-z]+$/);
+    }
+  });
+
+  it("every token is in the BIP39 wordlist", async () => {
+    const { wallet } = makeModule();
+    const mnemonic = await wallet.generateMnemonic();
+    for (const token of mnemonic.split(" ")) {
+      expect(BIP39_WORDLIST).toContain(token);
+    }
+  });
+
+  it("repeated calls return different mnemonics (randomness sanity)", async () => {
+    const { wallet } = makeModule();
+    const a = await wallet.generateMnemonic();
+    const b = await wallet.generateMnemonic();
+    const c = await wallet.generateMnemonic();
+    expect(new Set([a, b, c]).size).toBe(3);
+  });
+
+  it("does NOT persist anything — hasWallet() stays false", async () => {
+    const { wallet } = makeModule();
+    await wallet.generateMnemonic();
+    await wallet.generateMnemonic();
+    expect(await wallet.hasWallet()).toBe(false);
+  });
 });
 
 describe("public API surface", () => {
