@@ -77,8 +77,10 @@ function ensureBufferSource(value) {
 // credentialId (so we can reference it again) and the PRF-derived secret (so
 // we can wrap the seed immediately during onboarding).
 //
-// `userHandle` must be stable per-user. We use a hash of the wallet creation
-// timestamp — non-identifying, but stable enough for re-use.
+// `userHandle` is an opaque per-credential identifier. Callers may pass one for
+// stability across re-enrolls; otherwise we generate fresh random bytes each
+// time. Non-resident credentials don't persist userHandle on the authenticator,
+// so random-per-enroll is safe — plan Sub-fase 2 doesn't mandate stability.
 export async function enroll({ userHandle, displayName, credentialsImpl } = {}) {
   if (!hasWebAuthn()) {
     throw new WalletError(
@@ -120,9 +122,10 @@ export async function enroll({ userHandle, displayName, credentialsImpl } = {}) 
       }
     });
   } catch (err) {
+    const isUserCancel = err?.name === "NotAllowedError";
     throw new WalletError(
-      ERROR_CODES.BIOMETRIC_REJECTED,
-      err?.message ?? "WebAuthn enroll rejected",
+      isUserCancel ? ERROR_CODES.BIOMETRIC_REJECTED : ERROR_CODES.BIOMETRIC_UNAVAILABLE,
+      err?.message ?? "WebAuthn enroll failed",
       err
     );
   }
@@ -191,9 +194,10 @@ export async function derivePrfSecret({ credentialId, prfSalt, credentialsImpl }
       }
     });
   } catch (err) {
+    const isUserCancel = err?.name === "NotAllowedError";
     throw new WalletError(
-      ERROR_CODES.BIOMETRIC_REJECTED,
-      err?.message ?? "WebAuthn assertion rejected",
+      isUserCancel ? ERROR_CODES.BIOMETRIC_REJECTED : ERROR_CODES.BIOMETRIC_UNAVAILABLE,
+      err?.message ?? "WebAuthn assertion failed",
       err
     );
   }

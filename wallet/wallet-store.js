@@ -75,7 +75,13 @@ export async function openDb(indexedDbImpl) {
         db.createObjectStore(SYNC_STORE, { keyPath: "id" });
       }
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      const db = req.result;
+      // Release the connection if another tab triggers an upgrade or delete,
+      // so cross-tab teardown (destroyDatabase in wipeWallet) doesn't stall.
+      db.onversionchange = () => db.close();
+      resolve(db);
+    };
     req.onerror = () => reject(
       new WalletError(
         ERROR_CODES.STORAGE_UNAVAILABLE,
@@ -216,6 +222,11 @@ export async function destroyDatabase(indexedDbImpl) {
     const req = idb.deleteDatabase(DB_NAME);
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
-    req.onblocked = () => reject(new Error("deleteDatabase blocked"));
+    req.onblocked = () => reject(
+      new WalletError(
+        ERROR_CODES.STORAGE_UNAVAILABLE,
+        "deleteDatabase blocked by another tab"
+      )
+    );
   });
 }

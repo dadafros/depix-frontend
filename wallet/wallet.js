@@ -39,7 +39,6 @@ import {
   decryptSeed,
   deriveKey,
   encryptSeed,
-  importAesKey,
   randomIv,
   randomSalt
 } from "./wallet-crypto.js";
@@ -162,6 +161,7 @@ export function createWalletModule({
     const { signer: s, descriptor } = buildDescriptorFromMnemonic(l, mnemonicStr, net);
     const descriptorStr = descriptor.toString();
     const w = new l.Wollet(net, descriptor);
+    zeroInMemory();
     signer = s;
     wollet = w;
     touch();
@@ -181,7 +181,7 @@ export function createWalletModule({
     const l = await lwk();
 
     const mnemonicObj = mnemonic
-      ? new l.Mnemonic(mnemonic)
+      ? new l.Mnemonic(mnemonic.trim().toLowerCase())
       : l.Mnemonic.fromRandom(12);
     const mnemonicStr = mnemonicObj.toString();
 
@@ -192,22 +192,27 @@ export function createWalletModule({
 
     const descriptorStr = await unlockWithMnemonic(mnemonicStr);
 
-    let biometric = null;
-    if (enrollBiometric) {
-      biometric = await enrollBiometricForSeed(mnemonicStr);
-    }
-
     await writeCredentials(database, {
       encryptedSeed,
       salt,
       iv,
       descriptor: descriptorStr,
       failedPinAttempts: 0,
-      credentialId: biometric?.credentialId ?? null,
-      prfSalt: biometric?.prfSalt ?? null,
-      wrappedSeedKey: biometric?.wrappedSeedKey ?? null,
+      credentialId: null,
+      prfSalt: null,
+      wrappedSeedKey: null,
       createdAt: getNow()
     });
+
+    let biometric = null;
+    if (enrollBiometric) {
+      biometric = await enrollBiometricForSeed(mnemonicStr);
+      await patchCredentials(database, {
+        credentialId: biometric.credentialId,
+        prfSalt: biometric.prfSalt,
+        wrappedSeedKey: biometric.wrappedSeedKey
+      });
+    }
 
     return {
       mnemonic: mnemonicStr,
@@ -241,11 +246,17 @@ export function createWalletModule({
     }
 
     const mnemonicStr = mnemonicObj.toString();
-    const descriptorStr = await unlockWithMnemonic(mnemonicStr);
 
     // Plan Sub-fase 2: if a descriptor already exists from a prior (wiped)
     // wallet and it differs from the one derived here, the user likely typed
-    // the wrong mnemonic. Caller must decide whether to proceed.
+    // the wrong mnemonic. Compute the descriptor WITHOUT mutating closure
+    // state, check for mismatch, then actually unlock only if it matches.
+    const l2 = await lwk();
+    const net2 = makeNetwork(l2, network);
+    const { signer: probeSigner, descriptor: probeDesc } = buildDescriptorFromMnemonic(l2, mnemonicStr, net2);
+    const descriptorStr = probeDesc.toString();
+    if (probeSigner?.free) { try { probeSigner.free(); } catch { /* best effort */ } }
+
     const existing = await readCredentials(database);
     if (existing?.descriptor && existing.descriptor !== descriptorStr) {
       throw new WalletError(
@@ -254,15 +265,13 @@ export function createWalletModule({
       );
     }
 
+    // Now it's safe to populate the closure.
+    await unlockWithMnemonic(mnemonicStr);
+
     const salt = randomSalt(cryptoImpl);
     const iv = randomIv(cryptoImpl);
     const key = await deriveKey(pin, salt, cryptoImpl);
     const encryptedSeed = await encryptSeed(mnemonicStr, key, iv, cryptoImpl);
-
-    let biometric = null;
-    if (enrollBiometric) {
-      biometric = await enrollBiometricForSeed(mnemonicStr);
-    }
 
     await writeCredentials(database, {
       encryptedSeed,
@@ -270,11 +279,21 @@ export function createWalletModule({
       iv,
       descriptor: descriptorStr,
       failedPinAttempts: 0,
-      credentialId: biometric?.credentialId ?? null,
-      prfSalt: biometric?.prfSalt ?? null,
-      wrappedSeedKey: biometric?.wrappedSeedKey ?? null,
+      credentialId: null,
+      prfSalt: null,
+      wrappedSeedKey: null,
       createdAt: existing?.createdAt ?? getNow()
     });
+
+    let biometric = null;
+    if (enrollBiometric) {
+      biometric = await enrollBiometricForSeed(mnemonicStr);
+      await patchCredentials(database, {
+        credentialId: biometric.credentialId,
+        prfSalt: biometric.prfSalt,
+        wrappedSeedKey: biometric.wrappedSeedKey
+      });
+    }
 
     return {
       descriptor: descriptorStr,
@@ -328,6 +347,7 @@ export function createWalletModule({
       if (attempts >= MAX_PIN_ATTEMPTS) {
         await wipeSensitiveCredentials(database);
         zeroInMemory();
+        rateLimitUntil = 0;
         throw new WalletError(
           ERROR_CODES.WALLET_WIPED,
           "Too many wrong attempts — wallet wiped from this device",
@@ -342,8 +362,8 @@ export function createWalletModule({
     }
     await resetFailedPinAttempts(database);
     rateLimitUntil = 0;
-    await unlockWithMnemonic(mnemonicStr);
-    return { descriptor: record.descriptor };
+    const derivedDescriptor = await unlockWithMnemonic(mnemonicStr);
+    return { descriptor: derivedDescriptor };
   }
 
   async function unlockWithBiometric() {
@@ -370,11 +390,20 @@ export function createWalletModule({
     const wrapped = toUint8(record.wrappedSeedKey);
     const iv = wrapped.slice(0, 12);
     const ciphertext = wrapped.slice(12);
-    const mnemonicStr = await decryptSeed(ciphertext, prfKey, iv, cryptoImpl);
-    await unlockWithMnemonic(mnemonicStr);
+    let mnemonicStr;
+    try {
+      mnemonicStr = await decryptSeed(ciphertext, prfKey, iv, cryptoImpl);
+    } catch (err) {
+      throw new WalletError(
+        ERROR_CODES.BIOMETRIC_REJECTED,
+        "Biometric unlock failed to decrypt seed",
+        err
+      );
+    }
+    const derivedDescriptor = await unlockWithMnemonic(mnemonicStr);
     await resetFailedPinAttempts(database);
     rateLimitUntil = 0;
-    return { descriptor: record.descriptor };
+    return { descriptor: derivedDescriptor };
   }
 
   // High-level unlock — tries biometric first, falls back to a caller-
@@ -454,16 +483,27 @@ export function createWalletModule({
         "No wallet on this device"
       );
     }
+    if (rateLimitUntil > getNow()) {
+      throw new WalletError(
+        ERROR_CODES.PIN_RATE_LIMITED,
+        "Too many attempts, wait before retrying"
+      );
+    }
     const key = await deriveKey(pin, record.salt, cryptoImpl);
+    let mnemonicStr;
     try {
-      return await decryptSeed(record.encryptedSeed, key, record.iv, cryptoImpl);
+      mnemonicStr = await decryptSeed(record.encryptedSeed, key, record.iv, cryptoImpl);
     } catch (err) {
       // Export is a critical operation — use the same counter so a wrong PIN
       // here counts toward wipe. Users get the same safety net as unlock.
       const attempts = await incrementFailedPinAttempts(database);
+      if (attempts >= PIN_RATE_LIMIT_AFTER_ATTEMPT) {
+        rateLimitUntil = getNow() + PIN_RATE_LIMIT_MS;
+      }
       if (attempts >= MAX_PIN_ATTEMPTS) {
         await wipeSensitiveCredentials(database);
         zeroInMemory();
+        rateLimitUntil = 0;
         throw new WalletError(
           ERROR_CODES.WALLET_WIPED,
           "Too many wrong attempts — wallet wiped from this device",
@@ -472,6 +512,9 @@ export function createWalletModule({
       }
       throw err;
     }
+    await resetFailedPinAttempts(database);
+    rateLimitUntil = 0;
+    return mnemonicStr;
   }
 
   async function wipeWallet(pin) {

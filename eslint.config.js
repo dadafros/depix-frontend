@@ -21,9 +21,12 @@ const browserGlobals = {
   HTMLCanvasElement: "readonly",
   Image: "readonly",
   IntersectionObserver: "readonly",
+  PublicKeyCredential: "readonly",
   Response: "readonly",
+  TextDecoder: "readonly",
   TextEncoder: "readonly",
   URL: "readonly",
+  WebAssembly: "readonly",
   URLSearchParams: "readonly",
   caches: "readonly",
   clearInterval: "readonly",
@@ -34,6 +37,7 @@ const browserGlobals = {
   crypto: "readonly",
   document: "readonly",
   fetch: "readonly",
+  indexedDB: "readonly",
   localStorage: "readonly",
   location: "readonly",
   navigator: "readonly",
@@ -64,10 +68,10 @@ const testGlobals = {
 
 export default [
   {
-    ignores: ["coverage/**", "node_modules/**"]
+    ignores: ["coverage/**", "node_modules/**", "dist/**"]
   },
   {
-    files: ["*.js"],
+    files: ["**/*.js"],
     languageOptions: {
       ecmaVersion: "latest",
       globals: browserGlobals,

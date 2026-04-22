@@ -143,24 +143,39 @@ describe("wallet.createWallet", () => {
 }, 60_000);
 
 describe("wallet.unlockWithPin", () => {
-  it("wrong PIN increments the counter and wipes after MAX_PIN_ATTEMPTS", async () => {
-    const { wallet } = makeModule();
+  it("counter progression 1→2→3→4→5→WALLET_WIPED with clock advance", async () => {
+    let t = 1_000_000;
+    const clock = () => t;
+    const { wallet } = makeModule({ clock });
     await wallet.createWallet({ pin: STRONG_PIN });
     wallet.lock();
 
-    // Three wrong tries: the third triggers rate-limit on the next attempt.
-    for (let i = 0; i < 3; i++) {
-      try {
-        await wallet.unlockWithPin(SECOND_PIN);
-        throw new Error("expected wrong pin to throw");
-      } catch (err) {
-        expect(err.code === ERROR_CODES.WRONG_PIN || err.code === ERROR_CODES.PIN_RATE_LIMITED).toBe(true);
-      }
-    }
-    // 4th attempt is rate-limited.
+    // Attempts 1 and 2: plain WRONG_PIN, no rate-limit yet.
+    await expect(wallet.unlockWithPin(SECOND_PIN)).rejects.toMatchObject({
+      code: ERROR_CODES.WRONG_PIN
+    });
+    await expect(wallet.unlockWithPin(SECOND_PIN)).rejects.toMatchObject({
+      code: ERROR_CODES.WRONG_PIN
+    });
+    // Attempt 3: WRONG_PIN AND arms the rate-limit window for the next call.
+    await expect(wallet.unlockWithPin(SECOND_PIN)).rejects.toMatchObject({
+      code: ERROR_CODES.WRONG_PIN
+    });
+    // Attempt 4 inside the 10s rate-limit window: PIN_RATE_LIMITED, counter untouched.
     await expect(wallet.unlockWithPin(SECOND_PIN)).rejects.toMatchObject({
       code: ERROR_CODES.PIN_RATE_LIMITED
     });
+    // Advance past the 10s window → counter bumps to 4, WRONG_PIN surfaces.
+    t += 15_000;
+    await expect(wallet.unlockWithPin(SECOND_PIN)).rejects.toMatchObject({
+      code: ERROR_CODES.WRONG_PIN
+    });
+    // Advance again → counter hits 5 → WALLET_WIPED, sensitive credentials gone.
+    t += 15_000;
+    await expect(wallet.unlockWithPin(SECOND_PIN)).rejects.toMatchObject({
+      code: ERROR_CODES.WALLET_WIPED
+    });
+    expect(await wallet.hasWallet()).toBe(false);
   }, 180_000);
 
   it("correct PIN resets the counter and unlocks", async () => {
@@ -185,16 +200,30 @@ describe("wallet.unlockWithPin", () => {
 });
 
 describe("view-only accessors", () => {
-  it("work without unlock because the descriptor is plaintext", async () => {
-    const { wallet } = makeModule();
-    await wallet.createWallet({ pin: STRONG_PIN });
-    wallet.lock();
-    expect(wallet.isUnlocked()).toBe(false);
-    const address = await wallet.getReceiveAddress();
+  it("work on a fresh module backed by the same IDB (simulated reload)", async () => {
+    const idbFactory = new IDBFactory();
+    const fakeLwk = makeFakeLwk();
+    const first = createWalletModule({
+      indexedDbImpl: idbFactory,
+      cryptoImpl: webcrypto,
+      lwkLoader: async () => fakeLwk
+    });
+    await first.createWallet({ pin: STRONG_PIN });
+    first.lock();
+    // Simulate a page reload: drop the first module, build a fresh one
+    // backed by the SAME IDBFactory. No unlock — view-only must work off
+    // the plaintext descriptor in IndexedDB.
+    const second = createWalletModule({
+      indexedDbImpl: idbFactory,
+      cryptoImpl: webcrypto,
+      lwkLoader: async () => fakeLwk
+    });
+    expect(second.isUnlocked()).toBe(false);
+    const address = await second.getReceiveAddress();
     expect(address).toMatch(/^lq1fake-/);
-    const balances = await wallet.getBalances();
+    const balances = await second.getBalances();
     expect(balances).toBeDefined();
-    const txs = await wallet.listTransactions();
+    const txs = await second.listTransactions();
     expect(Array.isArray(txs)).toBe(true);
   }, 60_000);
 });
@@ -256,7 +285,7 @@ describe("exportMnemonic + wipeWallet", () => {
 });
 
 describe("public API surface", () => {
-  it("exposes only the documented methods and is frozen", async () => {
+  it("exposes only the documented methods, is frozen, and rejects mutation", async () => {
     const { wallet } = makeModule();
     expect(Object.isFrozen(wallet)).toBe(true);
     const methods = [
@@ -278,10 +307,16 @@ describe("public API surface", () => {
       "wipeWallet",
       "addBiometric",
       "removeBiometric",
-      "touch"
+      "touch",
+      "_zeroInMemory"
     ];
     for (const m of methods) {
       expect(typeof wallet[m]).toBe("function");
     }
+    // Exact surface — no extra methods creep in.
+    expect(Object.keys(wallet).sort()).toEqual([...methods].sort());
+    // Freeze is load-bearing: mutation must throw in ES-module strict mode.
+    expect(() => { wallet.unlockWithPin = () => null; }).toThrow(TypeError);
+    expect(() => { wallet.newMethod = () => null; }).toThrow(TypeError);
   });
 });
