@@ -35,7 +35,7 @@ export const BUNDLE_MANIFEST_URL = "/dist/manifest.json";
 // to MAX_LOAD_RETRIES) or fails degradedly.
 export const WASM_FETCH_TIMEOUT_MS = 10_000;
 export const MAX_LOAD_RETRIES = 3;
-export const LOAD_BACKOFF_SCHEDULE_MS = [1000, 3000, 9000];
+export const LOAD_BACKOFF_SCHEDULE_MS = [1000, 3000];
 
 // Minimum PIN length. Plan calls for 6-digit numeric.
 export const MIN_PIN_LENGTH = 6;

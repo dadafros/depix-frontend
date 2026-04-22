@@ -56,7 +56,8 @@ async function instantiate(url, fetchImpl) {
   return lwkBg;
 }
 
-async function tryLoad(url, fetchImpl) {
+async function tryLoad(url, fetchImpl, delayImpl) {
+  const sleep = delayImpl ?? ((ms) => new Promise(resolve => setTimeout(resolve, ms)));
   let lastErr = null;
   for (let attempt = 0; attempt < MAX_LOAD_RETRIES; attempt++) {
     try {
@@ -65,7 +66,7 @@ async function tryLoad(url, fetchImpl) {
       lastErr = err;
       const delay = LOAD_BACKOFF_SCHEDULE_MS[attempt] ?? 0;
       if (attempt < MAX_LOAD_RETRIES - 1 && delay > 0) {
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await sleep(delay);
       }
     }
   }
@@ -78,10 +79,10 @@ async function tryLoad(url, fetchImpl) {
 
 // Call once; returns the lwk_wasm_bg namespace (all the classes). Subsequent
 // calls return the cached promise — no repeat fetch, no repeat instantiate.
-export function loadLwk({ url, fetchImpl } = {}) {
+export function loadLwk({ url, fetchImpl, delayImpl } = {}) {
   if (loadPromise) return loadPromise;
   const effectiveUrl = url ?? lwkWasmUrl;
-  loadPromise = tryLoad(effectiveUrl, fetchImpl).catch(err => {
+  loadPromise = tryLoad(effectiveUrl, fetchImpl, delayImpl).catch(err => {
     // Reset on failure so the next call retries; otherwise a transient cold-
     // start failure would permanently brick the wallet until reload.
     loadPromise = null;
