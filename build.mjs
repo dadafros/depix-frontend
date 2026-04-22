@@ -59,9 +59,10 @@ function buildOptions() {
 
 async function writeManifest(metafile) {
   const outputs = Object.keys(metafile.outputs);
-  const bundle = outputs.find(
-    f => /wallet-bundle-[A-Z0-9]+\.js$/i.test(path.basename(f))
-  );
+  const bundle = outputs.find(f => {
+    const name = path.basename(f);
+    return name.startsWith("wallet-bundle-") && name.endsWith(".js");
+  });
   const wasm = outputs.find(f => path.basename(f).endsWith(".wasm"));
   if (!bundle) {
     throw new Error("build: wallet bundle not found in esbuild outputs");
@@ -95,12 +96,26 @@ async function oneShot() {
 
 async function watchMode() {
   await cleanOutDir();
-  const ctx = await esbuild.context(buildOptions());
+  const manifestPlugin = {
+    name: "manifest-on-rebuild",
+    setup(build) {
+      build.onEnd(async result => {
+        if (result.errors.length || !result.metafile) return;
+        try {
+          const manifest = await writeManifest(result.metafile);
+          console.log(`build: walletBundle = ${manifest.walletBundle}`);
+        } catch (err) {
+          console.error("build: manifest write failed:", err);
+        }
+      });
+    }
+  };
+  const ctx = await esbuild.context({
+    ...buildOptions(),
+    plugins: [manifestPlugin]
+  });
   await ctx.watch();
   console.log("build: watching wallet/ for changes…");
-  // Manifest regeneration after each rebuild is done via a plugin in a
-  // future revision. For now, run `npm run build` manually after edits you
-  // want reflected in the manifest.
 }
 
 try {

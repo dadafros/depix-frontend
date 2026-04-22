@@ -104,17 +104,30 @@ self.addEventListener("fetch", event => {
   // Wallet bundle + WASM — cache-first (content-hashed filename, so a new
   // build always produces a new URL). Timeout on the network fallback so a
   // stalled cellular fetch does not block wallet init forever.
-  if (/\/dist\/.*\.(wasm|js)$/.test(url.pathname)) {
+  //
+  // On cold install + timeout the fetch rejects with AbortError; we catch it
+  // and synthesize a 504 Response so the Sub-fase 2 loader can branch on
+  // response.ok / response.status instead of unwrapping a raw reject. UX copy
+  // ("Carregando carteira…" etc.) is rendered by the loader in Sub-fase 2+.
+  if (url.pathname.startsWith("/dist/") && /\.(wasm|js)$/.test(url.pathname)) {
     event.respondWith(
       caches.match(req).then(cached => {
         if (cached) return cached;
-        return fetchWithTimeout(req, WASM_FETCH_TIMEOUT_MS).then(response => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(req, clone));
-          }
-          return response;
-        });
+        return fetchWithTimeout(req, WASM_FETCH_TIMEOUT_MS)
+          .then(response => {
+            if (response.ok) {
+              const clone = response.clone();
+              caches.open(CACHE_NAME).then(cache => cache.put(req, clone));
+            }
+            return response;
+          })
+          .catch(err => {
+            const aborted = err && err.name === "AbortError";
+            return new Response("", {
+              status: 504,
+              statusText: aborted ? "Wallet fetch timeout" : "Wallet fetch failed"
+            });
+          });
       })
     );
     return;
