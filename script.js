@@ -16,6 +16,7 @@ import { renderBrandedQr, renderPrintableQr } from "./qr.js";
 import { resizeImage } from "./image-resize.js";
 import { loadWalletBundle } from "./wallet-bundle-loader.js";
 import { getDefaultConfigClient } from "./wallet/config.js";
+import { planHomeToggle } from "./wallet-home-gate.js";
 
 // Resolve the current user's preferred deposit address. If a wallet exists on
 // this device we deposit straight into it — no more copy-paste. Otherwise we
@@ -2702,27 +2703,15 @@ async function refreshWalletModeAvailability() {
     walletExists = false;
   }
   const walletEnabled = await isWalletFeatureEnabled();
+  const plan = planHomeToggle({ walletExists, walletEnabled });
   const banner = document.getElementById("wallet-maintenance-banner");
-  if (!walletEnabled) {
-    // Kill switch on. New users can't reach create flow; users with an existing
-    // wallet still get view-only access + maintenance banner linking the guide.
-    if (!walletExists) {
-      walletBtn.classList.add("hidden");
-      banner?.classList.add("hidden");
-      if (modoWallet) switchMode("deposit");
-      return;
-    }
-    walletBtn.classList.remove("hidden");
-    banner?.classList.remove("hidden");
-  } else {
-    banner?.classList.add("hidden");
-  }
-  if (!walletExists) {
-    walletBtn.classList.add("hidden");
-    if (modoWallet) switchMode("deposit");
+  walletBtn.classList.toggle("hidden", !plan.showWalletBtn);
+  banner?.classList.toggle("hidden", !plan.showBanner);
+  if (plan.forceDeposit && modoWallet) {
+    switchMode("deposit");
     return;
   }
-  walletBtn.classList.remove("hidden");
+  if (!plan.allowRestorePreferred) return;
   let preferred = null;
   try {
     preferred = localStorage.getItem("depix-home-mode");
