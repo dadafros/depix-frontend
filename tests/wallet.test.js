@@ -279,7 +279,9 @@ describe("exportMnemonic + wipeWallet", () => {
   it("wipeWallet with the wrong PIN refuses", async () => {
     const { wallet } = makeModule();
     await wallet.createWallet({ pin: STRONG_PIN });
-    await expect(wallet.wipeWallet(SECOND_PIN)).rejects.toBeDefined();
+    await expect(wallet.wipeWallet(SECOND_PIN)).rejects.toMatchObject({
+      code: ERROR_CODES.WRONG_PIN
+    });
     expect(await wallet.hasWallet()).toBe(true);
   }, 60_000);
 });

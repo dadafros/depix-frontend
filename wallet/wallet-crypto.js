@@ -64,14 +64,15 @@ function isAscendingOrDescendingRun(pin) {
 
 function looksLikeYearPattern(pin) {
   // PINs like "19XX" padded to 6 digits or "20XX" — conservative: reject if
-  // the first 4 digits are 19YY (1900..1999) or 20YY (2000..2026). Stops the
-  // most common birth-year pattern without forbidding every date-like PIN.
+  // the first 4 digits are 19YY (1900..1999) or 20YY (2000..2050). Bound is
+  // static (not `new Date().getFullYear()`) so tests stay deterministic; bump
+  // manually well before 2050.
   if (!/^[0-9]{6}$/.test(pin)) return false;
   const head = pin.slice(0, 4);
   const n = parseInt(head, 10);
   if (Number.isNaN(n)) return false;
   if (n >= 1900 && n <= 1999) return true;
-  if (n >= 2000 && n <= 2026) return true;
+  if (n >= 2000 && n <= 2050) return true;
   return false;
 }
 

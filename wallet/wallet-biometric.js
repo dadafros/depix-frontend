@@ -57,10 +57,6 @@ export async function isAvailable() {
   return platformAuthenticatorAvailable();
 }
 
-function strToBuf(str) {
-  return new TextEncoder().encode(str);
-}
-
 function bufToArray(buf) {
   if (buf instanceof Uint8Array) return buf;
   if (buf instanceof ArrayBuffer) return new Uint8Array(buf);
@@ -242,5 +238,4 @@ export function isPrfCredential(credentialRecord) {
   );
 }
 
-// Pure helper exported for tests.
-export { strToBuf as _strToBuf };
+
