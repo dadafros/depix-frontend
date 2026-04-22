@@ -330,6 +330,8 @@ Frontend changes reflect immediately (volume mount). See `../depix-dev/CLAUDE.md
 
 **E2E tests**: End-to-end tests live in `../depix-dev/tests/`. They run against the local dev environment and test full user flows (registration, login, blocking, webhooks, Telegram commands). See `../depix-dev/CLAUDE.md` for instructions on running and creating E2E tests.
 
+**E2E runs in CI too**: Every push/PR to `main` of this repo fires a `repository_dispatch` (event-type `frontend-push`) at `dadafros/depix-dev`, which runs the full e2e suite against the PR's commit of this repo + `main` of the other two repos. The result is posted back as a commit status `depix-dev / e2e` on the PR, which can be marked as a required check in branch protection. See `../depix-dev/CLAUDE.md` section "CI — Testes E2E automáticos no GitHub Actions" for setup details and how to debug failures (artifact `docker-logs` on the depix-dev run).
+
 ## Git
 
 - Remote: `git@github-personal:dadafros/depix-frontend.git`
