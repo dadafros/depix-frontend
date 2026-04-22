@@ -115,7 +115,7 @@ wrap cannot be trusted on this device class.
 
 ## Results log
 
-Fill a row per device tested. One row is enough to unblock Sub-fase 2.
+Fill a row per device tested. One row is enough to unblock Sub-fase 2. Sub-fase 1 (backend proxy, wallet scaffold) does **not** require a completed row — this smoke gates Sub-fase 2 (biometric enrollment UX) only.
 
 | Date | Device | iOS | Safari | Step 2 | Step 3 | Step 4 | Step 5 | Notes |
 |------|--------|-----|--------|--------|--------|--------|--------|-------|

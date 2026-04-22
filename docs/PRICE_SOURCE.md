@@ -27,7 +27,7 @@ price proxy cannot be a direct copy of SideSwap's setup.
 ## Decision for DepixApp `/api/quotes`
 
 The wallet UI needs `{ btcUsd, usdBrl, timestamp }`. We build these from
-two independent sources, cached 30s in Upstash Redis:
+two independent sources, cached 30s in the backend (store chosen in `depix-backend`):
 
 ### `btcUsd`
 

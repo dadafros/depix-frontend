@@ -37,8 +37,11 @@ Signals that `0.16.0` is a reasonable pin for Sub-fase 2:
 - Active project: 217 git tags, monthly minor releases, maintained by
   Blockstream.
 - SideSwap (our technical reference) consumes LWK in production via the
-  Rust path on mobile. The API surface we rely on (`Wollet`, `Signer`,
-  `TxBuilder`, Esplora client) is the one they exercise.
+  Rust crates on mobile (`lwk_wollet`, `lwk_signer`, `lwk_common`). They
+  do not use the `lwk_wasm` binding this PR pins, but the underlying Rust
+  crates — and therefore the core API surface (`Wollet`, `Signer`,
+  `TxBuilder`, Esplora client) — are the same ones they exercise in
+  production.
 - `lwk_wollet` has a `prices` feature flag, suggesting price-lookup
   primitives live in LWK itself. We still route BRL through the
   backend proxy (see `PRICE_SOURCE.md`), because LWK does not carry a
