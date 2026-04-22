@@ -177,9 +177,9 @@ Then iOS Settings → Passwords → search `depixapp.com` → delete the
 
 Fill a row per device tested. One row is enough to unblock Sub-fase 2. Sub-fase 1 (backend proxy, wallet scaffold) does **not** require a completed row — this smoke gates Sub-fase 2 (biometric enrollment UX) only.
 
-| Date | Device | iOS | Safari | Step 2 | Step 3 | Step 4 | Step 5 | Notes |
-|------|--------|-----|--------|--------|--------|--------|--------|-------|
-| YYYY-MM-DD | iPhone ... | 18.x | 18.x | pass/fail | pass/fail | pass/fail | pass/fail | |
+| Date       | Device            | iOS     | Safari  | Step 2 | Step 3 | Step 4 | Step 5 | Notes |
+|------------|-------------------|---------|---------|--------|--------|--------|--------|-------|
+| 2026-04-22 | iPhone 15 Pro Max | 26.2.1  | 26.2.1  | pass   | pass   | pass   | fail   | PRF non-deterministic across reboot with iCloud Keychain sync active. Same salt + cred id: pre-reboot `f4eef31bee01a096`, post-reboot `f4ccf31bcc01a096` (bytes 1 and 4 differ by `0x22`). PRF is deterministic *within* a session (verified with repeat unlock) — only breaks at the reboot boundary. See "Decision: biometric wrap not shipped" below. |
 
 ## Interpretation
 
@@ -193,6 +193,29 @@ Fill a row per device tested. One row is enough to unblock Sub-fase 2. Sub-fase 
 - **Step 4 or 5 fails but 3 passes** → do not ship biometric. Biometric
   decrypt across sessions is the whole point.
 
+## Decision: biometric wrap not shipped (2026-04-22)
+
+The floor-device smoke test showed PRF is not stable across reboot when
+iCloud Keychain is active (which is the default on iOS and used by ~all
+of the BR-consumer target segment). Apple's Passwords doc explicitly
+confirms the passkey is synced/backed-up via iCloud Keychain — on reboot
+the device appears to re-hydrate the passkey from iCloud, and the PRF
+output changes with some structured delta (not random noise). Within a
+session PRF is deterministic; across reboots it is not.
+
+Consequence for Phase 1 wallet:
+
+- **Biometric-wrap of the wallet seed is not viable.** Users who reboot
+  would lose wallet access on every reboot.
+- **PIN + Argon2id is the only wrap path** shipped (Sub-fase 2+).
+- The biometric enrollment screen is either hidden or gated behind a
+  disabled feature flag. Leaving the `wallet-biometric.js` code behind
+  a flag lets us re-enable it cheaply if Apple changes behaviour
+  (unlikely short term — this is how the API works, not a bug in one
+  iOS version).
+- Re-run this smoke test when Apple releases a subsequent major iOS and
+  refresh the row if behaviour changes. Until then, biometric stays off.
+
 ## What this test does NOT cover
 
 - Android Chrome (PIN-only fallback is known good there, PRF support
@@ -200,8 +223,10 @@ Fill a row per device tested. One row is enough to unblock Sub-fase 2. Sub-fase 
 - Desktop browsers (PIN-only by design — no platform authenticator in the
   wallet's sense).
 - iOS Safari tab (not PWA). The wallet only ships as a PWA.
-- iCloud backup behavior for the underlying credential. The plan's Tela 1
-  copy already warns that PWA data does not enter iCloud backup.
+- iCloud backup behavior for the app's own localStorage. The plan's
+  Tela 1 copy already warns that PWA localStorage does not enter iCloud
+  backup. Note the **passkey itself** does sync via iCloud Keychain — that
+  sync is what broke determinism in step 5 of the 2026-04-22 smoke run.
 
 If any of those become necessary, add a new log row with the variant, run
 the same 5 steps, and document deltas.
