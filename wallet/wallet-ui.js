@@ -39,8 +39,15 @@ export function selectChallengeIndices(pool, n, rand = Math.random) {
   if (typeof n !== "number" || n < 0) throw new RangeError("n");
   if (n > pool) throw new RangeError("n > pool");
   const used = new Set();
-  while (used.size < n) {
+  // Safety cap: bound the loop so a pathological PRNG (always-same-value, etc.)
+  // cannot hang. 1000 iterations is >>> enough for any sane pool/n pair —
+  // buildChallengeOptions uses the same guard.
+  let safety = 1000;
+  while (used.size < n && safety-- > 0) {
     used.add(Math.floor(rand() * pool));
+  }
+  if (used.size < n) {
+    throw new Error("selectChallengeIndices: could not pick enough distinct indices");
   }
   return [...used].sort((a, b) => a - b);
 }
@@ -185,16 +192,16 @@ export function registerWalletRoutes({
   // Scratch state carried across create/restore screens. Cleared at the end
   // of each flow. Never persisted.
   const state = {
-    createPendingMnemonic: null,
-    createPendingPin: null,
+    pendingMnemonic: null,
+    pendingPin: null,
     challenge: null, // { positions: number[], options: string[][], answered: boolean[] }
     restoreWords: new Array(12).fill(""),
     error: ""
   };
 
   function resetFlowState() {
-    state.createPendingMnemonic = null;
-    state.createPendingPin = null;
+    state.pendingMnemonic = null;
+    state.pendingPin = null;
     state.challenge = null;
     state.restoreWords = new Array(12).fill("");
     state.error = "";
@@ -258,8 +265,8 @@ export function registerWalletRoutes({
   q("wallet-create-intro-continue")?.addEventListener("click", async () => {
     try {
       clearMsg("wallet-create-intro-msg");
-      if (!state.createPendingMnemonic) {
-        state.createPendingMnemonic = await wallet.generateMnemonic();
+      if (!state.pendingMnemonic) {
+        state.pendingMnemonic = await wallet.generateMnemonic();
       }
       navigate("#wallet-create-seed");
     } catch (err) {
@@ -279,15 +286,16 @@ export function registerWalletRoutes({
     const grid = q("wallet-create-seed-grid");
     if (!grid) return;
     clearMsg("wallet-create-seed-msg");
-    if (!state.createPendingMnemonic) {
+    if (!state.pendingMnemonic) {
       navigate("#wallet-create-intro");
       return;
     }
-    const words = splitMnemonic(state.createPendingMnemonic);
+    const words = splitMnemonic(state.pendingMnemonic);
     grid.textContent = "";
     words.forEach((word, i) => {
       const cell = d.createElement("div");
       cell.className = "wallet-seed-cell";
+      cell.setAttribute("role", "listitem");
       cell.setAttribute("aria-label", `Palavra ${i + 1}: ${word}`);
       const n = d.createElement("span");
       n.className = "wallet-seed-index";
@@ -302,11 +310,11 @@ export function registerWalletRoutes({
   });
 
   q("wallet-create-seed-continue")?.addEventListener("click", () => {
-    if (!state.createPendingMnemonic) {
+    if (!state.pendingMnemonic) {
       navigate("#wallet-create-intro");
       return;
     }
-    const words = splitMnemonic(state.createPendingMnemonic);
+    const words = splitMnemonic(state.pendingMnemonic);
     const positions = selectChallengeIndices(12, 4, rand);
     const options = positions.map(i => buildChallengeOptions(words[i], BIP39_WORDLIST, rand));
     state.challenge = {
@@ -327,12 +335,15 @@ export function registerWalletRoutes({
   route("#wallet-create-verify", () => {
     const host = q("wallet-create-verify-host");
     if (!host) return;
+    // Modal lives outside the section so the router's hide doesn't clear it.
+    // Re-entry (user bailed, clicked menu, came back) must start with it hidden.
+    q("wallet-create-verify-modal")?.classList.add("hidden");
     clearMsg("wallet-create-verify-msg");
-    if (!state.challenge || !state.createPendingMnemonic) {
+    if (!state.challenge || !state.pendingMnemonic) {
       navigate("#wallet-create-seed");
       return;
     }
-    const words = splitMnemonic(state.createPendingMnemonic);
+    const words = splitMnemonic(state.pendingMnemonic);
     host.textContent = "";
     state.challenge.positions.forEach((pos, idx) => {
       const block = d.createElement("div");
@@ -403,7 +414,7 @@ export function registerWalletRoutes({
       showMsg("wallet-create-pin-msg", "A confirmação não bate com o PIN. Tente de novo.", "error");
       return;
     }
-    if (!state.createPendingMnemonic) {
+    if (!state.pendingMnemonic) {
       navigate("#wallet-create-intro");
       return;
     }
@@ -412,14 +423,20 @@ export function registerWalletRoutes({
     try {
       await wallet.createWallet({
         pin,
-        mnemonic: state.createPendingMnemonic,
+        mnemonic: state.pendingMnemonic,
         enrollBiometric: false
       });
-      state.createPendingPin = pin;
+      // Seed is persisted (encrypted) and LWK holds the live Signer. No need
+      // to keep the plaintext mnemonic in closure memory beyond this point.
+      state.pendingMnemonic = null;
+      state.pendingPin = pin;
       navigate("#wallet-create-biometric");
     } catch (err) {
       if (isWalletError(err, ERROR_CODES.WEAK_PIN)) {
         showMsg("wallet-create-pin-msg", "PIN muito comum ou previsível. Escolha outro.", "error");
+      } else if (isWalletError(err, ERROR_CODES.WALLET_ALREADY_EXISTS)) {
+        resetFlowState();
+        navigate("#wallet-gate");
       } else {
         renderError("wallet-create-pin-msg", err);
       }
@@ -439,35 +456,36 @@ export function registerWalletRoutes({
     clearMsg("wallet-create-biometric-msg");
     const enrollBtn = q("wallet-create-biometric-enroll");
     const skipBtn = q("wallet-create-biometric-skip");
-    const unavailable = q("wallet-create-biometric-unavailable");
+    // Plan Sub-fase 3 Tela 5: if PRF isn't available, the screen is skipped
+    // silently — user proceeds with PIN-only, no "degraded" copy.
+    let supported = false;
     try {
-      const supported = await wallet.biometricSupported();
-      if (supported) {
-        enrollBtn?.classList.remove("hidden");
-        unavailable?.classList.add("hidden");
-      } else {
-        enrollBtn?.classList.add("hidden");
-        unavailable?.classList.remove("hidden");
-      }
+      supported = await wallet.biometricSupported();
     } catch {
-      enrollBtn?.classList.add("hidden");
-      unavailable?.classList.remove("hidden");
+      supported = false;
     }
+    if (!supported) {
+      state.pendingPin = null;
+      navigate("#wallet-create-done");
+      return;
+    }
+    enrollBtn?.classList.remove("hidden");
     if (skipBtn) skipBtn.disabled = false;
   });
 
   q("wallet-create-biometric-enroll")?.addEventListener("click", async () => {
     clearMsg("wallet-create-biometric-msg");
-    const pin = state.createPendingPin;
+    const pin = state.pendingPin;
     if (!pin) {
       navigate("#wallet-create-pin");
       return;
     }
     const btn = q("wallet-create-biometric-enroll");
     if (btn) btn.disabled = true;
+    let enrolled = false;
     try {
       await wallet.addBiometric(pin);
-      navigate("#wallet-create-done");
+      enrolled = true;
     } catch (err) {
       if (isWalletError(err, ERROR_CODES.BIOMETRIC_REJECTED)) {
         showMsg("wallet-create-biometric-msg", "Autenticação cancelada. Você pode ativar mais tarde.", "warning");
@@ -476,10 +494,18 @@ export function registerWalletRoutes({
       }
     } finally {
       if (btn) btn.disabled = false;
+      if (enrolled) {
+        // PIN is no longer needed for any subsequent onboarding step — zero it
+        // out before we leave this screen so the biometric view is the last
+        // place it lives in memory.
+        state.pendingPin = null;
+      }
     }
+    if (enrolled) navigate("#wallet-create-done");
   });
 
   q("wallet-create-biometric-skip")?.addEventListener("click", () => {
+    state.pendingPin = null;
     navigate("#wallet-create-done");
   });
 
@@ -487,8 +513,8 @@ export function registerWalletRoutes({
   // #wallet-create-done — success.
   // ====================================================================
   route("#wallet-create-done", () => {
-    state.createPendingMnemonic = null;
-    state.createPendingPin = null;
+    state.pendingMnemonic = null;
+    state.pendingPin = null;
     state.challenge = null;
     if (showToast) showToast("Carteira criada com sucesso.");
   });
@@ -524,6 +550,10 @@ export function registerWalletRoutes({
       input.autocomplete = "off";
       input.autocapitalize = "off";
       input.spellcheck = false;
+      // iOS Safari applies autocorrect independently of spellcheck and will
+      // silently replace BIP39 words with English substitutions
+      // ("abandon" → "abandoned"). Explicit attribute needed.
+      input.setAttribute("autocorrect", "off");
       input.inputMode = "text";
       input.setAttribute("aria-label", `Palavra ${i + 1}`);
       input.value = state.restoreWords[i] || "";
@@ -558,8 +588,13 @@ export function registerWalletRoutes({
 
       input.addEventListener("input", () => {
         const raw = input.value.trim().toLowerCase();
+        // Keep the visible value in sync with the canonical form — otherwise
+        // a user typing 'ABAN' sees 'ABAN' in the field while state has
+        // 'aban', confusing anyone with first-letter auto-cap keyboards.
+        if (input.value !== raw) input.value = raw;
         state.restoreWords[i] = raw;
-        if (raw.length < 2) {
+        // Plan: autocomplete fires after 3+ chars.
+        if (raw.length < 3) {
           closeDropdown();
           validateCell(raw);
           return;
@@ -586,6 +621,17 @@ export function registerWalletRoutes({
         });
         dropdown.classList.remove("hidden");
         validateCell(raw);
+      });
+      // Plan Sub-fase 3 Restore Tela 1: "Sem paste. User precisa digitar cada
+      // palavra" — paste exposes users to clipboard-sniffing and short-
+      // circuits the letter-by-letter verification.
+      input.addEventListener("paste", evt => {
+        evt.preventDefault();
+        showMsg(
+          "wallet-restore-input-msg",
+          "Digite cada palavra — colar não é permitido.",
+          "warning"
+        );
       });
       input.addEventListener("blur", () => {
         setTimeout(() => closeDropdown(), 100);
@@ -619,7 +665,7 @@ export function registerWalletRoutes({
       showMsg("wallet-restore-input-msg", "Uma ou mais palavras não estão na lista BIP39.", "error");
       return;
     }
-    state.createPendingMnemonic = words.join(" ");
+    state.pendingMnemonic = words.join(" ");
     navigate("#wallet-restore-pin");
   });
 
@@ -650,7 +696,7 @@ export function registerWalletRoutes({
       showMsg("wallet-restore-pin-msg", "A confirmação não bate com o PIN. Tente de novo.", "error");
       return;
     }
-    if (!state.createPendingMnemonic) {
+    if (!state.pendingMnemonic) {
       navigate("#wallet-restore-input");
       return;
     }
@@ -658,11 +704,11 @@ export function registerWalletRoutes({
     if (btn) btn.disabled = true;
     try {
       await wallet.restoreWallet({
-        mnemonic: state.createPendingMnemonic,
+        mnemonic: state.pendingMnemonic,
         pin,
         enrollBiometric: false
       });
-      state.createPendingPin = pin;
+      state.pendingPin = pin;
       navigate("#wallet-restore-biometric");
     } catch (err) {
       if (isWalletError(err, ERROR_CODES.WEAK_PIN)) {
@@ -670,9 +716,13 @@ export function registerWalletRoutes({
       } else if (isWalletError(err, ERROR_CODES.INVALID_MNEMONIC)) {
         showMsg("wallet-restore-pin-msg", "Combinação inválida. Confira se digitou corretamente.", "error");
       } else if (isWalletError(err, ERROR_CODES.DESCRIPTOR_MISMATCH)) {
+        // Plan Sub-fase 3 calls for a Continue/Cancel modal on the input
+        // screen — full flow needs a wipe-without-old-PIN API path, tracked
+        // as follow-up. For now we surface the plan's copy so the user knows
+        // this is a distinct-wallet restore, not a typo.
         showMsg(
           "wallet-restore-pin-msg",
-          "Essas 12 palavras geram uma carteira diferente da anterior neste aparelho.",
+          "Esta recuperação vai criar uma carteira diferente da que estava aqui. Se as 12 palavras estão corretas, a carteira anterior tinha outra seed. Para prosseguir, remova a carteira existente.",
           "error"
         );
       } else {
@@ -693,34 +743,34 @@ export function registerWalletRoutes({
   route("#wallet-restore-biometric", async () => {
     clearMsg("wallet-restore-biometric-msg");
     const enrollBtn = q("wallet-restore-biometric-enroll");
-    const unavailable = q("wallet-restore-biometric-unavailable");
+    // Mirror of create: silent skip when PRF isn't supported.
+    let supported = false;
     try {
-      const supported = await wallet.biometricSupported();
-      if (supported) {
-        enrollBtn?.classList.remove("hidden");
-        unavailable?.classList.add("hidden");
-      } else {
-        enrollBtn?.classList.add("hidden");
-        unavailable?.classList.remove("hidden");
-      }
+      supported = await wallet.biometricSupported();
     } catch {
-      enrollBtn?.classList.add("hidden");
-      unavailable?.classList.remove("hidden");
+      supported = false;
     }
+    if (!supported) {
+      state.pendingPin = null;
+      navigate("#wallet-restore-done");
+      return;
+    }
+    enrollBtn?.classList.remove("hidden");
   });
 
   q("wallet-restore-biometric-enroll")?.addEventListener("click", async () => {
     clearMsg("wallet-restore-biometric-msg");
-    const pin = state.createPendingPin;
+    const pin = state.pendingPin;
     if (!pin) {
       navigate("#wallet-restore-pin");
       return;
     }
     const btn = q("wallet-restore-biometric-enroll");
     if (btn) btn.disabled = true;
+    let enrolled = false;
     try {
       await wallet.addBiometric(pin);
-      navigate("#wallet-restore-done");
+      enrolled = true;
     } catch (err) {
       if (isWalletError(err, ERROR_CODES.BIOMETRIC_REJECTED)) {
         showMsg("wallet-restore-biometric-msg", "Autenticação cancelada. Você pode ativar mais tarde.", "warning");
@@ -729,10 +779,13 @@ export function registerWalletRoutes({
       }
     } finally {
       if (btn) btn.disabled = false;
+      if (enrolled) state.pendingPin = null;
     }
+    if (enrolled) navigate("#wallet-restore-done");
   });
 
   q("wallet-restore-biometric-skip")?.addEventListener("click", () => {
+    state.pendingPin = null;
     navigate("#wallet-restore-done");
   });
 
@@ -740,8 +793,8 @@ export function registerWalletRoutes({
   // #wallet-restore-done — success.
   // ====================================================================
   route("#wallet-restore-done", () => {
-    state.createPendingMnemonic = null;
-    state.createPendingPin = null;
+    state.pendingMnemonic = null;
+    state.pendingPin = null;
     state.restoreWords = new Array(12).fill("");
     if (showToast) showToast("Carteira restaurada com sucesso.");
   });

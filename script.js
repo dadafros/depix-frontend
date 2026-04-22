@@ -2327,12 +2327,17 @@ function makeWalletRouteStub() {
       // synthetic hashchange so the real handler runs for the current view.
       window.dispatchEvent(new Event("hashchange"));
     } catch (err) {
+      console.error("wallet bundle load failed", err);
+      // Deep-link or back-button entry may land the user on any wallet-*
+      // view — not just #wallet-gate. Surface a toast regardless, then route
+      // to the gate so the inline error slot is visible too.
+      showToast("Não foi possível carregar a carteira. Verifique sua conexão e tente novamente.");
+      navigate("#wallet-gate");
       const msg = document.getElementById("wallet-gate-msg");
       if (msg) {
         msg.textContent = "Não foi possível carregar a carteira. Verifique sua conexão e tente novamente.";
         msg.classList.add("error");
       }
-      console.error("wallet bundle load failed", err);
     }
   };
 }

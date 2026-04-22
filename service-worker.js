@@ -103,6 +103,27 @@ self.addEventListener("fetch", event => {
     return;
   }
 
+  // Wallet manifest — network-first. The manifest points the loader at the
+  // current content-hashed bundle filename; a stale cached manifest would
+  // reference a filename that no longer exists on the server after a wallet-
+  // only deploy (hash rotated, APP_VERSION unchanged). Keep it fresh.
+  // Falls back to cache when offline so a reload without network can still
+  // read whatever bundle was last installed.
+  if (url.pathname === "/dist/manifest.json") {
+    event.respondWith(
+      fetch(req, { cache: "no-cache" })
+        .then(response => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(req, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(req))
+    );
+    return;
+  }
+
   // Wallet bundle + WASM — cache-first (content-hashed filename, so a new
   // build always produces a new URL). Timeout on the network fallback so a
   // stalled cellular fetch does not block wallet init forever.
