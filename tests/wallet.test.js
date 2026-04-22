@@ -87,9 +87,9 @@ function makeFakeLwk() {
   };
 }
 
-function makeModule({ clock, credentialsImpl } = {}) {
+function makeModule({ clock, credentialsImpl, idbFactory: existingIdb } = {}) {
   const fakeLwk = makeFakeLwk();
-  const idbFactory = new IDBFactory();
+  const idbFactory = existingIdb ?? new IDBFactory();
   return {
     wallet: createWalletModule({
       indexedDbImpl: idbFactory,
@@ -321,4 +321,56 @@ describe("public API surface", () => {
     expect(() => { wallet.unlockWithPin = () => null; }).toThrow(TypeError);
     expect(() => { wallet.newMethod = () => null; }).toThrow(TypeError);
   });
+});
+
+describe("failedPinAttempts persistence across module instances", () => {
+  it("rate-limit state survives a simulated page reload", async () => {
+    // Shared IDBFactory simulates the browser's IndexedDB sticking around
+    // across a reload. A fresh createWalletModule in a new session must
+    // read the counter from IDB, not from the (dropped) closure.
+    let t = 1_000_000;
+    const clock = () => t;
+    const sharedIdb = new IDBFactory();
+
+    // Session A: create wallet, lock, burn 3 wrong PINs (attempt 3 arms
+    // the rate-limit window).
+    const { wallet: walletA } = makeModule({ clock, idbFactory: sharedIdb });
+    await walletA.createWallet({ pin: STRONG_PIN });
+    walletA.lock();
+    await expect(walletA.unlockWithPin(SECOND_PIN)).rejects.toMatchObject({
+      code: ERROR_CODES.WRONG_PIN
+    });
+    await expect(walletA.unlockWithPin(SECOND_PIN)).rejects.toMatchObject({
+      code: ERROR_CODES.WRONG_PIN
+    });
+    await expect(walletA.unlockWithPin(SECOND_PIN)).rejects.toMatchObject({
+      code: ERROR_CODES.WRONG_PIN
+    });
+
+    // Drop session A; spin up session B backed by the SAME IDBFactory.
+    // NB: the rate-limit *window* (`rateLimitUntil`) is closure-only and
+    // ephemeral per session by design — only the counter persists. So on
+    // session B we prove persistence via the counter itself: two more wrong
+    // attempts take us to 5 → WALLET_WIPED. If the counter had leaked back
+    // to 0 in B, it'd take 5 attempts instead of 2.
+    const { wallet: walletB } = makeModule({ clock, idbFactory: sharedIdb });
+    expect(walletB.isUnlocked()).toBe(false);
+
+    // Attempt 4: WRONG_PIN (counter 3 → 4). Error message carries the
+    // remaining count, which proves the counter came from IDB and not from
+    // a fresh closure.
+    let err4;
+    try { await walletB.unlockWithPin(SECOND_PIN); } catch (e) { err4 = e; }
+    expect(err4).toBeInstanceOf(WalletError);
+    expect(err4.code).toBe(ERROR_CODES.WRONG_PIN);
+    expect(err4.message).toMatch(/1 attempts remaining/);
+
+    // Attempt 5: WALLET_WIPED (only reachable in 2 session-B attempts if
+    // the session-A counter persisted).
+    t += 15_000; // step past session B's own rate-limit window
+    await expect(walletB.unlockWithPin(SECOND_PIN)).rejects.toMatchObject({
+      code: ERROR_CODES.WALLET_WIPED
+    });
+    expect(await walletB.hasWallet()).toBe(false);
+  }, 180_000);
 });
