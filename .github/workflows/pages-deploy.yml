@@ -1,3 +1,10 @@
+# Deploys the DePix frontend (legacy static files + `dist/` wallet bundle) to
+# GitHub Pages. REQUIRES a one-time repo Settings change BEFORE this workflow
+# serves traffic: Settings -> Pages -> Build and deployment -> Source = GitHub
+# Actions (currently "Deploy from a branch"). Until that toggle is flipped
+# post-merge, this workflow runs successfully but its output is NOT served —
+# the branch-based deploy continues. `workflow_dispatch` is kept so a
+# maintainer can re-run manually after flipping the setting.
 name: Deploy to GitHub Pages
 
 on:
@@ -35,13 +42,32 @@ jobs:
       - name: Build wallet bundle
         run: npm run build
 
+      - name: Stage Pages artifact
+        run: |
+          mkdir -p _site
+          rsync -a \
+            --exclude='_site' \
+            --exclude='node_modules' \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='tests' \
+            --exclude='package.json' \
+            --exclude='package-lock.json' \
+            --exclude='build.mjs' \
+            --exclude='eslint.config.js' \
+            --exclude='vitest.config.*' \
+            --exclude='*.md' \
+            --exclude='.gitignore' \
+            --exclude='.claude' \
+            ./ _site/
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: _site
 
   deploy:
     name: Deploy to GitHub Pages
