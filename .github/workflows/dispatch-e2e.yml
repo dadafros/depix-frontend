@@ -1,0 +1,26 @@
+name: Dispatch E2E on depix-dev
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger depix-dev e2e
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.DEPIX_DEV_DISPATCH_TOKEN }}
+          repository: dadafros/depix-dev
+          event-type: frontend-push
+          client-payload: |-
+            {
+              "source_repo": "${{ github.repository }}",
+              "source_sha": "${{ github.event.pull_request.head.sha || github.sha }}",
+              "source_ref": "${{ github.ref }}",
+              "event_name": "${{ github.event_name }}",
+              "pr_number": "${{ github.event.pull_request.number || '' }}"
+            }
