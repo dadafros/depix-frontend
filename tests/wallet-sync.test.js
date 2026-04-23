@@ -415,5 +415,95 @@ describe("wallet.syncWallet", () => {
         code: ERROR_CODES.ESPLORA_RATE_LIMITED
       });
     }, 60_000);
+
+    // Rediscovery — if the preferred provider 429s once at session start, we
+    // stay on the fallback for `REDISCOVERY_INTERVAL` (10) syncs, then the
+    // next sync re-tests the preferred provider. Guards against a permanent
+    // demotion after a transient failure.
+    it("rediscovers the preferred provider every 10 successful syncs", async () => {
+      const fakeLwk = makeFakeLwkWithSync();
+      const providers = [
+        { name: "provA", url: "https://a.example/api" },
+        { name: "provB", url: "https://b.example/api" }
+      ];
+      let provACallCount = 0;
+      let provBCallCount = 0;
+      const factory = (_l, _net, provider) => {
+        const client = new fakeLwk.EsploraClient(_net, provider.url);
+        client.fullScan = async () => {
+          if (provider.name === "provA") {
+            provACallCount++;
+            // First call: simulate a transient 429 so the scheduler falls
+            // through to provB. Subsequent calls succeed (the "recovered"
+            // state we want rediscovery to find).
+            if (provACallCount === 1) throw new Error("status 429");
+          } else {
+            provBCallCount++;
+          }
+          return new fakeLwk.Update(new Uint8Array([0xde, 0xad]));
+        };
+        return client;
+      };
+      const wallet = createWalletModule({
+        indexedDbImpl: new IDBFactory(),
+        cryptoImpl: webcrypto,
+        lwkLoader: async () => fakeLwk,
+        esploraProviders: providers,
+        esploraClientFactory: factory
+      });
+      await wallet.createWallet({ pin: STRONG_PIN });
+      wallet.lock();
+
+      // Sync 1: A 429s (call #1), fallback to B succeeds. lastGood=B, counter=1.
+      await wallet.syncWallet();
+      expect(provACallCount).toBe(1);
+      expect(provBCallCount).toBe(1);
+
+      // Syncs 2-10: sticky on B. A is never touched. counter reaches 10.
+      for (let i = 0; i < 9; i++) await wallet.syncWallet();
+      expect(provACallCount).toBe(1);
+      expect(provBCallCount).toBe(10);
+
+      // Sync 11: counter >= 10, forceRediscovery resets startIndex to 0. A
+      // now succeeds (its recovered-state second call). lastGood goes back to
+      // A, counter resets.
+      await wallet.syncWallet();
+      expect(provACallCount).toBe(2);
+      // B should NOT have been hit on sync 11 — A succeeded so we returned
+      // without falling through.
+      expect(provBCallCount).toBe(10);
+    }, 60_000);
+  });
+
+  // ----------------------------------------------------------------------
+  // Outer timeout — LWK 0.16.x retries 429s internally without ever
+  // surfacing the error. We guard every provider attempt with a
+  // Promise.race(SYNC_TIMEOUT_MS) so the fallback loop can move on when
+  // the upstream client is hung. Tests inject a small timeout so the
+  // assertion runs in milliseconds instead of 60s real-time.
+  // ----------------------------------------------------------------------
+  describe("SYNC_TIMEOUT_MS", () => {
+    it("times out a hung fullScan and classifies the timeout as rate-limited", async () => {
+      // fullScan never resolves — simulates the LWK retry loop wedge we
+      // observed against Blockstream in dev. With syncTimeoutMs=50 the
+      // outer Promise.race fires after 50ms and rejects with "rate limit"
+      // in the synthetic message; isRateLimitError() routes that into
+      // ESPLORA_RATE_LIMITED so the UI applies its backoff.
+      const neverResolves = new Promise(() => {});
+      const fakeLwk = makeFakeLwkWithSync({ fullScanHold: neverResolves });
+      const wallet = createWalletModule({
+        indexedDbImpl: new IDBFactory(),
+        cryptoImpl: webcrypto,
+        lwkLoader: async () => fakeLwk,
+        esploraUrl: "https://fake-esplora/api",
+        syncTimeoutMs: 50
+      });
+      await wallet.createWallet({ pin: STRONG_PIN });
+      wallet.lock();
+
+      await expect(wallet.syncWallet()).rejects.toMatchObject({
+        code: ERROR_CODES.ESPLORA_RATE_LIMITED
+      });
+    }, 10_000);
   });
 });

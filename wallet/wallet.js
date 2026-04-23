@@ -156,7 +156,8 @@ export function createWalletModule({
   network = "mainnet",
   esploraUrl,
   esploraProviders,
-  esploraClientFactory
+  esploraClientFactory,
+  syncTimeoutMs
 } = {}) {
   const lwkLoaderFn = lwkLoader ?? loadLwk;
   const getNow = clock ?? now;
@@ -181,6 +182,13 @@ export function createWalletModule({
   // of this module instance so consecutive syncs don't retry known-failing
   // providers first. Reset on module recreate (page reload).
   let lastGoodProviderIndex = 0;
+  // Periodic-rediscovery counter. Without this, if provider[0] (Blockstream)
+  // 429s on the first sync of a session, we stick to the fallback forever
+  // even after Blockstream recovers. Every N successful syncs we force the
+  // next attempt to start at index 0 so a transient 429 doesn't produce a
+  // permanent demotion of the preferred provider for the rest of the session.
+  let syncsSinceLastRediscovery = 0;
+  const REDISCOVERY_INTERVAL = 10;
 
   function db() {
     if (!dbPromise) dbPromise = openDb(indexedDbImpl);
@@ -604,10 +612,23 @@ export function createWalletModule({
 
   // Outer wall-clock guard on a single provider's fullScan. LWK 0.16.x retries
   // 429s internally without surfacing the error, which can wedge the promise
-  // forever. We cap each provider attempt at 30s; the synthetic error message
+  // forever. We cap each provider attempt at 60s; the synthetic error message
   // contains "rate limit" so isRateLimitError() classifies it and the
   // fallback loop moves on to the next provider.
-  const SYNC_TIMEOUT_MS = 30_000;
+  //
+  // 60s (not 30s) tolerates legitimately slow scans on bad mobile networks —
+  // a fresh wallet's ~40-address gap-limit serial scan can genuinely take
+  // 40-50s on congested 3G/4G without any rate-limit involvement. A 30s
+  // timeout in that scenario would false-positive into the exponential
+  // backoff, stranding the user in a 10-min cool-down when their only
+  // "problem" was a slow cell tower. The cost is a higher worst-case
+  // wait (2 providers × 60s = 120s) when both upstreams are genuinely
+  // hung, but the cached balance stays on screen the whole time and the
+  // "Tentar novamente" CTA lets users escape the wait manually.
+  //
+  // Overridable via the `syncTimeoutMs` option so tests can assert the
+  // timeout path deterministically without 60s real-time waits.
+  const SYNC_TIMEOUT_MS = typeof syncTimeoutMs === "number" ? syncTimeoutMs : 60_000;
 
   // Run fullScan against one client, enforced by the 30s timeout. Returns the
   // Update on success; throws the underlying error on failure (the caller
@@ -676,9 +697,14 @@ export function createWalletModule({
     }
 
     // Start from the last provider we saw succeed (or 0 on cold start), then
-    // wrap around. Collect every failure so we can classify the aggregate
-    // outcome once the loop exhausts the list.
-    const startIndex = Math.min(lastGoodProviderIndex, providers.length - 1);
+    // wrap around. Every REDISCOVERY_INTERVAL syncs we force startIndex=0 so
+    // a once-failed preferred provider eventually gets re-tested after
+    // recovery — otherwise a single 429 on Blockstream at mount time would
+    // demote it for the rest of the session.
+    const forceRediscovery = syncsSinceLastRediscovery >= REDISCOVERY_INTERVAL;
+    const startIndex = forceRediscovery
+      ? 0
+      : Math.min(lastGoodProviderIndex, providers.length - 1);
     const errors = [];
     let anyRateLimited = false;
 
@@ -695,6 +721,7 @@ export function createWalletModule({
       try {
         const update = await runSingleScan(client, w);
         lastGoodProviderIndex = idx;
+        syncsSinceLastRediscovery = forceRediscovery ? 0 : syncsSinceLastRediscovery + 1;
         return await persistScan(w, update);
       } catch (err) {
         if (isRateLimitError(err)) anyRateLimited = true;

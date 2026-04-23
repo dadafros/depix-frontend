@@ -1155,7 +1155,7 @@ export function registerWalletRoutes({
         );
         nextSyncAllowedAt = Date.now() + backoffMs;
         updateSyncState(
-          `Muitas sincronizações. Próxima tentativa em ${formatBackoffSeconds(backoffMs)}.`,
+          `Serviço sobrecarregado. Próxima tentativa em ${formatBackoffSeconds(backoffMs)}.`,
           "warning"
         );
       } else if (isWalletError(err, ERROR_CODES.ESPLORA_UNAVAILABLE)) {
@@ -1231,7 +1231,7 @@ export function registerWalletRoutes({
     const remainingMs = nextSyncAllowedAt - Date.now();
     if (remainingMs > 0) {
       updateSyncState(
-        `Muitas sincronizações. Próxima tentativa em ${formatBackoffSeconds(remainingMs)}.`,
+        `Serviço sobrecarregado. Próxima tentativa em ${formatBackoffSeconds(remainingMs)}.`,
         "warning"
       );
       setRetryCtaVisible(true);
