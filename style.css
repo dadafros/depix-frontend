@@ -4788,6 +4788,10 @@ textarea:focus {
 }
 .wallet-receive-copy {
   flex-shrink: 0;
+  /* override global `input, button { width: 100% }` so this trailing button
+     does not consume the flex row and squeeze the address span to 0. */
+  width: auto;
+  margin-bottom: 0;
   background: var(--accent-subtle);
   color: var(--accent);
   border: none;
@@ -4864,6 +4868,10 @@ textarea:focus {
 }
 .wallet-tx-pill {
   flex-shrink: 0;
+  /* override global `input, button { width: 100% }` — pills must size to
+     content, otherwise each one takes 100% of the row and scrolls forever. */
+  width: auto;
+  margin-bottom: 0;
   padding: 6px 14px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
@@ -4953,9 +4961,16 @@ textarea:focus {
 }
 .wallet-setting-row button {
   flex-shrink: 0;
+  /* override global `input, button { width: 100% }` — trailing action must
+     size to content, otherwise it consumes the flex row and collapses the
+     body text column to ~0, wrapping titles one word per line. */
+  width: auto;
+  margin-bottom: 0;
   padding: 8px 14px;
 }
 .wallet-settings-danger {
+  width: auto;
+  margin-bottom: 0;
   background: rgba(255, 107, 107, 0.12);
   border: 1px solid rgba(255, 107, 107, 0.3);
   color: var(--color-error);
