@@ -4692,12 +4692,12 @@ textarea:focus {
   flex-shrink: 0;
   width: 36px;
   height: 36px;
-  border-radius: 50%;
-  object-fit: cover;
-  background: var(--bg-primary);
-  /* brand logos carry their own backdrop; the dark card shows through
-     any transparent corner and the circle clip keeps asymmetric logos
-     (like the Liquid Bitcoin PNG) visually consistent with the others. */
+  /* No background + no clip. Brand logos (Tether pin, Liquid-Bitcoin
+     teardrop, DePix full-brand mark) have their own silhouettes with
+     transparent corners — clipping to a circle was chopping off the
+     pin/teardrop tips and the dark backdrop was bleeding through every
+     transparent pixel. `contain` keeps the full logo inside the box. */
+  object-fit: contain;
 }
 .wallet-home-asset-body {
   flex: 1;
