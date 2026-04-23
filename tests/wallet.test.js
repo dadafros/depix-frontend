@@ -334,6 +334,43 @@ describe("wallet.generateMnemonic", () => {
   });
 });
 
+describe("wallet.validateMnemonic", () => {
+  it("resolves for a 12-word mnemonic the fake LWK accepts", async () => {
+    const { wallet } = makeModule();
+    const valid = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+    await expect(wallet.validateMnemonic(valid)).resolves.toBeUndefined();
+  });
+
+  it("throws INVALID_MNEMONIC on non-string / empty input", async () => {
+    const { wallet } = makeModule();
+    await expect(wallet.validateMnemonic("")).rejects.toMatchObject({
+      code: ERROR_CODES.INVALID_MNEMONIC
+    });
+    await expect(wallet.validateMnemonic("   ")).rejects.toMatchObject({
+      code: ERROR_CODES.INVALID_MNEMONIC
+    });
+    await expect(wallet.validateMnemonic(null)).rejects.toMatchObject({
+      code: ERROR_CODES.INVALID_MNEMONIC
+    });
+  });
+
+  it("throws INVALID_MNEMONIC when LWK rejects the word list", async () => {
+    // Fake LWK's Mnemonic constructor requires exactly 12 words; any other
+    // count should surface as INVALID_MNEMONIC (wraps the raw error).
+    const { wallet } = makeModule();
+    await expect(wallet.validateMnemonic("one two three")).rejects.toMatchObject({
+      code: ERROR_CODES.INVALID_MNEMONIC
+    });
+  });
+
+  it("does NOT persist anything — hasWallet() stays false after valid input", async () => {
+    const { wallet } = makeModule();
+    const valid = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+    await wallet.validateMnemonic(valid);
+    expect(await wallet.hasWallet()).toBe(false);
+  });
+});
+
 describe("public API surface", () => {
   it("exposes only the documented methods, is frozen, and rejects mutation", async () => {
     const { wallet } = makeModule();
@@ -344,6 +381,7 @@ describe("public API surface", () => {
       "biometricSupported",
       "isUnlocked",
       "generateMnemonic",
+      "validateMnemonic",
       "createWallet",
       "restoreWallet",
       "unlock",

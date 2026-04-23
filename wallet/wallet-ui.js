@@ -673,8 +673,36 @@ export function registerWalletRoutes({
       showMsg("wallet-restore-input-msg", "Uma ou mais palavras não estão na lista BIP39.", "error");
       return;
     }
-    state.pendingMnemonic = words.join(" ");
-    navigate("#wallet-restore-pin");
+    const mnemonicStr = words.join(" ");
+    // Checksum validation via LWK. First call triggers WASM load (~9 MB) —
+    // surface that as an explicit "Validando…" state instead of leaving a
+    // silent async gap or deferring until after PIN entry.
+    const btn = q("wallet-restore-input-continue");
+    const originalLabel = btn ? btn.textContent : "";
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Validando…";
+    }
+    try {
+      await wallet.validateMnemonic(mnemonicStr);
+      state.pendingMnemonic = mnemonicStr;
+      navigate("#wallet-restore-pin");
+    } catch (err) {
+      if (isWalletError(err, ERROR_CODES.INVALID_MNEMONIC)) {
+        showMsg(
+          "wallet-restore-input-msg",
+          "Uma ou mais das 12 palavras está errada. Confira sua anotação e tente novamente.",
+          "error"
+        );
+      } else {
+        renderError("wallet-restore-input-msg", err);
+      }
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = originalLabel;
+      }
+    }
   });
 
   q("wallet-restore-input-back")?.addEventListener("click", () => {

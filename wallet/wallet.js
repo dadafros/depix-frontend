@@ -559,12 +559,41 @@ export function createWalletModule({
     return l.Mnemonic.fromRandom(12).toString();
   }
 
+  // Checksum-validate a user-typed mnemonic WITHOUT persisting or unlocking.
+  // Used by the restore UI's "Validar e avançar" button so a bad checksum
+  // surfaces on the input screen (where "palavras erradas" is unambiguous)
+  // instead of 2 screens later after the user has typed a PIN.
+  // Throws INVALID_MNEMONIC on bad input or bad BIP39 checksum.
+  async function validateMnemonic(mnemonicStr) {
+    if (typeof mnemonicStr !== "string" || !mnemonicStr.trim()) {
+      throw new WalletError(
+        ERROR_CODES.INVALID_MNEMONIC,
+        "mnemonic must be a non-empty string"
+      );
+    }
+    const l = await lwk();
+    let mnemonicObj;
+    try {
+      mnemonicObj = new l.Mnemonic(mnemonicStr.trim().toLowerCase());
+    } catch (err) {
+      throw new WalletError(
+        ERROR_CODES.INVALID_MNEMONIC,
+        "Invalid BIP39 mnemonic",
+        err
+      );
+    }
+    if (mnemonicObj?.free) {
+      try { mnemonicObj.free(); } catch { /* best effort */ }
+    }
+  }
+
   return Object.freeze({
     hasWallet,
     hasBiometric,
     biometricSupported,
     isUnlocked,
     generateMnemonic,
+    validateMnemonic,
     createWallet,
     restoreWallet,
     unlock,
