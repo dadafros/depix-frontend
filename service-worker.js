@@ -33,6 +33,7 @@ const JS_MODULES = [
 // wallet home shows the same logos users recognise from other Liquid apps.
 // Referenced from wallet/asset-registry.js with origin-absolute paths.
 const ICON_FILES = [
+  "icons/depix.png",
   "icons/liquid-tether.svg",
   "icons/liquid-bitcoin.png"
 ];
