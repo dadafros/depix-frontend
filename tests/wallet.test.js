@@ -392,6 +392,8 @@ describe("public API surface", () => {
       "getBalances",
       "listTransactions",
       "getDescriptor",
+      "getLastScanAt",
+      "syncWallet",
       "exportMnemonic",
       "wipeWallet",
       "addBiometric",
