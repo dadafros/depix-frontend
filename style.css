@@ -4596,9 +4596,12 @@ textarea:focus {
 
 /* ===== Wallet home (view-only Liquid dashboard) ===== */
 .wallet-home-total {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  /* Row 1: label + value (left) · icon buttons (right).
+     Row 2: sync-state spans both columns so it can center across the
+     full card width instead of only within the left-hand main column. */
+  gap: 8px 12px;
   padding: 16px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-accent);
@@ -4606,7 +4609,6 @@ textarea:focus {
   margin-bottom: 16px;
 }
 .wallet-home-total-main {
-  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -4614,10 +4616,10 @@ textarea:focus {
   gap: 4px;
 }
 .wallet-home-total-actions {
-  flex-shrink: 0;
   display: flex;
   gap: 6px;
   align-items: flex-start;
+  justify-self: end;
 }
 /* History + Settings icons inside the balance card. Override the global
    `input, button { width: 100%; margin-bottom: 12px; padding: 14px }`
@@ -4659,8 +4661,13 @@ textarea:focus {
   letter-spacing: -0.02em;
 }
 .wallet-home-sync-state {
+  grid-column: 1 / -1;
+  text-align: center;
   font-size: 0.72rem;
   color: var(--text-tertiary);
+}
+.wallet-home-sync-state:empty {
+  display: none;
 }
 .wallet-home-sync-state.error {
   color: var(--color-warning);
@@ -4685,15 +4692,12 @@ textarea:focus {
   flex-shrink: 0;
   width: 36px;
   height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   border-radius: 50%;
-  background: var(--accent-subtle);
-  color: var(--accent);
-  font-family: 'Space Grotesk', system-ui, sans-serif;
-  font-weight: 600;
-  font-size: 0.8rem;
+  object-fit: cover;
+  background: var(--bg-primary);
+  /* brand logos carry their own backdrop; the dark card shows through
+     any transparent corner and the circle clip keeps asymmetric logos
+     (like the Liquid Bitcoin PNG) visually consistent with the others. */
 }
 .wallet-home-asset-body {
   flex: 1;
