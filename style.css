@@ -4597,14 +4597,54 @@ textarea:focus {
 /* ===== Wallet home (view-only Liquid dashboard) ===== */
 .wallet-home-total {
   display: flex;
-  flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
+  gap: 12px;
   padding: 16px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-accent);
   border-radius: 14px;
   margin-bottom: 16px;
+}
+.wallet-home-total-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.wallet-home-total-actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+/* History + Settings icons inside the balance card. Override the global
+   `input, button { width: 100%; margin-bottom: 12px; padding: 14px }`
+   rule so the icons stay square and compact. */
+.wallet-home-icon-btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  margin-bottom: 0;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.18s, color 0.18s, border-color 0.18s;
+}
+.wallet-home-icon-btn:hover:not(:disabled) {
+  background: var(--bg-elevated-hover);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.wallet-home-icon-btn svg {
+  width: 18px;
+  height: 18px;
 }
 .wallet-home-total-label {
   font-size: 0.78rem;
@@ -4721,29 +4761,6 @@ textarea:focus {
 }
 .wallet-home-action svg {
   color: var(--accent);
-}
-
-.wallet-home-links {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 12px;
-  border-top: 1px solid var(--border-subtle);
-  padding-top: 12px;
-}
-.link-btn {
-  background: none;
-  border: none;
-  color: var(--accent);
-  font-size: 0.9rem;
-  text-align: left;
-  padding: 6px 0;
-  cursor: pointer;
-  text-decoration: none;
-}
-.link-btn:hover {
-  color: var(--accent-hover);
-  text-decoration: underline;
 }
 
 /* ===== Wallet receive ===== */
