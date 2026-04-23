@@ -31,6 +31,8 @@ Thumbs.db
 !social-preview.png
 !social-preview-docs.png
 !social-preview-btcpay.png
+# Brand logos for wallet asset rows — committed, not screenshots.
+!icons/*.png
 
 # Coverage
 coverage/
