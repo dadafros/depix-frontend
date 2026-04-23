@@ -1644,6 +1644,18 @@ export function registerWalletRoutes({
       words.textContent = "";
       words.classList.add("hidden");
     }
+    // Restore the pre-reveal layout: show PIN input + Cancelar button,
+    // hide the identity fingerprint card, reset intro copy.
+    q("wallet-export-pin-wrap")?.classList.remove("hidden");
+    q("wallet-export-cancel")?.classList.remove("hidden");
+    const identity = q("wallet-export-identity");
+    if (identity) identity.classList.add("hidden");
+    const identityValue = q("wallet-export-identity-value");
+    if (identityValue) identityValue.textContent = "…";
+    const intro = q("wallet-export-intro");
+    if (intro) {
+      intro.textContent = "Digite seu PIN. As palavras serão mostradas apenas nesta tela — anote em papel antes de fechar.";
+    }
     clearMsg("wallet-export-msg");
     const confirm = q("wallet-export-confirm");
     if (confirm) {
@@ -1697,6 +1709,34 @@ export function registerWalletRoutes({
         cell.appendChild(w);
         wordsEl.appendChild(cell);
       });
+      // Post-reveal layout: the PIN input and the duplicate Cancelar
+      // button are no longer useful; hide them so the only prominent
+      // action is the now-relabeled "Fechar" confirm button. Also swap
+      // the intro copy to the anote-em-papel emphasis.
+      q("wallet-export-pin-wrap")?.classList.add("hidden");
+      q("wallet-export-cancel")?.classList.add("hidden");
+      const intro = q("wallet-export-intro");
+      if (intro) {
+        intro.textContent = "Anote em papel antes de fechar. Sem as 12 palavras e sem a identidade da carteira, os fundos não podem ser recuperados.";
+      }
+      // Mirror the create-seed screen: show the wallet identity fingerprint
+      // alongside the 12 words so user writes both down together. Descriptor
+      // is plaintext in IDB, no extra unlock needed.
+      const identityCard = q("wallet-export-identity");
+      const identityValue = q("wallet-export-identity-value");
+      if (identityCard && identityValue) {
+        identityCard.classList.remove("hidden");
+        identityValue.textContent = "…";
+        try {
+          const descriptor = await wallet.getDescriptor();
+          identityValue.textContent = descriptor
+            ? await computeFingerprint(descriptor)
+            : "—";
+        } catch {
+          // Fingerprint is a convenience, never block the word reveal.
+          identityValue.textContent = "—";
+        }
+      }
       if (confirm) {
         confirm.textContent = "Fechar";
         confirm.disabled = false;
