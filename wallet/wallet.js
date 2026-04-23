@@ -253,9 +253,11 @@ export function createWalletModule({
     // state, check for mismatch, then actually unlock only if it matches.
     const l2 = await lwk();
     const net2 = makeNetwork(l2, network);
-    const { signer: probeSigner, descriptor: probeDesc } = buildDescriptorFromMnemonic(l2, mnemonicStr, net2);
+    const { signer: probeSigner, mnemonic: probeMnemonic, descriptor: probeDesc } = buildDescriptorFromMnemonic(l2, mnemonicStr, net2);
     const descriptorStr = probeDesc.toString();
     if (probeSigner?.free) { try { probeSigner.free(); } catch { /* best effort */ } }
+    if (probeDesc?.free) { try { probeDesc.free(); } catch { /* best effort */ } }
+    if (probeMnemonic?.free) { try { probeMnemonic.free(); } catch { /* best effort */ } }
 
     const existing = await readCredentials(database);
     if (existing?.descriptor && existing.descriptor !== descriptorStr) {
@@ -586,11 +588,15 @@ export function createWalletModule({
       );
     }
     const net = makeNetwork(l, network);
-    const { signer, descriptor } = buildDescriptorFromMnemonic(l, mnemonicObj.toString(), net);
+    const { signer, mnemonic: innerMnemonic, descriptor } = buildDescriptorFromMnemonic(l, mnemonicObj.toString(), net);
     const descStr = descriptor.toString();
-    // Free the ephemeral LWK objects — this derivation does not hold onto the
-    // Signer; closure state stays untouched.
+    // Free every WASM-owned handle this derivation allocated. The comment
+    // above claims full cleanup — keep it honest: signer, the inner Mnemonic
+    // built by `buildDescriptorFromMnemonic`, the returned descriptor, and
+    // the outer validator-mnemonic all hold WASM memory until .free()'d.
     if (signer?.free) { try { signer.free(); } catch { /* best effort */ } }
+    if (descriptor?.free) { try { descriptor.free(); } catch { /* best effort */ } }
+    if (innerMnemonic?.free) { try { innerMnemonic.free(); } catch { /* best effort */ } }
     if (mnemonicObj?.free) { try { mnemonicObj.free(); } catch { /* best effort */ } }
     return descStr;
   }
