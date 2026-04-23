@@ -670,7 +670,11 @@ export function registerWalletRoutes({
       return;
     }
     if (words.some(w => !BIP39_WORDLIST.includes(w))) {
-      showMsg("wallet-restore-input-msg", "Uma ou mais palavras não estão na lista BIP39.", "error");
+      showMsg(
+        "wallet-restore-input-msg",
+        "Uma ou mais palavras estão com erro de digitação. Confira cuidadosamente.",
+        "error"
+      );
       return;
     }
     const mnemonicStr = words.join(" ");
