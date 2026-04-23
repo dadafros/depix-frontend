@@ -1509,19 +1509,46 @@ export function registerWalletRoutes({
       }
       return;
     }
-    // Add requires PIN — reuse export modal input pattern inline.
-    const pin = prompt("Digite seu PIN para ativar biometria:");
-    if (!pin) return;
-    toggle.disabled = true;
+    resetBiometricPinModal();
+    q("wallet-biometric-pin-modal")?.classList.remove("hidden");
+    q("wallet-biometric-pin-input")?.focus();
+  });
+
+  // --- Biometric enrollment PIN modal ---
+  function resetBiometricPinModal() {
+    const pin = q("wallet-biometric-pin-input");
+    if (pin) pin.value = "";
+    clearMsg("wallet-biometric-pin-msg");
+    const btn = q("wallet-biometric-pin-confirm");
+    if (btn) btn.disabled = false;
+  }
+
+  q("wallet-biometric-pin-cancel")?.addEventListener("click", () => {
+    q("wallet-biometric-pin-modal")?.classList.add("hidden");
+    resetBiometricPinModal();
+  });
+
+  q("wallet-biometric-pin-confirm")?.addEventListener("click", async () => {
+    const pin = q("wallet-biometric-pin-input")?.value ?? "";
+    const btn = q("wallet-biometric-pin-confirm");
+    clearMsg("wallet-biometric-pin-msg");
+    if (!isPinInputValid(pin)) {
+      showMsg("wallet-biometric-pin-msg", "Informe um PIN de 6 dígitos.", "error");
+      return;
+    }
+    if (btn) btn.disabled = true;
     try {
       await wallet.addBiometric(pin);
+      q("wallet-biometric-pin-modal")?.classList.add("hidden");
+      resetBiometricPinModal();
       if (showToast) showToast("Biometria ativada.");
     } catch (err) {
       if (isWalletError(err, ERROR_CODES.BIOMETRIC_REJECTED)) {
-        showMsg("wallet-settings-msg", "Autenticação cancelada.", "warning");
+        showMsg("wallet-biometric-pin-msg", "Autenticação cancelada.", "warning");
       } else {
-        renderError("wallet-settings-msg", err);
+        renderError("wallet-biometric-pin-msg", err);
       }
+      if (btn) btn.disabled = false;
     } finally {
       await refreshBiometricRow();
     }

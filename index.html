@@ -2314,6 +2314,21 @@
   </div>
 </div>
 
+<!-- ===== MODAL: PIN PARA ATIVAR BIOMETRIA ===== -->
+<div id="wallet-biometric-pin-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="wallet-biometric-pin-title">
+  <div class="modal-box">
+    <h2 id="wallet-biometric-pin-title">Ativar biometria</h2>
+    <p class="info-text">Digite seu PIN para vincular o acesso biométrico a esta carteira.</p>
+    <label for="wallet-biometric-pin-input">PIN</label>
+    <input id="wallet-biometric-pin-input" type="password" inputmode="numeric" pattern="\d*" autocomplete="off" maxlength="6" />
+    <div id="wallet-biometric-pin-msg" class="mensagem"></div>
+    <div class="wallet-action-row">
+      <button id="wallet-biometric-pin-cancel" class="secondary">Cancelar</button>
+      <button id="wallet-biometric-pin-confirm">Ativar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== MODAL: APAGAR CARTEIRA ===== -->
 <div id="wallet-wipe-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="wallet-wipe-title">
   <div class="modal-box">
