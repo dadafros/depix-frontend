@@ -1063,10 +1063,17 @@ export function registerWalletRoutes({
       }
       const row = d.createElement("div");
       row.className = "wallet-home-asset";
-      const icon = d.createElement("div");
+      // Render the official brand logo via <img>. Source files live at
+      // /icons/* (service-worker pre-cached) or /icon-192.png (DePix).
+      // Set loading="lazy" as a cheap hint; at 36px these are tiny anyway.
+      const icon = d.createElement("img");
       icon.className = "wallet-home-asset-icon";
-      icon.style.background = asset.color;
-      icon.textContent = asset.symbol.charAt(0);
+      icon.src = asset.iconUrl;
+      icon.alt = asset.symbol;
+      icon.width = 36;
+      icon.height = 36;
+      icon.loading = "lazy";
+      icon.decoding = "async";
       const body = d.createElement("div");
       body.className = "wallet-home-asset-body";
       const name = d.createElement("div");
