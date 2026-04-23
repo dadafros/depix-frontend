@@ -558,8 +558,21 @@ export function createWalletModule({
       // Let LWK pick its default for non-mainnet networks (testnet, regtest).
       return net.defaultEsploraClient();
     }
-    return new l.EsploraClient(net, url, false, 4, false);
+    // Concurrency 1 (not 4): Blockstream's public Esplora enforces a tight
+    // per-IP limit. With concurrency 4 a gap-limit fullScan (~40 address
+    // lookups) fires in bursts that trip 429, then LWK's internal retry loop
+    // re-hammers the same addresses and the client never returns. Keeping
+    // requests serial lets the scan complete well under our 30s outer
+    // timeout on a cold wallet.
+    return new l.EsploraClient(net, url, false, 1, false);
   }
+
+  // Outer wall-clock guard on fullScan. LWK 0.16.x retries 429s internally
+  // without surfacing the error, which can wedge the promise forever. We cap
+  // the scan at 30s; the synthetic error message contains "rate limit" so
+  // isRateLimitError() routes it into ESPLORA_RATE_LIMITED and the UI
+  // applies its exponential backoff.
+  const SYNC_TIMEOUT_MS = 30_000;
 
   // Drives a fresh Esplora scan and persists the resulting Update blob so
   // the next mount can paint immediately. Dedup'd via `syncPromise` — a
@@ -593,8 +606,16 @@ export function createWalletModule({
       );
     }
     let update;
+    let timer;
     try {
-      update = await client.fullScan(w);
+      update = await Promise.race([
+        client.fullScan(w),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => {
+            reject(new Error(`fullScan timed out after ${SYNC_TIMEOUT_MS}ms — upstream likely rate limit`));
+          }, SYNC_TIMEOUT_MS);
+        })
+      ]);
     } catch (err) {
       if (isRateLimitError(err)) {
         throw new WalletError(
@@ -609,6 +630,7 @@ export function createWalletModule({
         err
       );
     } finally {
+      if (timer) clearTimeout(timer);
       if (client?.free) {
         try { client.free(); } catch { /* best effort */ }
       }
