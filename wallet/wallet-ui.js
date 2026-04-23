@@ -790,6 +790,10 @@ export function registerWalletRoutes({
   q("wallet-restore-confirm-back")?.addEventListener("click", () => {
     // State preserved: restoreWords stay, pendingDescriptor stays (will be
     // recomputed on next "Validar e avançar" if the user edits a word).
+    // The input screen reads state.error on render — surface a hint so the
+    // user knows why they came back (otherwise the screen looks neutral and
+    // the click seems unacknowledged).
+    state.error = "A identidade gerada não bateu com a que você anotou. Revise cada palavra — uma pequena diferença muda toda a carteira.";
     navigate("#wallet-restore-input");
   });
 
