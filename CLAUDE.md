@@ -227,9 +227,37 @@ Canonical row pattern (long value + trailing action):
 
 This is exactly the bug we hit with the "Editar Callback URL" button — it was a `display: table` row without `table-layout: fixed`, which has the same failure mode. **Prefer flex over table layouts.** If you must use `display: table`, always add `table-layout: fixed`.
 
-### Rule 3 — Trailing actions use `flex-shrink: 0`
+### Rule 3 — Trailing actions use `flex-shrink: 0` AND `width: auto`
 
 Edit buttons, copy buttons, delete icons, badges, timestamps, and any other "chrome" next to a user string must have `flex-shrink: 0`. Without it, a long value can compress the button until it disappears or wraps awkwardly.
+
+**Equally important and easy to miss**: `style.css:146` declares a global `input, button { width: 100%; margin-bottom: 12px; }` rule that every `<button>` inherits. In a flex row, `width: 100%` becomes `flex-basis: 100%` — and combined with `flex-shrink: 0`, the button consumes the entire row, leaving sibling flex children (the text with `flex: 1; min-width: 0`) with 0 computed width. `word-break: break-all` on that text then renders it **one character per line**. The Sub-fase 4 `wallet-receive` address display and the `wallet-settings` rows both shipped this bug — Rule 3 was followed but Rule 3's implicit assumption (buttons size to content by default) was wrong for this codebase.
+
+Fix: any trailing button inside a flex row must also set `width: auto;` (and typically `margin-bottom: 0;`) to override the global declaration. The canonical pattern becomes:
+
+```css
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.row .value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.row .action {
+  flex-shrink: 0;
+  width: auto;         /* THIS — cancels the inherited width: 100% */
+  margin-bottom: 0;    /* AND THIS — cancels the inherited margin-bottom */
+}
+```
+
+Exception: buttons inside `.wallet-action-row` already have `flex: 1` which overrides `width` via flex-basis, so they don't need the extra lines. Grid cells (`display: grid; grid-template-columns: ...`) also neutralize the global rule via explicit track sizing.
+
+If you ever change or remove the global `input, button { width: 100% }` in favor of opt-in helper classes, update this rule and Rule 7 accordingly.
 
 ### Rule 4 — Parent containers must constrain width
 
@@ -243,14 +271,32 @@ A `display: inline-block` element with long unbreakable content can still push p
 
 For Liquid addresses, webhook URLs, API keys, we already abbreviate server-side values in JS (`abbreviateHash`, substring). This is **in addition to** the CSS truncation, not a replacement — CSS still has to truncate because the abbreviation still contains no spaces and can be pushed around by flex children without `min-width: 0`.
 
-### Rule 6 — Test with a pathological string before shipping
+### Rule 6 — Browser smoke test with realistic max-length data, then attach a screenshot
 
-Before marking any view done, paste a 200-character URL or a 50-character product name into the field and verify:
-1. The edit/copy/action button is still visible and clickable.
-2. Nothing causes horizontal scroll on the viewport.
-3. The string is either truncated with `…` or wraps cleanly.
+`npm test` + ESLint + `npm run build` together catch **zero layout bugs**. Flex collapse, one-char-per-line wrap, overlapping buttons, modal overflow — only a browser sees them. Sub-fase 4 landed three separate layout regressions because this step was skipped; the pattern recurs on every UI-heavy PR until the ritual below is mandatory.
 
-If you can't test in a browser (no dev server running), say so explicitly — don't claim the UI works based on the diff alone. Type-checks and unit tests verify code correctness, not layout.
+Before marking any UI PR ready for review:
+
+1. Start the dev environment: `cd ../depix-dev && docker compose up -d` (frontend at localhost:2323).
+2. Open the new/changed view in DevTools responsive mode at **420 × 800** (mobile-first; the card `max-width: 420px` is where bugs hide). Repeat at **360 × 800** if the view contains Liquid addresses or descriptors.
+3. Replace every user-rendered string with a **realistic max-length** value. **Forbidden placeholders** that never trigger layout bugs: `Carregando…`, `lorem ipsum`, `R$ 0,00`, `—`, the empty string, a 6-digit OTP. **Required realistic inputs per data type**:
+   - **Liquid confidential address** (~95 chars, unbreakable): `lq1qqg7vg5sy8rnz3glpwjwxhdm2ftz3v6ruumdsks4wrj7k8dnrx6kzqwsxvfmq8t6tnx0j0zfj7kyzzn3em3q9m8vtdzpz2v` — or live via `wallet.getReceiveAddress()` in DevTools console.
+   - **CT descriptor** (hundreds of chars): output of `wallet.getDescriptor()`.
+   - **Liquid txid / Bitcoin txid** (64 hex chars): `aabbcc0011223344556677889900aabbccddeeff11223344556677889900aabb`.
+   - **Merchant / product name** (50+ chars no spaces): `SuperlongproductnameabsolutelynobreakingpointsAAAAAAA`.
+   - **Webhook URL** (200+ chars with no spaces): a real deeply-nested URL from the merchant test flow.
+   - **Email**: `username.with.many.characters.at.a.long.domain@really-long-domain-name-example.co.uk`.
+   - **12-word mnemonic**: output of `wallet.generateMnemonic()` — already used by the onboarding, real values.
+   - **PIX key (EVP / email / phone / CPF / CNPJ)**: pick the longest applicable form per field.
+4. Scroll the entire view AND open every modal reachable from it. For each, verify:
+   - Zero horizontal scrollbar on the page or any card.
+   - Zero text wrapping one char or one word per line.
+   - Every trailing button, badge, icon, or timestamp still visible and clickable with the long string in place.
+   - Zero element overlap (common when Rule 3 is followed but `width: auto` is missing).
+5. If anything looks off, fix the CSS and re-verify.
+6. **Attach at least one screenshot to the PR body** showing the view with max-length strings rendered. A screenshot is the only falsifiable evidence that this rule was followed; PRs without one will be asked for one, so do it up front.
+
+**If the dev environment can't start** (Docker off, port conflict, WASM fetch timeout, etc.), say so explicitly in the PR description and mark the layout check as blocked. Do not claim success when you did not verify. "Bundle builds, tests pass, lint clean" says nothing about whether the layout is broken.
 
 ### Rule 7 — Modal inputs get `width: 100%` and `box-sizing: border-box`
 
@@ -269,8 +315,11 @@ Before approving any frontend PR that renders user data:
 - `white-space: nowrap` without a matching `overflow: hidden; text-overflow: ellipsis` nearby.
 - Flex children rendering a user string without `min-width: 0`.
 - `display: table` without `table-layout: fixed`.
-- Action buttons inside flex rows without `flex-shrink: 0`.
+- Action buttons inside flex rows with `flex-shrink: 0` but **without `width: auto`** — the global `input, button { width: 100% }` will still dominate (Rule 3).
+- New CSS class added in JS (`el.className = "foo-bar"`) with no matching `.foo-bar` rule anywhere in `style.css`. Grep every new class in the JS diff against the CSS diff.
 - `escapeHtml(someUserField)` injected into a `<span>`/`<div>` with no CSS class that bounds its width.
+- Modal markup (`<div class="modal">`) without a `hashchange` (or equivalent) handler that hides + resets it — hash nav doesn't close modals, so sensitive content persists on top of the next view.
+- New `fetch(...)` calls using a bare `/api/...` path instead of `apiFetch(...)` or an explicit `API_BASE` prefix — works in localhost:2323 dev (nginx proxy) but 404s on GitHub Pages at depixapp.com.
 
 ## Internationalization (i18n) — Static Pages
 
