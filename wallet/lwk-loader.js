@@ -81,7 +81,16 @@ async function tryLoad(url, fetchImpl, delayImpl) {
 // calls return the cached promise — no repeat fetch, no repeat instantiate.
 export function loadLwk({ url, fetchImpl, delayImpl } = {}) {
   if (loadPromise) return loadPromise;
-  const effectiveUrl = url ?? lwkWasmUrl;
+  // esbuild's `file` loader emits a bare relative filename for the WASM
+  // import (e.g. "lwk_wasm_bg-<hash>.wasm"). If we fetch that string
+  // directly, the browser resolves it against the DOCUMENT URL, not the
+  // bundle URL — a page at "/" then requests "/lwk_wasm_bg-...wasm" and
+  // gets the SPA fallback (index.html) back, which fails WASM validation
+  // with "Failed to load LWK WASM after retries". Resolve against this
+  // module's own URL so the request lands on "/dist/lwk_wasm_bg-...wasm".
+  // Absolute URLs passed by tests (e.g. "fake://wasm") are preserved —
+  // `new URL` ignores the base when the first arg is already absolute.
+  const effectiveUrl = new URL(url ?? lwkWasmUrl, import.meta.url).href;
   loadPromise = tryLoad(effectiveUrl, fetchImpl, delayImpl).catch(err => {
     // Reset on failure so the next call retries; otherwise a transient cold-
     // start failure would permanently brick the wallet until reload.
