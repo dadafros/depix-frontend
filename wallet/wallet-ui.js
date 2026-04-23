@@ -970,7 +970,6 @@ export function registerWalletRoutes({
   let homeSyncTimer = null;
   let homeMounted = false;
   let homeFilter = "all";
-  let lastBalancesRender = 0;
 
   function persistHomeMode(mode) {
     try {
@@ -1040,12 +1039,19 @@ export function registerWalletRoutes({
     assetsHost.textContent = "";
     let totalBrl = 0;
     let anyBrl = false;
+    // If any asset with a non-zero balance couldn't convert (quote missing),
+    // the partial sum would understate the total by orders of magnitude —
+    // e.g. R$50 DePix + 100 USDt would show "R$ 50" when USDt can't convert.
+    // Render "R$ —" whenever that happens; never a misleading partial.
+    let anyMissingWithBalance = false;
     for (const asset of DISPLAY_ORDER) {
       const sats = balances[asset.id] ?? 0n;
       const brl = convertSatsToBrl(sats, asset, quoteValues);
       if (typeof brl === "number") {
         totalBrl += brl;
         anyBrl = true;
+      } else if (sats > 0n) {
+        anyMissingWithBalance = true;
       }
       const row = d.createElement("div");
       row.className = "wallet-home-asset";
@@ -1078,8 +1084,9 @@ export function registerWalletRoutes({
       row.appendChild(amounts);
       assetsHost.appendChild(row);
     }
-    totalEl.textContent = anyBrl ? formatBrlNumber(totalBrl) : "R$ —";
-    lastBalancesRender = Date.now();
+    totalEl.textContent = (anyBrl && !anyMissingWithBalance)
+      ? formatBrlNumber(totalBrl)
+      : "R$ —";
 
     if (quoteResult?.stale) {
       showMsg("wallet-home-msg", "Cotação com atraso. Valores em BRL podem estar desatualizados.", "warning");
@@ -1110,12 +1117,22 @@ export function registerWalletRoutes({
     await renderWalletHomeBalances({ background });
   }
 
+  // `offsetParent === null` is true whenever any ancestor has `display: none`
+  // (our `.hidden` class), so this catches BOTH a mode switch within #home
+  // AND the router hiding the #home section entirely (navigation to
+  // #wallet-receive etc.). homeMounted alone only flips on mode switch.
+  function isWalletHomeVisible() {
+    const host = q("telaCarteira");
+    return !!host && host.offsetParent !== null;
+  }
+
   function startHomeSyncTimer() {
     stopHomeSyncTimer();
     if (!w || typeof w.setInterval !== "function") return;
     homeSyncTimer = w.setInterval(() => {
       if (!homeMounted) return;
       if (d.visibilityState && d.visibilityState !== "visible") return;
+      if (!isWalletHomeVisible()) return;
       void syncAndRender({ background: true });
     }, SYNC_INTERVAL_MS);
   }
@@ -1129,6 +1146,10 @@ export function registerWalletRoutes({
 
   async function onWalletHomeMount() {
     homeMounted = true;
+    // Invalidate the receive-address cache so wipe+restore in the same session
+    // never shows an address derived from the previous seed. Module-scoped
+    // cache from the old wallet would otherwise persist until a full reload.
+    cachedReceiveAddress = null;
     showMsg("wallet-home-msg", "", null);
     updateSyncState("Sincronizando…", null);
     // First paint from the cached Update blob (instant, offline-safe).
@@ -1354,7 +1375,14 @@ export function registerWalletRoutes({
     try {
       const fn = obj?.[name];
       if (typeof fn === "function") return fn.call(obj);
-    } catch { /* fallthrough */ }
+    } catch (err) {
+      // Log only when the handle actually threw — absent/non-function reads
+      // stay silent (that path is structurally fine). Grep-able prefix so
+      // LWK upgrades that rename balance()/type()/timestamp()/txid() surface
+      // in devtools instead of silently rendering "—"/"tx" (OBS-01 follow-up
+      // will wire a telemetry counter through this signal in Sub-fase 6).
+      console.warn("[wallet-tx] safeCall", name, err);
+    }
     return undefined;
   }
 
@@ -1388,14 +1416,14 @@ export function registerWalletRoutes({
       body.className = "wallet-tx-row-body";
       const type = safeCall(tx, "type") ?? "tx";
       const label = d.createElement("div");
-      label.className = "wallet-tx-row-label";
+      label.className = "wallet-tx-row-title";
       label.textContent = type === "incoming"
         ? "Recebido"
         : type === "outgoing"
           ? "Enviado"
           : String(type);
       const meta = d.createElement("div");
-      meta.className = "wallet-tx-row-meta";
+      meta.className = "wallet-tx-row-sub";
       const ts = safeCall(tx, "timestamp");
       const txid = safeCall(tx, "txid");
       const txidStr = (txid && typeof txid.toString === "function") ? txid.toString() : String(txid ?? "");
@@ -1429,6 +1457,12 @@ export function registerWalletRoutes({
     }
   }
 
+  // Plan Sub-fase 4 preferred "Extrato unificado" (toggle inside #reports).
+  // We shipped the dedicated #wallet-transactions view (plano B) because the
+  // #reports refactor would exceed ~150 LOC — date range, pagination,
+  // CSV/PDF export and polling all live there and would need to branch on
+  // mode. Dedicated view keeps this PR's diff reviewable; future maintainer
+  // can promote to unified extrato if desired without new wallet scope.
   route("#wallet-transactions", () => {
     void renderTransactions();
   });
@@ -1443,7 +1477,11 @@ export function registerWalletRoutes({
       const filter = pill.getAttribute("data-wallet-filter") || "all";
       homeFilter = filter;
       for (const other of d.querySelectorAll("[data-wallet-filter]")) {
-        other.classList.toggle("active", other === pill);
+        const selected = other === pill;
+        other.classList.toggle("active", selected);
+        // Flip aria-checked alongside .active so screen readers announce the
+        // selected state — .active alone is not exposed to the a11y tree.
+        other.setAttribute("aria-checked", selected ? "true" : "false");
       }
       void renderTransactions();
     });
@@ -1687,13 +1725,37 @@ export function registerWalletRoutes({
     }
   });
 
+  // Any wallet modal that can hold sensitive residue (seed words, PIN input)
+  // must close and reset on route change — otherwise a `.modal` with
+  // `position: fixed; z-index: 2500` overlays the new view and the seed stays
+  // readable in the DOM heap even after CSS hides it. Belt-and-suspenders for
+  // SEC-07 (DOM residue after backup).
+  if (w && typeof w.addEventListener === "function") {
+    w.addEventListener("hashchange", () => {
+      const exportModal = q("wallet-export-modal");
+      if (exportModal && !exportModal.classList.contains("hidden")) {
+        exportModal.classList.add("hidden");
+        resetExportModal();
+      }
+      const wipeModal = q("wallet-wipe-modal");
+      if (wipeModal && !wipeModal.classList.contains("hidden")) {
+        wipeModal.classList.add("hidden");
+        resetWipeModal();
+      }
+      const biometricModal = q("wallet-biometric-pin-modal");
+      if (biometricModal && !biometricModal.classList.contains("hidden")) {
+        biometricModal.classList.add("hidden");
+        resetBiometricPinModal();
+      }
+    });
+  }
+
   // Expose a small handle for tests + potential future callers. Read-only.
   return Object.freeze({
     _mountWalletHome: onWalletHomeMount,
     _unmountWalletHome: onWalletHomeUnmount,
     _renderReceiveQr: renderReceiveQr,
     _renderTransactions: renderTransactions,
-    _refreshBiometricRow: refreshBiometricRow,
-    _lastBalancesRender: () => lastBalancesRender
+    _refreshBiometricRow: refreshBiometricRow
   });
 }

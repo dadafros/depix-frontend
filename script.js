@@ -2653,6 +2653,19 @@ route("#home", () => {
 async function refreshWalletModeAvailability() {
   const walletBtn = document.getElementById("modeWallet");
   if (!walletBtn) return;
+  // Cheap cache of hasWallet() so users without a wallet never pay the
+  // ~197kb bundle download just to answer "is there a wallet?". Flag is
+  // set by wallet.js on create/restore and cleared on any wipe path; IDB
+  // stays the source of truth. If the flag is absent we skip the bundle
+  // entirely. See wallet.js:markWalletExists/clearWalletExistsFlag.
+  let hasFlag = false;
+  try { hasFlag = localStorage.getItem("depix-wallet-exists") === "1"; }
+  catch { /* private mode */ }
+  if (!hasFlag) {
+    walletBtn.classList.add("hidden");
+    if (modoWallet) switchMode("deposit");
+    return;
+  }
   let walletExists = false;
   try {
     const bundle = await loadWalletBundle();

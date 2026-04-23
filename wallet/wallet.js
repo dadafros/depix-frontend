@@ -34,7 +34,8 @@ import {
   incrementFailedPinAttempts,
   hasCredentials as storeHasCredentials,
   readSync,
-  writeSync
+  writeSync,
+  patchSync
 } from "./wallet-store.js";
 import {
   assertStrongPin,
@@ -85,6 +86,29 @@ function buildDescriptorFromMnemonic(lwk, mnemonicStr, network) {
 // Blockstream public Esplora — the free, open endpoint we hardcode by default.
 // Can be overridden via `esploraUrl` option (tests + alt networks).
 const DEFAULT_ESPLORA_URL_MAINNET = "https://blockstream.info/liquid/api";
+
+// Cheap mirror of `hasWallet()` into localStorage. IDB remains the source of
+// truth; this flag lets script.js answer "should I even load the wallet
+// bundle?" synchronously, so users without a wallet never download the
+// ~197kb bundle just to check. Set on create/restore, cleared on any wipe
+// path. See script.js:refreshWalletModeAvailability for the read site.
+const WALLET_EXISTS_FLAG = "depix-wallet-exists";
+
+function markWalletExists() {
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(WALLET_EXISTS_FLAG, "1");
+    }
+  } catch { /* private mode / disabled */ }
+}
+
+function clearWalletExistsFlag() {
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem(WALLET_EXISTS_FLAG);
+    }
+  } catch { /* private mode / disabled */ }
+}
 
 export function createWalletModule({
   indexedDbImpl,
@@ -146,7 +170,12 @@ export function createWalletModule({
 
   async function hasWallet() {
     const database = await db();
-    return storeHasCredentials(database);
+    const exists = await storeHasCredentials(database);
+    // Backfill the lazy flag for installs that pre-date it: if IDB has a
+    // wallet but the flag is missing (older app version, first run post-
+    // upgrade), set it so subsequent #home visits skip the bundle download.
+    if (exists) markWalletExists();
+    return exists;
   }
 
   async function hasBiometric() {
@@ -214,6 +243,7 @@ export function createWalletModule({
       wrappedSeedKey: null,
       createdAt: getNow()
     });
+    markWalletExists();
 
     let biometric = null;
     if (enrollBiometric) {
@@ -297,6 +327,7 @@ export function createWalletModule({
       wrappedSeedKey: null,
       createdAt: existing?.createdAt ?? getNow()
     });
+    markWalletExists();
 
     let biometric = null;
     if (enrollBiometric) {
@@ -360,6 +391,7 @@ export function createWalletModule({
       if (attempts >= MAX_PIN_ATTEMPTS) {
         await wipeSensitiveCredentials(database);
         zeroInMemory();
+        clearWalletExistsFlag();
         rateLimitUntil = 0;
         throw new WalletError(
           ERROR_CODES.WALLET_WIPED,
@@ -551,14 +583,14 @@ export function createWalletModule({
         try { update.free(); } catch { /* best effort */ }
       }
     } else {
-      // No changes since last scan — still bump the timestamp so the UI
-      // can show "synced N seconds ago" accurately.
+      // No changes since last scan — still bump the timestamp so the UI can
+      // show "synced N seconds ago" accurately. Uses `patchSync` so the read
+      // and write happen in a single IDB transaction; a separate readSync +
+      // writeSync pair would race with a sibling tab that wrote a newer
+      // updateBlob in between, and we'd overwrite it with the stale value.
       try {
         const database = await db();
-        await writeSync(database, {
-          updateBlob: (await readSync(database))?.updateBlob ?? null,
-          lastScanAt: scanAt
-        });
+        await patchSync(database, { lastScanAt: scanAt });
       } catch { /* best effort */ }
     }
     lastScanAt = scanAt;
@@ -614,6 +646,7 @@ export function createWalletModule({
       if (attempts >= MAX_PIN_ATTEMPTS) {
         await wipeSensitiveCredentials(database);
         zeroInMemory();
+        clearWalletExistsFlag();
         rateLimitUntil = 0;
         throw new WalletError(
           ERROR_CODES.WALLET_WIPED,
@@ -638,6 +671,7 @@ export function createWalletModule({
     dbPromise = null;
     database.close();
     await destroyDatabase(indexedDbImpl);
+    clearWalletExistsFlag();
   }
 
   // Updates the biometric enrollment after the wallet was created (e.g. user

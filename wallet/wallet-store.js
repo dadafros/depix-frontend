@@ -155,6 +155,21 @@ export async function writeSync(db, record) {
   });
 }
 
+// Merge a partial record into the existing sync row within ONE readwrite
+// transaction. Callers that only bump metadata (e.g. `lastScanAt` on a scan
+// that yielded no new Update blob) use this instead of readSync + writeSync
+// back-to-back — otherwise a sibling tab can slip a newer `updateBlob` in
+// between and our stale re-write would overwrite it, briefly flickering the
+// persisted state backwards.
+export async function patchSync(db, partial) {
+  return withStore(db, SYNC_STORE, "readwrite", async store => {
+    const existing = (await promisifyRequest(store.get(MAIN_KEY))) ?? null;
+    const next = { ...(existing ?? {}), ...partial, id: MAIN_KEY };
+    await promisifyRequest(store.put(next));
+    return next;
+  });
+}
+
 export async function deleteSync(db) {
   return withStore(db, SYNC_STORE, "readwrite", async store => {
     await promisifyRequest(store.delete(MAIN_KEY));
