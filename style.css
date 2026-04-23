@@ -4982,3 +4982,13 @@ textarea:focus {
 .wallet-settings-danger:hover {
   background: rgba(255, 107, 107, 0.2);
 }
+/* Inside a wallet-action-row (wipe modal), match the sibling .secondary
+   button dimensions so Cancelar and Apagar render at the same height.
+   Without this the compact 8px padding + smaller font-size from the
+   settings-row context makes the danger button visibly shorter than
+   its neighbour. */
+.wallet-action-row .wallet-settings-danger {
+  padding: 14px;
+  border-radius: 10px;
+  font-size: 16px;
+}
