@@ -967,9 +967,17 @@ export function registerWalletRoutes({
   // by script.js when the user toggles the 4-mode home switch.
   // ====================================================================
   const SYNC_INTERVAL_MS = 30_000;
+  // Exponential backoff when Esplora rate-limits the wallet (HTTP 429).
+  // Series: 60s → 120s → 240s → 480s → capped at 600s. Reset to 0 on the
+  // first successful sync. The timer respects `nextSyncAllowedAt` and
+  // skips ticks that fall inside the cool-down window.
+  const RATE_LIMIT_BACKOFF_START_MS = 60_000;
+  const RATE_LIMIT_BACKOFF_MAX_MS = 600_000;
   let homeSyncTimer = null;
   let homeMounted = false;
   let homeFilter = "all";
+  let consecutiveRateLimits = 0;
+  let nextSyncAllowedAt = 0;
 
   function persistHomeMode(mode) {
     try {
@@ -1101,14 +1109,36 @@ export function registerWalletRoutes({
     if (text && kind) el.classList.add(kind);
   }
 
+  function formatBackoffSeconds(ms) {
+    const s = Math.max(1, Math.round(ms / 1000));
+    if (s < 60) return `${s}s`;
+    const m = Math.round(s / 60);
+    return `${m}min`;
+  }
+
   async function syncAndRender({ background = false } = {}) {
     if (!homeMounted) return;
     if (!background) updateSyncState("Sincronizando…", null);
     try {
       await wallet.syncWallet();
+      // Reset rate-limit state on any successful sync. Any prior 429 series
+      // is considered resolved; the next failure starts backoff from 60s.
+      consecutiveRateLimits = 0;
+      nextSyncAllowedAt = 0;
       updateSyncState("Atualizado agora", "success");
     } catch (err) {
-      if (isWalletError(err, ERROR_CODES.ESPLORA_UNAVAILABLE)) {
+      if (isWalletError(err, ERROR_CODES.ESPLORA_RATE_LIMITED)) {
+        consecutiveRateLimits++;
+        const backoffMs = Math.min(
+          RATE_LIMIT_BACKOFF_START_MS * 2 ** (consecutiveRateLimits - 1),
+          RATE_LIMIT_BACKOFF_MAX_MS
+        );
+        nextSyncAllowedAt = Date.now() + backoffMs;
+        updateSyncState(
+          `Muitas sincronizações. Próxima tentativa em ${formatBackoffSeconds(backoffMs)}.`,
+          "warning"
+        );
+      } else if (isWalletError(err, ERROR_CODES.ESPLORA_UNAVAILABLE)) {
         updateSyncState("Sem conexão com o servidor. Mostrando último saldo conhecido.", "warning");
       } else {
         updateSyncState("Falha na sincronização.", "error");
@@ -1133,6 +1163,9 @@ export function registerWalletRoutes({
       if (!homeMounted) return;
       if (d.visibilityState && d.visibilityState !== "visible") return;
       if (!isWalletHomeVisible()) return;
+      // Respect the rate-limit backoff. Ticks inside the cool-down are
+      // dropped silently; the user already sees "Próxima tentativa em Ns".
+      if (Date.now() < nextSyncAllowedAt) return;
       void syncAndRender({ background: true });
     }, SYNC_INTERVAL_MS);
   }
@@ -1151,13 +1184,22 @@ export function registerWalletRoutes({
     // cache from the old wallet would otherwise persist until a full reload.
     cachedReceiveAddress = null;
     showMsg("wallet-home-msg", "", null);
-    updateSyncState("Sincronizando…", null);
     // First paint from the cached Update blob (instant, offline-safe).
     try {
       await renderWalletHomeBalances({ background: true });
     } catch { /* noop */ }
-    // Then trigger a fresh scan in the background.
-    void syncAndRender({ background: false });
+    // If a previous sync left us inside a rate-limit cool-down, surface the
+    // remaining wait instead of triggering a sync that will just 429 again.
+    const remainingMs = nextSyncAllowedAt - Date.now();
+    if (remainingMs > 0) {
+      updateSyncState(
+        `Muitas sincronizações. Próxima tentativa em ${formatBackoffSeconds(remainingMs)}.`,
+        "warning"
+      );
+    } else {
+      updateSyncState("Sincronizando…", null);
+      void syncAndRender({ background: false });
+    }
     startHomeSyncTimer();
   }
 
@@ -1170,11 +1212,12 @@ export function registerWalletRoutes({
     w.addEventListener("wallet-home:mount", () => { void onWalletHomeMount(); });
     w.addEventListener("wallet-home:unmount", () => { onWalletHomeUnmount(); });
     // Also respond to visibility changes so a hidden-then-visible PWA
-    // kicks a fresh sync immediately.
+    // kicks a fresh sync immediately — unless we're in a rate-limit
+    // cool-down, in which case focus-returns shouldn't bypass the backoff.
     d.addEventListener?.("visibilitychange", () => {
-      if (homeMounted && d.visibilityState === "visible") {
-        void syncAndRender({ background: true });
-      }
+      if (!homeMounted || d.visibilityState !== "visible") return;
+      if (Date.now() < nextSyncAllowedAt) return;
+      void syncAndRender({ background: true });
     });
   }
 

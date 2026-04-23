@@ -110,6 +110,24 @@ function clearWalletExistsFlag() {
   } catch { /* private mode / disabled */ }
 }
 
+// LWK wraps Esplora fetch errors as a plain `Error` whose `message` contains
+// the upstream status (e.g. "error response 429 Too Many Requests" on 0.16.x).
+// We pattern-match on the stringified error because LWK does not expose a
+// typed discriminator; a breaking upstream change would silently degrade
+// this into the generic ESPLORA_UNAVAILABLE path, which is acceptable — the
+// 60s backoff UX is a nicety, not a correctness guarantee.
+function isRateLimitError(err) {
+  let cur = err;
+  for (let i = 0; i < 4 && cur; i++) {
+    const msg = String(cur.message ?? cur ?? "").toLowerCase();
+    if (msg.includes("429") || msg.includes("too many requests") || msg.includes("rate limit")) {
+      return true;
+    }
+    cur = cur.cause;
+  }
+  return false;
+}
+
 export function createWalletModule({
   indexedDbImpl,
   cryptoImpl,
@@ -128,6 +146,12 @@ export function createWalletModule({
   let signer = null;
   let wollet = null;
   let lwkCache = null;
+  // Single in-flight syncWallet promise. Concurrent callers (mount +
+  // 30s timer + visibilitychange) share this promise so a fresh wallet's
+  // gap-limit fullScan (~40 Esplora requests) runs exactly once instead
+  // of N times stacked, which previously triggered the 429 cascade we
+  // saw in dev.
+  let syncPromise = null;
   let lastActivityAt = 0;
   let rateLimitUntil = 0;
   let lastScanAt = 0;
@@ -538,9 +562,23 @@ export function createWalletModule({
   }
 
   // Drives a fresh Esplora scan and persists the resulting Update blob so
-  // the next mount can paint immediately. Idempotent; the UI calls it on
-  // mount and on a 30s timer while the view is visible.
-  async function syncWallet() {
+  // the next mount can paint immediately. Dedup'd via `syncPromise` — a
+  // second caller while the first is in-flight receives the same promise
+  // instead of starting a parallel scan. This prevents the 429 cascade
+  // where mount + 30s timer + visibilitychange stacked 3 concurrent
+  // fullScans (~40 Esplora requests each) on the same addresses.
+  //
+  // Throws ESPLORA_RATE_LIMITED when upstream responds 429 so the UI can
+  // apply exponential backoff; ESPLORA_UNAVAILABLE for any other failure.
+  function syncWallet() {
+    if (syncPromise) return syncPromise;
+    syncPromise = syncWalletInner().finally(() => {
+      syncPromise = null;
+    });
+    return syncPromise;
+  }
+
+  async function syncWalletInner() {
     const w = await ensureViewWollet();
     const l = await lwk();
     const net = makeNetwork(l, network);
@@ -558,6 +596,13 @@ export function createWalletModule({
     try {
       update = await client.fullScan(w);
     } catch (err) {
+      if (isRateLimitError(err)) {
+        throw new WalletError(
+          ERROR_CODES.ESPLORA_RATE_LIMITED,
+          "Esplora rate-limited the sync (HTTP 429)",
+          err
+        );
+      }
       throw new WalletError(
         ERROR_CODES.ESPLORA_UNAVAILABLE,
         "Failed to sync with Esplora",
