@@ -4431,6 +4431,47 @@ textarea:focus {
   -webkit-user-select: none;
 }
 
+/* Wallet identity fingerprint (XXXX-XXXX).
+   Public value — the user can copy it to compare, unlike the seed words
+   which are explicitly `user-select: none`. Font size is intentionally
+   large because it's only 9 characters (incl. hyphen) and legibility on
+   paper transcription dominates. */
+.wallet-identity-card {
+  background: rgba(56, 227, 172, 0.06);
+  border: 1px solid rgba(56, 227, 172, 0.14);
+  border-radius: 10px;
+  padding: 12px;
+  margin-top: 16px;
+}
+.wallet-identity-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.wallet-identity-label {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.wallet-identity-value {
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 22px;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding: 8px 0;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.wallet-identity-hint {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  margin: 10px 0 0;
+  line-height: 1.4;
+}
+
 /* Verification — create flow */
 .wallet-verify-block {
   margin: 14px 0;

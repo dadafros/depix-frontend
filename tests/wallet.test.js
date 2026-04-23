@@ -371,6 +371,67 @@ describe("wallet.validateMnemonic", () => {
   });
 });
 
+describe("wallet.deriveDescriptor", () => {
+  const VALID = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+
+  it("returns a non-empty CT descriptor string for a valid mnemonic", async () => {
+    const { wallet } = makeModule();
+    const descriptor = await wallet.deriveDescriptor(VALID);
+    expect(typeof descriptor).toBe("string");
+    expect(descriptor.length).toBeGreaterThan(0);
+    expect(descriptor).toMatch(/^ct\(/);
+  });
+
+  it("is deterministic — same mnemonic produces the same descriptor", async () => {
+    const { wallet } = makeModule();
+    const a = await wallet.deriveDescriptor(VALID);
+    const b = await wallet.deriveDescriptor(VALID);
+    expect(a).toBe(b);
+  });
+
+  it("different mnemonics produce different descriptors", async () => {
+    const { wallet } = makeModule();
+    const other = "legal winner thank year wave sausage worth useful legal winner thank yellow";
+    const a = await wallet.deriveDescriptor(VALID);
+    const b = await wallet.deriveDescriptor(other);
+    expect(a).not.toBe(b);
+  });
+
+  it("throws INVALID_MNEMONIC on empty/whitespace/non-string input", async () => {
+    const { wallet } = makeModule();
+    await expect(wallet.deriveDescriptor("")).rejects.toMatchObject({
+      code: ERROR_CODES.INVALID_MNEMONIC
+    });
+    await expect(wallet.deriveDescriptor("   ")).rejects.toMatchObject({
+      code: ERROR_CODES.INVALID_MNEMONIC
+    });
+    await expect(wallet.deriveDescriptor(null)).rejects.toMatchObject({
+      code: ERROR_CODES.INVALID_MNEMONIC
+    });
+  });
+
+  it("throws INVALID_MNEMONIC when LWK rejects the word count", async () => {
+    const { wallet } = makeModule();
+    await expect(wallet.deriveDescriptor("one two three")).rejects.toMatchObject({
+      code: ERROR_CODES.INVALID_MNEMONIC
+    });
+  });
+
+  it("does NOT persist anything — hasWallet() stays false", async () => {
+    const { wallet } = makeModule();
+    await wallet.deriveDescriptor(VALID);
+    await wallet.deriveDescriptor(VALID);
+    expect(await wallet.hasWallet()).toBe(false);
+  });
+
+  it("does NOT affect unlock state — isUnlocked() stays false", async () => {
+    const { wallet } = makeModule();
+    expect(wallet.isUnlocked()).toBe(false);
+    await wallet.deriveDescriptor(VALID);
+    expect(wallet.isUnlocked()).toBe(false);
+  });
+});
+
 describe("public API surface", () => {
   it("exposes only the documented methods, is frozen, and rejects mutation", async () => {
     const { wallet } = makeModule();
@@ -382,6 +443,7 @@ describe("public API surface", () => {
       "isUnlocked",
       "generateMnemonic",
       "validateMnemonic",
+      "deriveDescriptor",
       "createWallet",
       "restoreWallet",
       "unlock",

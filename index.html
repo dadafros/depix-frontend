@@ -1968,7 +1968,7 @@
     <div id="wallet-gate-msg" class="mensagem"></div>
 
     <div id="wallet-gate-new" class="hidden">
-      <p class="info-text">Uma carteira não-custodial, aqui no seu aparelho. Você guarda as 12 palavras; elas são a única forma de recuperar seu dinheiro.</p>
+      <p class="info-text">Uma carteira não-custodial, aqui no seu aparelho. Somente você tem acesso ao seu dinheiro.</p>
       <button id="wallet-gate-create" style="width:100%;margin-top:12px">Criar nova carteira</button>
       <button id="wallet-gate-restore" class="secondary" style="width:100%;margin-top:8px">Restaurar com 12 palavras</button>
     </div>
@@ -1984,8 +1984,8 @@
   <div class="card">
     <h2 class="view-title">Vamos criar sua carteira</h2>
     <p class="info-text">Sua carteira é protegida por 12 palavras que só você tem. Anote em papel — <strong>não tire print, não escreva em nota do celular</strong>.</p>
-    <p class="info-text">Celular pode ser roubado, hackeado, quebrado ou o app pode ser desinstalado. Se isso acontecer, as 12 palavras no papel são a única forma de recuperar seu dinheiro.</p>
-    <p class="info-text wallet-warning">No iPhone, quando você instala o app na tela inicial, os dados da carteira <strong>não</strong> entram no backup do iCloud. Trocou de celular? Se você não tem as 12 palavras, perde o acesso.</p>
+    <p class="info-text">Celular pode ser roubado, hackeado, quebrado ou o app pode ser desinstalado. Se isso acontecer, as 12 palavras no papel são a única forma de recuperar seu dinheiro. O DepixApp não consegue recuperar acesso ao seu dinheiro, só você consegue fazer isso, através das suas 12 palavras anotadas em papel e guardadas em local seguro.</p>
+    <p class="info-text wallet-warning">No iPhone, os dados da carteira <strong>não</strong> entram no backup do iCloud. Trocou de celular? Se você não tem as 12 palavras, perdeu o acesso ao seu dinheiro.</p>
 
     <label class="wallet-consent-row">
       <input type="checkbox" id="wallet-create-consent-1" />
@@ -2006,9 +2006,18 @@
   <div class="card">
     <h2 class="view-title">Suas 12 palavras</h2>
     <p class="info-text">Anote todas as 12 palavras na <strong>ordem exata</strong>. Ideal: faça 2 cópias em locais diferentes (caixa fechada, cofre, gaveta trancada).</p>
-    <p class="info-text wallet-warning">Nunca digite essas palavras em outro app ou site. Ninguém da DepixApp vai pedir elas.</p>
+    <p class="info-text wallet-warning">Não tire foto ou print das suas palavras. Não informe para terceiros, nem digite em sites ou apps que você não confia. Elas dão acesso direto ao seu dinheiro. Nós NUNCA iremos pedir suas palavras.</p>
 
     <div id="wallet-create-seed-grid" class="wallet-seed-grid" role="list"></div>
+
+    <div class="wallet-identity-card">
+      <div class="wallet-identity-header">
+        <span class="wallet-identity-label">Identidade da carteira</span>
+        <button id="wallet-create-identity-help" class="icon-btn-sm" aria-label="O que é a identidade da carteira?">?</button>
+      </div>
+      <div id="wallet-create-identity-value" class="wallet-identity-value mono" aria-live="polite">…</div>
+      <p class="info-text wallet-identity-hint">Anote essa identidade junto com as 12 palavras. Ela ajuda a conferir a carteira quando você precisar restaurar.</p>
+    </div>
 
     <div id="wallet-create-seed-msg" class="mensagem"></div>
     <button id="wallet-create-seed-continue" style="width:100%;margin-top:12px">Já anotei em papel, próximo</button>
@@ -2033,6 +2042,16 @@
     <h2 id="wallet-create-verify-modal-title">Revise sua anotação</h2>
     <p class="info-text">Você precisa anotar suas 12 palavras em papel e guardar em local seguro. Elas são a única forma de recuperar sua carteira. Revise sua anotação agora.</p>
     <button id="wallet-create-verify-modal-dismiss" style="width:100%;margin-top:12px">Entendi</button>
+  </div>
+</div>
+
+<div id="wallet-identity-info-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="wallet-identity-info-modal-title">
+  <div class="modal-box">
+    <h2 id="wallet-identity-info-modal-title">O que é a identidade da carteira?</h2>
+    <p class="info-text">É um código curto (8 caracteres) que funciona como uma <strong>impressão digital pública</strong> da sua carteira. É gerado automaticamente a partir das suas 12 palavras.</p>
+    <p class="info-text" style="margin-top:10px"><strong>Posso compartilhar?</strong> Sim, tranquilamente. Ela não dá acesso ao seu dinheiro — só as 12 palavras dão.</p>
+    <p class="info-text" style="margin-top:10px"><strong>Pra que serve?</strong> Se um dia você precisar restaurar a carteira, o app mostra a identidade gerada das 12 palavras digitadas. Se bater com a que você anotou, é sua carteira mesmo. Se não bater, alguma palavra foi anotada errada.</p>
+    <button id="wallet-identity-info-close" class="secondary" style="width:100%;margin-top:16px">Entendi</button>
   </div>
 </div>
 
@@ -2086,6 +2105,22 @@
     <div id="wallet-restore-input-msg" class="mensagem"></div>
     <button id="wallet-restore-input-continue" style="width:100%;margin-top:12px">Validar e avançar</button>
     <button id="wallet-restore-input-back" class="secondary" style="width:100%;margin-top:8px">Cancelar</button>
+  </div>
+</section>
+
+<section data-view="wallet-restore-confirm-identity" class="page hidden">
+  <div class="card">
+    <h2 class="view-title">Confira sua carteira</h2>
+    <p class="info-text">Essas 12 palavras geraram a carteira com a identidade abaixo. Compare com a identidade que você anotou junto com as 12 palavras.</p>
+    <div class="wallet-identity-card">
+      <div class="wallet-identity-header">
+        <span class="wallet-identity-label">Identidade gerada</span>
+        <button id="wallet-restore-identity-help" class="icon-btn-sm" aria-label="O que é a identidade da carteira?">?</button>
+      </div>
+      <div id="wallet-restore-confirm-identity-value" class="wallet-identity-value mono" aria-live="polite">…</div>
+    </div>
+    <button id="wallet-restore-confirm-yes" style="width:100%;margin-top:12px">Sim, é a minha carteira</button>
+    <button id="wallet-restore-confirm-back" class="secondary" style="width:100%;margin-top:8px">Voltar e corrigir</button>
   </div>
 </section>
 
