@@ -83,9 +83,28 @@ function buildDescriptorFromMnemonic(lwk, mnemonicStr, network) {
   return { signer, mnemonic, descriptor };
 }
 
-// Blockstream public Esplora — the free, open endpoint we hardcode by default.
-// Can be overridden via `esploraUrl` option (tests + alt networks).
-const DEFAULT_ESPLORA_URL_MAINNET = "https://blockstream.info/liquid/api";
+// Public Liquid Esplora endpoints we fall through on rate-limit or network
+// failure. Both speak the Esplora REST API that LWK expects. Ordered by
+// preference — Blockstream first (authoritative, well-monitored), Liquid.network
+// (mempool.space's Liquid instance) second.
+//
+// Rationale for fallback vs. a single upstream: users behind CGNAT / shared
+// mobile carrier NATs share an IP with dozens-to-hundreds of other Blockstream
+// callers, so their "per-IP" quota can be exhausted by strangers. Falling
+// through to a different provider with a fresh IP quota unblocks those users
+// without us running our own Esplora.
+//
+// Direct-from-client (each browser → Esplora) stays the right topology — proxying
+// through our backend would concentrate all traffic through a small Vercel IP
+// pool and make the rate-limit problem worse, not better, because Liquid
+// addresses are user-unique so there is no cross-user cache hit to amortize.
+//
+// Can be overridden with `esploraUrl` (single URL, legacy) or `esploraProviders`
+// (array of {name, url}) for tests and alt networks.
+const DEFAULT_PROVIDERS_MAINNET = Object.freeze([
+  Object.freeze({ name: "Blockstream", url: "https://blockstream.info/liquid/api" }),
+  Object.freeze({ name: "Liquid.network", url: "https://liquid.network/api" })
+]);
 
 // Cheap mirror of `hasWallet()` into localStorage. IDB remains the source of
 // truth; this flag lets script.js answer "should I even load the wallet
@@ -136,6 +155,7 @@ export function createWalletModule({
   clock,
   network = "mainnet",
   esploraUrl,
+  esploraProviders,
   esploraClientFactory
 } = {}) {
   const lwkLoaderFn = lwkLoader ?? loadLwk;
@@ -156,6 +176,11 @@ export function createWalletModule({
   let rateLimitUntil = 0;
   let lastScanAt = 0;
   let appliedCachedUpdate = false;
+  // Index into the provider list (see DEFAULT_PROVIDERS_MAINNET) of the most
+  // recent provider that returned a successful scan. Persists for the lifetime
+  // of this module instance so consecutive syncs don't retry known-failing
+  // providers first. Reset on module recreate (page reload).
+  let lastGoodProviderIndex = 0;
 
   function db() {
     if (!dbPromise) dbPromise = openDb(indexedDbImpl);
@@ -549,30 +574,59 @@ export function createWalletModule({
     return wollet;
   }
 
-  async function esploraClient(l, net) {
-    if (typeof esploraClientFactory === "function") {
-      return esploraClientFactory(l, net);
+  // Resolve the provider list. Priority:
+  //   1. `esploraProviders` — explicit array of {name, url}. Tests use this.
+  //   2. `esploraUrl` — legacy single-URL override. Wrapped in a 1-item list.
+  //   3. `DEFAULT_PROVIDERS_MAINNET` on mainnet; empty on other networks
+  //      (LWK picks its own default client).
+  function resolveProviders() {
+    if (Array.isArray(esploraProviders) && esploraProviders.length > 0) {
+      return esploraProviders;
     }
-    const url = esploraUrl ?? (network === "mainnet" ? DEFAULT_ESPLORA_URL_MAINNET : null);
-    if (!url) {
-      // Let LWK pick its default for non-mainnet networks (testnet, regtest).
-      return net.defaultEsploraClient();
+    if (esploraUrl) {
+      return [{ name: "custom", url: esploraUrl }];
     }
-    // Concurrency 1 (not 4): Blockstream's public Esplora enforces a tight
-    // per-IP limit. With concurrency 4 a gap-limit fullScan (~40 address
-    // lookups) fires in bursts that trip 429, then LWK's internal retry loop
-    // re-hammers the same addresses and the client never returns. Keeping
-    // requests serial lets the scan complete well under our 30s outer
-    // timeout on a cold wallet.
-    return new l.EsploraClient(net, url, false, 1, false);
+    if (network === "mainnet") return DEFAULT_PROVIDERS_MAINNET;
+    return [];
   }
 
-  // Outer wall-clock guard on fullScan. LWK 0.16.x retries 429s internally
-  // without surfacing the error, which can wedge the promise forever. We cap
-  // the scan at 30s; the synthetic error message contains "rate limit" so
-  // isRateLimitError() routes it into ESPLORA_RATE_LIMITED and the UI
-  // applies its exponential backoff.
+  // Build one EsploraClient for a specific provider. Concurrency=1 keeps a
+  // gap-limit scan (~40 address lookups) serial so bursts don't trip per-IP
+  // limits, which previously wedged LWK in an internal retry loop. The
+  // injected `esploraClientFactory` gets the provider metadata so tests can
+  // fan out per-provider behavior.
+  async function buildEsploraClient(l, net, provider) {
+    if (typeof esploraClientFactory === "function") {
+      return esploraClientFactory(l, net, provider);
+    }
+    return new l.EsploraClient(net, provider.url, false, 1, false);
+  }
+
+  // Outer wall-clock guard on a single provider's fullScan. LWK 0.16.x retries
+  // 429s internally without surfacing the error, which can wedge the promise
+  // forever. We cap each provider attempt at 30s; the synthetic error message
+  // contains "rate limit" so isRateLimitError() classifies it and the
+  // fallback loop moves on to the next provider.
   const SYNC_TIMEOUT_MS = 30_000;
+
+  // Run fullScan against one client, enforced by the 30s timeout. Returns the
+  // Update on success; throws the underlying error on failure (the caller
+  // decides whether to fall through to the next provider or surface it).
+  async function runSingleScan(client, w) {
+    let timer;
+    try {
+      return await Promise.race([
+        client.fullScan(w),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => {
+            reject(new Error(`fullScan timed out after ${SYNC_TIMEOUT_MS}ms — upstream likely rate limit`));
+          }, SYNC_TIMEOUT_MS);
+        })
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
 
   // Drives a fresh Esplora scan and persists the resulting Update blob so
   // the next mount can paint immediately. Dedup'd via `syncPromise` — a
@@ -581,8 +635,12 @@ export function createWalletModule({
   // where mount + 30s timer + visibilitychange stacked 3 concurrent
   // fullScans (~40 Esplora requests each) on the same addresses.
   //
-  // Throws ESPLORA_RATE_LIMITED when upstream responds 429 so the UI can
-  // apply exponential backoff; ESPLORA_UNAVAILABLE for any other failure.
+  // Falls through a provider list (DEFAULT_PROVIDERS_MAINNET by default):
+  // each provider gets one 30s attempt; rate-limit or network error moves
+  // to the next. Returns as soon as any provider succeeds, and records the
+  // winning index so the next sync starts there (warm path). Throws only
+  // if every provider fails — ESPLORA_RATE_LIMITED if at least one was
+  // rate-limited (UI triggers backoff), ESPLORA_UNAVAILABLE otherwise.
   function syncWallet() {
     if (syncPromise) return syncPromise;
     syncPromise = syncWalletInner().finally(() => {
@@ -595,46 +653,83 @@ export function createWalletModule({
     const w = await ensureViewWollet();
     const l = await lwk();
     const net = makeNetwork(l, network);
-    let client;
-    try {
-      client = await esploraClient(l, net);
-    } catch (err) {
-      throw new WalletError(
-        ERROR_CODES.ESPLORA_UNAVAILABLE,
-        "Failed to create Esplora client",
-        err
-      );
-    }
-    let update;
-    let timer;
-    try {
-      update = await Promise.race([
-        client.fullScan(w),
-        new Promise((_, reject) => {
-          timer = setTimeout(() => {
-            reject(new Error(`fullScan timed out after ${SYNC_TIMEOUT_MS}ms — upstream likely rate limit`));
-          }, SYNC_TIMEOUT_MS);
-        })
-      ]);
-    } catch (err) {
-      if (isRateLimitError(err)) {
-        throw new WalletError(
-          ERROR_CODES.ESPLORA_RATE_LIMITED,
-          "Esplora rate-limited the sync (HTTP 429)",
-          err
-        );
-      }
-      throw new WalletError(
-        ERROR_CODES.ESPLORA_UNAVAILABLE,
-        "Failed to sync with Esplora",
-        err
-      );
-    } finally {
-      if (timer) clearTimeout(timer);
-      if (client?.free) {
-        try { client.free(); } catch { /* best effort */ }
+    const providers = resolveProviders();
+
+    // Degenerate case: no provider list (non-mainnet without override). Use
+    // LWK's network-default client and preserve the old single-attempt
+    // semantics — still guarded by the 30s timeout.
+    if (providers.length === 0) {
+      const client = await net.defaultEsploraClient();
+      try {
+        const update = await runSingleScan(client, w);
+        return await persistScan(w, update);
+      } catch (err) {
+        if (isRateLimitError(err)) {
+          throw new WalletError(ERROR_CODES.ESPLORA_RATE_LIMITED, "Esplora rate-limited the sync (HTTP 429)", err);
+        }
+        throw new WalletError(ERROR_CODES.ESPLORA_UNAVAILABLE, "Failed to sync with Esplora", err);
+      } finally {
+        if (client?.free) {
+          try { client.free(); } catch { /* best effort */ }
+        }
       }
     }
+
+    // Start from the last provider we saw succeed (or 0 on cold start), then
+    // wrap around. Collect every failure so we can classify the aggregate
+    // outcome once the loop exhausts the list.
+    const startIndex = Math.min(lastGoodProviderIndex, providers.length - 1);
+    const errors = [];
+    let anyRateLimited = false;
+
+    for (let step = 0; step < providers.length; step++) {
+      const idx = (startIndex + step) % providers.length;
+      const provider = providers[idx];
+      let client;
+      try {
+        client = await buildEsploraClient(l, net, provider);
+      } catch (err) {
+        errors.push({ provider, err });
+        continue;
+      }
+      try {
+        const update = await runSingleScan(client, w);
+        lastGoodProviderIndex = idx;
+        return await persistScan(w, update);
+      } catch (err) {
+        if (isRateLimitError(err)) anyRateLimited = true;
+        errors.push({ provider, err });
+      } finally {
+        if (client?.free) {
+          try { client.free(); } catch { /* best effort */ }
+        }
+      }
+    }
+
+    // Every provider failed. Surface rate-limit if any of them hit 429 (so
+    // the UI applies its exponential backoff); otherwise a generic network
+    // error code so the UI shows the cached balance + manual-retry CTA.
+    const lastErr = errors.length > 0 ? errors[errors.length - 1].err : new Error("no providers");
+    const summary = errors.map(e => `${e.provider.name}: ${String(e.err?.message ?? e.err)}`).join(" | ");
+    if (anyRateLimited) {
+      throw new WalletError(
+        ERROR_CODES.ESPLORA_RATE_LIMITED,
+        `All Esplora providers rate-limited (${summary})`,
+        lastErr
+      );
+    }
+    throw new WalletError(
+      ERROR_CODES.ESPLORA_UNAVAILABLE,
+      `All Esplora providers failed (${summary})`,
+      lastErr
+    );
+  }
+
+  // Persist an Update produced by a successful scan and return the result
+  // the caller sees. Factored out of syncWalletInner so both the
+  // provider-fallback loop and the no-provider branch share the same
+  // persistence semantics.
+  async function persistScan(w, update) {
     const scanAt = getNow();
     if (update) {
       w.applyUpdate(update);

@@ -69,6 +69,8 @@ function makeFakeLwkWithSync({
       this._url = url;
       this.freed = false;
       EsploraClient.calls = (EsploraClient.calls ?? 0) + 1;
+      EsploraClient.urls = (EsploraClient.urls ?? []);
+      EsploraClient.urls.push(url);
     }
     async fullScan() {
       EsploraClient.scanCalls = (EsploraClient.scanCalls ?? 0) + 1;
@@ -83,6 +85,7 @@ function makeFakeLwkWithSync({
   }
   EsploraClient.calls = 0;
   EsploraClient.scanCalls = 0;
+  EsploraClient.urls = [];
   const Network = {
     mainnet: () => ({ _kind: "mainnet", defaultEsploraClient: () => new EsploraClient({}, null) }),
     testnet: () => ({ _kind: "testnet", defaultEsploraClient: () => new EsploraClient({}, null) }),
@@ -266,6 +269,151 @@ describe("wallet.syncWallet", () => {
       // Two actual scan calls — the failed syncPromise was cleared, not
       // memoized, so the second call dispatched a fresh scan.
       expect(fakeLwk.EsploraClient.scanCalls).toBe(2);
+    }, 60_000);
+  });
+
+  // ----------------------------------------------------------------------
+  // Provider fallback — each wallet module holds an ordered list of Esplora
+  // endpoints. A 429 or network error on one provider should fall through
+  // to the next; only when every provider in the list fails do we surface
+  // ESPLORA_RATE_LIMITED / ESPLORA_UNAVAILABLE to the UI.
+  // ----------------------------------------------------------------------
+  describe("provider fallback", () => {
+    // Build a wallet with two providers (A + B) and a per-provider client
+    // factory so each test can script the exact sequence of outcomes.
+    function makeFallbackModule({ outcomes, clock } = {}) {
+      const fakeLwk = makeFakeLwkWithSync();
+      const providers = [
+        { name: "provA", url: "https://a.example/api" },
+        { name: "provB", url: "https://b.example/api" }
+      ];
+      const factoryCalls = [];
+      const factory = (_l, _net, provider) => {
+        factoryCalls.push(provider);
+        const client = new fakeLwk.EsploraClient(_net, provider.url);
+        // Pick the outcome scripted for THIS provider. Supported values:
+        //   { ok: true }          — resolve with a default Update
+        //   { throw: Error }      — reject with that error
+        //   missing               — same as { ok: true }
+        const outcome = outcomes[provider.name];
+        client.fullScan = async () => {
+          fakeLwk.EsploraClient.scanCalls = (fakeLwk.EsploraClient.scanCalls ?? 0) + 1;
+          if (outcome?.throw) throw outcome.throw;
+          return new fakeLwk.Update(new Uint8Array([0xde, 0xad]));
+        };
+        return client;
+      };
+      const wallet = createWalletModule({
+        indexedDbImpl: new IDBFactory(),
+        cryptoImpl: webcrypto,
+        lwkLoader: async () => fakeLwk,
+        clock: clock ?? (() => Date.now()),
+        esploraProviders: providers,
+        esploraClientFactory: factory
+      });
+      return { fakeLwk, wallet, providers, factoryCalls };
+    }
+
+    it("uses the first provider on a cold start", async () => {
+      const { wallet, factoryCalls } = makeFallbackModule({ outcomes: { provA: { ok: true } } });
+      await wallet.createWallet({ pin: STRONG_PIN });
+      wallet.lock();
+
+      const res = await wallet.syncWallet();
+      expect(res.changed).toBe(true);
+      // Only provA was asked — provB never built a client.
+      expect(factoryCalls.map(p => p.name)).toEqual(["provA"]);
+    }, 60_000);
+
+    it("falls through to the next provider on 429", async () => {
+      const { wallet, factoryCalls } = makeFallbackModule({
+        outcomes: {
+          provA: { throw: new Error("error response 429 Too Many Requests") },
+          provB: { ok: true }
+        }
+      });
+      await wallet.createWallet({ pin: STRONG_PIN });
+      wallet.lock();
+
+      const res = await wallet.syncWallet();
+      expect(res.changed).toBe(true);
+      // provA was tried first, 429'd; provB picked up and succeeded.
+      expect(factoryCalls.map(p => p.name)).toEqual(["provA", "provB"]);
+    }, 60_000);
+
+    it("falls through on a generic network error too", async () => {
+      const { wallet, factoryCalls } = makeFallbackModule({
+        outcomes: {
+          provA: { throw: new Error("socket hang up") },
+          provB: { ok: true }
+        }
+      });
+      await wallet.createWallet({ pin: STRONG_PIN });
+      wallet.lock();
+
+      await wallet.syncWallet();
+      expect(factoryCalls.map(p => p.name)).toEqual(["provA", "provB"]);
+    }, 60_000);
+
+    it("subsequent syncs start from the last-good provider (sticky)", async () => {
+      const { wallet, factoryCalls } = makeFallbackModule({
+        outcomes: {
+          provA: { throw: new Error("429") },
+          provB: { ok: true }
+        }
+      });
+      await wallet.createWallet({ pin: STRONG_PIN });
+      wallet.lock();
+
+      await wallet.syncWallet();   // A → fails, B → ok. lastGood = B.
+      factoryCalls.length = 0;
+      await wallet.syncWallet();   // Should START at B, skipping A.
+      expect(factoryCalls.map(p => p.name)).toEqual(["provB"]);
+    }, 60_000);
+
+    it("surfaces ESPLORA_RATE_LIMITED when every provider 429s", async () => {
+      const { wallet } = makeFallbackModule({
+        outcomes: {
+          provA: { throw: new Error("status 429") },
+          provB: { throw: new Error("Too Many Requests") }
+        }
+      });
+      await wallet.createWallet({ pin: STRONG_PIN });
+      wallet.lock();
+
+      await expect(wallet.syncWallet()).rejects.toMatchObject({
+        code: ERROR_CODES.ESPLORA_RATE_LIMITED
+      });
+    }, 60_000);
+
+    it("surfaces ESPLORA_UNAVAILABLE when every provider fails with a non-429 error", async () => {
+      const { wallet } = makeFallbackModule({
+        outcomes: {
+          provA: { throw: new Error("socket hang up") },
+          provB: { throw: new Error("ECONNRESET") }
+        }
+      });
+      await wallet.createWallet({ pin: STRONG_PIN });
+      wallet.lock();
+
+      await expect(wallet.syncWallet()).rejects.toMatchObject({
+        code: ERROR_CODES.ESPLORA_UNAVAILABLE
+      });
+    }, 60_000);
+
+    it("mixed failures: any 429 in the chain surfaces RATE_LIMITED (UI backs off)", async () => {
+      const { wallet } = makeFallbackModule({
+        outcomes: {
+          provA: { throw: new Error("ECONNRESET") },    // network error
+          provB: { throw: new Error("status 429") }      // rate limit
+        }
+      });
+      await wallet.createWallet({ pin: STRONG_PIN });
+      wallet.lock();
+
+      await expect(wallet.syncWallet()).rejects.toMatchObject({
+        code: ERROR_CODES.ESPLORA_RATE_LIMITED
+      });
     }, 60_000);
   });
 });

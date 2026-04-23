@@ -1116,6 +1116,18 @@ export function registerWalletRoutes({
     if (text && kind) el.classList.add(kind);
   }
 
+  // Show/hide the "Tentar novamente" CTA beneath the sync status copy. We
+  // surface it whenever the last sync failed — cached balance is still on
+  // screen, and a manual retry bypasses the exponential backoff so users
+  // who just switched network (Wi-Fi ⇆ cellular, VPN on/off) don't have
+  // to wait N minutes for the auto-timer.
+  function setRetryCtaVisible(visible) {
+    const btn = q("wallet-home-sync-retry");
+    if (!btn) return;
+    btn.classList.toggle("hidden", !visible);
+    btn.disabled = false;
+  }
+
   function formatBackoffSeconds(ms) {
     const s = Math.max(1, Math.round(ms / 1000));
     if (s < 60) return `${s}s`;
@@ -1133,6 +1145,7 @@ export function registerWalletRoutes({
       consecutiveRateLimits = 0;
       nextSyncAllowedAt = 0;
       updateSyncState("Atualizado agora", "success");
+      setRetryCtaVisible(false);
     } catch (err) {
       if (isWalletError(err, ERROR_CODES.ESPLORA_RATE_LIMITED)) {
         consecutiveRateLimits++;
@@ -1150,8 +1163,24 @@ export function registerWalletRoutes({
       } else {
         updateSyncState("Falha na sincronização.", "error");
       }
+      setRetryCtaVisible(true);
     }
     await renderWalletHomeBalances({ background });
+  }
+
+  // Manual retry: user taps "Tentar novamente". Clears the backoff floor
+  // (their explicit intent beats our automatic cool-down) and kicks a fresh
+  // sync. Disables the button while the scan is in-flight so repeated taps
+  // don't stack — the dedup inside wallet.syncWallet() would coalesce them
+  // anyway, but the visual feedback matters.
+  async function onManualRetry() {
+    const btn = q("wallet-home-sync-retry");
+    if (btn) {
+      btn.disabled = true;
+    }
+    nextSyncAllowedAt = 0;
+    consecutiveRateLimits = 0;
+    await syncAndRender({ background: false });
   }
 
   // `offsetParent === null` is true whenever any ancestor has `display: none`
@@ -1197,13 +1226,17 @@ export function registerWalletRoutes({
     } catch { /* noop */ }
     // If a previous sync left us inside a rate-limit cool-down, surface the
     // remaining wait instead of triggering a sync that will just 429 again.
+    // Also offer the manual-retry CTA so users who just changed network
+    // (Wi-Fi ⇆ cellular, VPN on/off) can bypass the cool-down.
     const remainingMs = nextSyncAllowedAt - Date.now();
     if (remainingMs > 0) {
       updateSyncState(
         `Muitas sincronizações. Próxima tentativa em ${formatBackoffSeconds(remainingMs)}.`,
         "warning"
       );
+      setRetryCtaVisible(true);
     } else {
+      setRetryCtaVisible(false);
       updateSyncState("Sincronizando…", null);
       void syncAndRender({ background: false });
     }
@@ -1240,6 +1273,9 @@ export function registerWalletRoutes({
   });
   q("wallet-home-settings")?.addEventListener("click", () => {
     navigate("#wallet-settings");
+  });
+  q("wallet-home-sync-retry")?.addEventListener("click", () => {
+    void onManualRetry();
   });
 
   // ====================================================================
