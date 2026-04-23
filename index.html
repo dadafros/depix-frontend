@@ -142,16 +142,16 @@
   }
   </script>
 
-  <link rel="manifest" href="manifest.json?v=128" />
-  <link rel="icon" href="icon-192.png?v=128" />
-  <link rel="apple-touch-icon" href="icon-192.png?v=128" />
+  <link rel="manifest" href="manifest.json?v=129" />
+  <link rel="icon" href="icon-192.png?v=129" />
+  <link rel="apple-touch-icon" href="icon-192.png?v=129" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
   <!-- Asset version must match APP_VERSION in service-worker.js -->
-  <link rel="stylesheet" href="style.css?v=128" />
+  <link rel="stylesheet" href="style.css?v=129" />
 </head>
 <body>
 
@@ -160,7 +160,7 @@
 
   <nav class="landing-nav">
     <div class="landing-nav-inner">
-      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=128" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
+      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=129" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
       <div class="landing-nav-right">
         <a href="https://blog.depixapp.com/" class="landing-nav-link">Blog</a>
         <a href="#login" class="landing-nav-cta">Entrar</a>
@@ -2230,10 +2230,10 @@
     <h2 class="view-title">Movimentações da carteira</h2>
 
     <div class="wallet-tx-filters" role="radiogroup" aria-label="Filtrar por ativo">
-      <button class="wallet-tx-pill active" data-wallet-filter="all" type="button">Todos</button>
-      <button class="wallet-tx-pill" data-wallet-filter="DEPIX" type="button">DePix</button>
-      <button class="wallet-tx-pill" data-wallet-filter="USDT" type="button">USDt</button>
-      <button class="wallet-tx-pill" data-wallet-filter="LBTC" type="button">L-BTC</button>
+      <button class="wallet-tx-pill active" data-wallet-filter="all" type="button" role="radio" aria-checked="true">Todos</button>
+      <button class="wallet-tx-pill" data-wallet-filter="DEPIX" type="button" role="radio" aria-checked="false">DePix</button>
+      <button class="wallet-tx-pill" data-wallet-filter="USDT" type="button" role="radio" aria-checked="false">USDt</button>
+      <button class="wallet-tx-pill" data-wallet-filter="LBTC" type="button" role="radio" aria-checked="false">L-BTC</button>
     </div>
 
     <div id="wallet-tx-msg" class="mensagem"></div>
@@ -2923,6 +2923,6 @@
 
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 <!-- Asset version must match APP_VERSION in service-worker.js -->
-<script type="module" src="script.js?v=128"></script>
+<script type="module" src="script.js?v=129"></script>
 </body>
 </html>
