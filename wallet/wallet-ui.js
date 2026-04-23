@@ -530,7 +530,15 @@ export function registerWalletRoutes({
   route("#wallet-restore-input", () => {
     const grid = q("wallet-restore-grid");
     if (!grid) return;
-    clearMsg("wallet-restore-input-msg");
+    // Honor a transient error set by a failed PIN-submit (bad checksum
+    // surfacing late — plan positions this error on THIS screen, not the
+    // PIN screen where "combinação" would be read as PIN+confirm).
+    if (state.error) {
+      showMsg("wallet-restore-input-msg", state.error, "error");
+      state.error = "";
+    } else {
+      clearMsg("wallet-restore-input-msg");
+    }
     grid.textContent = "";
     for (let i = 0; i < 12; i++) {
       const cell = d.createElement("div");
@@ -714,7 +722,14 @@ export function registerWalletRoutes({
       if (isWalletError(err, ERROR_CODES.WEAK_PIN)) {
         showMsg("wallet-restore-pin-msg", "PIN muito comum ou previsível. Escolha outro.", "error");
       } else if (isWalletError(err, ERROR_CODES.INVALID_MNEMONIC)) {
-        showMsg("wallet-restore-pin-msg", "Combinação inválida. Confira se digitou corretamente.", "error");
+        // LWK's Mnemonic constructor validates checksum — by the time we
+        // get here the user typed their PIN twice, so staying on this
+        // screen with "Combinação inválida" reads as a PIN mismatch even
+        // though it is about the 12 words. Send them back to the input
+        // screen with an unambiguous message (plan Sub-fase 3 Restore
+        // Tela 1: "Combinação inválida" is the intended copy THERE).
+        state.error = "Uma ou mais das 12 palavras está errada. Confira sua anotação e tente novamente.";
+        navigate("#wallet-restore-input");
       } else if (isWalletError(err, ERROR_CODES.DESCRIPTOR_MISMATCH)) {
         // Plan Sub-fase 3 calls for a Continue/Cancel modal on the input
         // screen — full flow needs a wipe-without-old-PIN API path, tracked
