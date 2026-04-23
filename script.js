@@ -12,7 +12,8 @@ import { toCents, formatBRL, formatDePix, escapeHtml, slugify } from "./utils.js
 import { validateLiquidAddress, validatePhone, validatePixKey, validateCPF, validateCNPJ, formatPixKey, preparePixKeyForApi } from "./validation.js";
 import { showToast, setMsg, goToAppropriateScreen as _goToAppropriateScreen } from "./script-helpers.js";
 import { captureReferralCode, buildRegistrationBody, clearReferralCode, buildAffiliateLink, renderReferralsHTML, generateFingerprint } from "./affiliates.js";
-import { renderBrandedQr, renderPrintableQr } from "./qr.js";
+import { renderBrandedQr } from "./qr.js";
+import { renderPrintableQr } from "./qr-print.js";
 import { resizeImage } from "./image-resize.js";
 
 // ===== Constants =====

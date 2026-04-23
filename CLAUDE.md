@@ -316,6 +316,18 @@ After any edit to Portuguese content, grep for common unaccented words to catch 
 - **Translate everything visible**: Hero text, step descriptions, benefit cards, FAQ questions/answers, CTA text, footer
 - **FAQ accordion**: Uses `<details>/<summary>` elements — make sure both languages have the same questions
 
+## Shared files with depix-backend
+
+Some files in this repo exist as **byte-identical copies** under `../depix-backend/public/`. They are imported by backend-rendered server pages (checkout / merchant / product templates) in addition to the SPA, so any divergence between copies will cause one side to load helpers the other side doesn't define — and in dev, where everything is served from `localhost:2323`, both sides end up hitting the same file through nginx (see `../depix-dev/CLAUDE.md`), so drift breaks the landing page.
+
+| File here | Copy in depix-backend | Imported by |
+|-----------|----------------------|-------------|
+| `qr.js` | `public/qr.js` | SPA (`script.js` imports `./qr.js`) + backend-rendered checkout/merchant/product pages (import `/qr.js`) |
+
+**Rule: any edit to a shared file must be replicated in the other repo in the same change (both PRs if applicable).** Don't diverge `qr.js` to add frontend-only helpers — put those in a separate file (e.g. `qr-print.js`) and import them explicitly from the SPA. Keeping `qr.js` a single shared asset is what lets the server-rendered pages work in both prod and dev without branching logic.
+
+Both copies carry a `SYNC NOTICE` header. Do not remove it. If you introduce a new shared file, add a row to the table above AND to the equivalent section in `../depix-backend/CLAUDE.md` AND drop a `SYNC NOTICE` header in both copies.
+
 ## Local Dev Environment
 
 A Docker-based dev environment exists at `../depix-dev/`. Use it to test changes locally before pushing to production.
