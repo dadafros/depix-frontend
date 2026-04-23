@@ -394,6 +394,8 @@ describe("public API surface", () => {
       "getDescriptor",
       "getLastScanAt",
       "syncWallet",
+      "prepareSend",
+      "confirmSend",
       "exportMnemonic",
       "wipeWallet",
       "addBiometric",
