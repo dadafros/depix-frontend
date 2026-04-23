@@ -11,7 +11,15 @@
 const FRESH_WINDOW_MS = 30_000;
 const STALE_WINDOW_MS = 5 * 60_000;
 const DEFAULT_TIMEOUT_MS = 8_000;
-const DEFAULT_ENDPOINT = "/api/quotes";
+// Mirrors api.js: localhost:2323 goes through nginx proxy (relative path);
+// every other host (prod on GitHub Pages, previews, etc.) must hit the backend
+// directly — otherwise `/api/quotes` returns 404 HTML from Pages and quotes
+// stay null for USDt/L-BTC.
+const DEFAULT_ENDPOINT = (typeof window !== "undefined" &&
+  window.location?.hostname === "localhost" &&
+  window.location?.port === "2323")
+  ? "/api/quotes"
+  : "https://depix-backend.vercel.app/api/quotes";
 
 function isFiniteNumber(x) {
   return typeof x === "number" && Number.isFinite(x) && x > 0;

@@ -17,6 +17,18 @@
 // usdBrl }` (floats from the /api/quotes proxy). Because DePix pegs 1:1 to
 // BRL by protocol design, its BRL value is simply the display amount.
 
+// Icon URLs are origin-absolute so they resolve consistently whether the
+// wallet bundle runs out of /dist/wallet-bundle-<hash>.js or a dev volume
+// mount. All three are the ASSET logos (not the app icon):
+//   * DePix       — depix-marketing's canonical brand mark, used on IG
+//                   templates with alt="DePix". Distinct from icon-192.png
+//                   which is the PWA app launcher icon, not the coin.
+//   * USDt + L-BTC — official Blockstream/Tether artwork vendored from
+//                   the DePix monorepo's BTCPayServer Liquid plugin
+//                   (submodules/btcpayserver/.../imlegacy/). Same files
+//                   BTCPay uses for AltcoinsPlugin.LiquidAssets.cs and
+//                   AltcoinsPlugin.Liquid.cs.
+
 export const ASSETS = Object.freeze({
   DEPIX: Object.freeze({
     id: "02f22f8d9c76ab41661a2729e4752e2c5d1a263012141b86ea98af5472df5189",
@@ -24,7 +36,8 @@ export const ASSETS = Object.freeze({
     name: "DePix",
     decimals: 8,
     color: "#38e3ac",
-    brlFormula: "peg"
+    brlFormula: "peg",
+    iconUrl: "/icons/depix.png"
   }),
   USDT: Object.freeze({
     id: "ce091c998b83c78bb71a632313ba3760f1763d9cfcffae02258ffa9865a37bd2",
@@ -32,7 +45,8 @@ export const ASSETS = Object.freeze({
     name: "Tether USD (Liquid)",
     decimals: 8,
     color: "#26a17b",
-    brlFormula: "usd"
+    brlFormula: "usd",
+    iconUrl: "/icons/liquid-tether.svg"
   }),
   LBTC: Object.freeze({
     id: "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d",
@@ -40,7 +54,8 @@ export const ASSETS = Object.freeze({
     name: "Liquid Bitcoin",
     decimals: 8,
     color: "#f7931a",
-    brlFormula: "btc"
+    brlFormula: "btc",
+    iconUrl: "/icons/liquid-bitcoin.png"
   })
 });
 

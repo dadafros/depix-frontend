@@ -2346,6 +2346,7 @@ const WALLET_ROUTE_HASHES = [
   "#wallet-create-biometric",
   "#wallet-create-done",
   "#wallet-restore-input",
+  "#wallet-restore-confirm-identity",
   "#wallet-restore-pin",
   "#wallet-restore-biometric",
   "#wallet-restore-done",
@@ -2654,6 +2655,27 @@ route("#home", () => {
 async function refreshWalletModeAvailability() {
   const walletBtn = document.getElementById("modeWallet");
   if (!walletBtn) return;
+  // Cheap cache of hasWallet() so users without a wallet never pay the
+  // ~197kb bundle download just to answer "is there a wallet?". Flag is
+  // set by wallet.js on create/restore and cleared on any wipe path; IDB
+  // stays the source of truth. See wallet.js:markWalletExists.
+  let hasFlag = false;
+  try { hasFlag = localStorage.getItem("depix-wallet-exists") === "1"; }
+  catch { /* private mode */ }
+  if (!hasFlag) {
+    // Backfill path: the flag can be missing while IDB still holds a
+    // wallet (install pre-dates the flag, localStorage cleared out-of-band,
+    // or a dev restart that only wipes localStorage). A raw IDB probe
+    // avoids a false negative without loading the bundle.
+    const idbHasWallet = await hasWalletInIdbRaw();
+    if (!idbHasWallet) {
+      walletBtn.classList.add("hidden");
+      if (modoWallet) switchMode("deposit");
+      return;
+    }
+    try { localStorage.setItem("depix-wallet-exists", "1"); }
+    catch { /* private mode */ }
+  }
   let walletExists = false;
   try {
     const bundle = await loadWalletBundle();
@@ -2674,6 +2696,48 @@ async function refreshWalletModeAvailability() {
   if (preferred === "wallet" && !modoWallet) {
     switchMode("wallet");
   }
+}
+
+// Raw IndexedDB existence check — resolves true iff `depix-wallet` has a
+// credentials row with a non-empty encryptedSeed. Duplicates a sliver of
+// wallet-store.js on purpose so script.js can detect a stranded wallet
+// without dynamic-importing the bundle.
+function hasWalletInIdbRaw() {
+  return new Promise(resolve => {
+    if (typeof indexedDB === "undefined") { resolve(false); return; }
+    let req;
+    try { req = indexedDB.open("depix-wallet"); }
+    catch { resolve(false); return; }
+    req.onerror = () => resolve(false);
+    req.onblocked = () => resolve(false);
+    req.onupgradeneeded = () => {
+      // DB didn't exist (or was on an older version) — fresh install,
+      // no wallet to backfill. Abort so we don't accidentally create an
+      // empty schema racing with the real wallet-store upgrade path.
+      try { req.transaction?.abort(); } catch { /* best effort */ }
+      resolve(false);
+    };
+    req.onsuccess = ev => {
+      const db = ev.target.result;
+      if (!db.objectStoreNames.contains("credentials")) {
+        db.close();
+        resolve(false);
+        return;
+      }
+      let tx;
+      try { tx = db.transaction("credentials", "readonly"); }
+      catch { db.close(); resolve(false); return; }
+      const getReq = tx.objectStore("credentials").get("main");
+      getReq.onsuccess = () => {
+        const rec = getReq.result;
+        const seed = rec?.encryptedSeed;
+        const len = seed?.byteLength ?? seed?.length ?? 0;
+        db.close();
+        resolve(len > 0);
+      };
+      getReq.onerror = () => { db.close(); resolve(false); };
+    };
+  });
 }
 
 route("#login", () => {

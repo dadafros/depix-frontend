@@ -1,10 +1,46 @@
 import { describe, it, expect } from "vitest";
-import { webcrypto } from "node:crypto";
+import { webcrypto, createHash } from "node:crypto";
 import { IDBFactory } from "fake-indexeddb";
 
 import { createWalletModule } from "../wallet/wallet.js";
 import { WalletError, ERROR_CODES } from "../wallet/wallet-errors.js";
 import { BIP39_WORDLIST } from "../wallet/bip39-wordlist.js";
+
+// Real BIP39 checksum validation — matches the semantics of LWK's Mnemonic
+// constructor so unit tests can distinguish word-count errors from
+// bad-checksum errors (the 1-in-16 false-positive scenario the fingerprint
+// feature is designed to defend against). 12 words = 128 bits entropy + 4
+// bits checksum; the checksum is the top 4 bits of SHA-256(entropy).
+function verifyBip39Checksum(words) {
+  let bits = "";
+  for (const w of words) {
+    const idx = BIP39_WORDLIST.indexOf(w);
+    if (idx < 0) return false;
+    bits += idx.toString(2).padStart(11, "0");
+  }
+  const entropy = new Uint8Array(16);
+  for (let i = 0; i < 16; i++) {
+    entropy[i] = parseInt(bits.slice(i * 8, (i + 1) * 8), 2);
+  }
+  const expected = createHash("sha256").update(entropy).digest()[0] >> 4;
+  const actual = parseInt(bits.slice(128), 2);
+  return expected === actual;
+}
+
+// Given 16 deterministic entropy bytes, produce a valid 12-word BIP39
+// mnemonic. Used by fromRandom() so generated seeds pass checksum.
+function entropyToMnemonicWords(entropy) {
+  const checksum = createHash("sha256").update(entropy).digest()[0] >> 4;
+  let bits = "";
+  for (const byte of entropy) bits += byte.toString(2).padStart(8, "0");
+  bits += checksum.toString(2).padStart(4, "0");
+  const out = [];
+  for (let i = 0; i < 12; i++) {
+    const idx = parseInt(bits.slice(i * 11, (i + 1) * 11), 2);
+    out.push(BIP39_WORDLIST[idx]);
+  }
+  return out;
+}
 
 // LWK is too heavy to load in jsdom. The wallet module delegates all crypto-
 // currency-specific work to the lwk namespace returned by `loadLwk`, so we
@@ -21,19 +57,24 @@ function makeFakeLwk() {
       if (words.length !== 12) {
         throw new Error("fake lwk: mnemonic must be 12 words");
       }
+      // Match LWK: any of (wrong word count | word not in BIP39 wordlist |
+      // bad checksum) produces the same failure surface. The unit under
+      // test folds all three into INVALID_MNEMONIC.
+      if (!verifyBip39Checksum(words)) {
+        throw new Error("fake lwk: BIP39 checksum or wordlist validation failed");
+      }
       this._str = words.join(" ");
     }
     toString() { return this._str; }
     static fromRandom(_bits) {
       fromRandomCounter++;
-      const words = [];
-      for (let i = 0; i < 11; i++) {
-        const idx = (fromRandomCounter * 37 + i * 17) % BIP39_WORDLIST.length;
-        words.push(BIP39_WORDLIST[idx]);
+      // Deterministic entropy so each call is reproducible; real LWK uses
+      // real randomness but tests need stable output for assertions.
+      const entropy = new Uint8Array(16);
+      for (let i = 0; i < 16; i++) {
+        entropy[i] = (fromRandomCounter * 31 + i * 7) & 0xff;
       }
-      // End with "about" so the 12th word is stable across calls — matches
-      // the classic "abandon ... about" convention used elsewhere in tests.
-      words.push("about");
+      const words = entropyToMnemonicWords(entropy);
       return new Mnemonic(words.join(" "));
     }
   }
@@ -371,6 +412,82 @@ describe("wallet.validateMnemonic", () => {
   });
 });
 
+describe("wallet.deriveDescriptor", () => {
+  const VALID = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+
+  it("returns a non-empty CT descriptor string for a valid mnemonic", async () => {
+    const { wallet } = makeModule();
+    const descriptor = await wallet.deriveDescriptor(VALID);
+    expect(typeof descriptor).toBe("string");
+    expect(descriptor.length).toBeGreaterThan(0);
+    expect(descriptor).toMatch(/^ct\(/);
+  });
+
+  it("is deterministic — same mnemonic produces the same descriptor", async () => {
+    const { wallet } = makeModule();
+    const a = await wallet.deriveDescriptor(VALID);
+    const b = await wallet.deriveDescriptor(VALID);
+    expect(a).toBe(b);
+  });
+
+  it("different mnemonics produce different descriptors", async () => {
+    const { wallet } = makeModule();
+    const other = "legal winner thank year wave sausage worth useful legal winner thank yellow";
+    const a = await wallet.deriveDescriptor(VALID);
+    const b = await wallet.deriveDescriptor(other);
+    expect(a).not.toBe(b);
+  });
+
+  it("throws INVALID_MNEMONIC on empty/whitespace/non-string input", async () => {
+    const { wallet } = makeModule();
+    await expect(wallet.deriveDescriptor("")).rejects.toMatchObject({
+      code: ERROR_CODES.INVALID_MNEMONIC
+    });
+    await expect(wallet.deriveDescriptor("   ")).rejects.toMatchObject({
+      code: ERROR_CODES.INVALID_MNEMONIC
+    });
+    await expect(wallet.deriveDescriptor(null)).rejects.toMatchObject({
+      code: ERROR_CODES.INVALID_MNEMONIC
+    });
+  });
+
+  it("throws INVALID_MNEMONIC when LWK rejects the word count", async () => {
+    const { wallet } = makeModule();
+    await expect(wallet.deriveDescriptor("one two three")).rejects.toMatchObject({
+      code: ERROR_CODES.INVALID_MNEMONIC
+    });
+  });
+
+  // The 1-in-16 false-positive scenario this whole sub-fase is designed for:
+  // 12 valid BIP39 words whose checksum fails. Pins down that LWK surfaces
+  // INVALID_MNEMONIC on the checksum branch (not just word-count validation)
+  // — insurance against an LWK taxonomy change silently slipping past the
+  // restore flow.
+  it("throws INVALID_MNEMONIC when 12 valid words fail the checksum", async () => {
+    const { wallet } = makeModule();
+    // All 12 words are valid BIP39 entries, but the checksum for 12×"abandon"
+    // requires "about" at the end — so this combination is rejected.
+    const badChecksum = "abandon ".repeat(12).trim();
+    await expect(wallet.deriveDescriptor(badChecksum)).rejects.toMatchObject({
+      code: ERROR_CODES.INVALID_MNEMONIC
+    });
+  });
+
+  it("does NOT persist anything — hasWallet() stays false", async () => {
+    const { wallet } = makeModule();
+    await wallet.deriveDescriptor(VALID);
+    await wallet.deriveDescriptor(VALID);
+    expect(await wallet.hasWallet()).toBe(false);
+  });
+
+  it("does NOT affect unlock state — isUnlocked() stays false", async () => {
+    const { wallet } = makeModule();
+    expect(wallet.isUnlocked()).toBe(false);
+    await wallet.deriveDescriptor(VALID);
+    expect(wallet.isUnlocked()).toBe(false);
+  });
+});
+
 describe("public API surface", () => {
   it("exposes only the documented methods, is frozen, and rejects mutation", async () => {
     const { wallet } = makeModule();
@@ -382,6 +499,7 @@ describe("public API surface", () => {
       "isUnlocked",
       "generateMnemonic",
       "validateMnemonic",
+      "deriveDescriptor",
       "createWallet",
       "restoreWallet",
       "unlock",

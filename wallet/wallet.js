@@ -34,7 +34,8 @@ import {
   incrementFailedPinAttempts,
   hasCredentials as storeHasCredentials,
   readSync,
-  writeSync
+  writeSync,
+  patchSync
 } from "./wallet-store.js";
 import {
   assertStrongPin,
@@ -83,9 +84,69 @@ function buildDescriptorFromMnemonic(lwk, mnemonicStr, network) {
   return { signer, mnemonic, descriptor };
 }
 
-// Blockstream public Esplora — the free, open endpoint we hardcode by default.
-// Can be overridden via `esploraUrl` option (tests + alt networks).
-const DEFAULT_ESPLORA_URL_MAINNET = "https://blockstream.info/liquid/api";
+// Public Liquid Esplora endpoints we fall through on rate-limit or network
+// failure. Both speak the Esplora REST API that LWK expects. Ordered by
+// preference — Blockstream first (authoritative, well-monitored), Liquid.network
+// (mempool.space's Liquid instance) second.
+//
+// Rationale for fallback vs. a single upstream: users behind CGNAT / shared
+// mobile carrier NATs share an IP with dozens-to-hundreds of other Blockstream
+// callers, so their "per-IP" quota can be exhausted by strangers. Falling
+// through to a different provider with a fresh IP quota unblocks those users
+// without us running our own Esplora.
+//
+// Direct-from-client (each browser → Esplora) stays the right topology — proxying
+// through our backend would concentrate all traffic through a small Vercel IP
+// pool and make the rate-limit problem worse, not better, because Liquid
+// addresses are user-unique so there is no cross-user cache hit to amortize.
+//
+// Can be overridden with `esploraUrl` (single URL, legacy) or `esploraProviders`
+// (array of {name, url}) for tests and alt networks.
+const DEFAULT_PROVIDERS_MAINNET = Object.freeze([
+  Object.freeze({ name: "Blockstream", url: "https://blockstream.info/liquid/api" }),
+  Object.freeze({ name: "Liquid.network", url: "https://liquid.network/api" })
+]);
+
+// Cheap mirror of `hasWallet()` into localStorage. IDB remains the source of
+// truth; this flag lets script.js answer "should I even load the wallet
+// bundle?" synchronously, so users without a wallet never download the
+// ~197kb bundle just to check. Set on create/restore, cleared on any wipe
+// path. See script.js:refreshWalletModeAvailability for the read site.
+const WALLET_EXISTS_FLAG = "depix-wallet-exists";
+
+function markWalletExists() {
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(WALLET_EXISTS_FLAG, "1");
+    }
+  } catch { /* private mode / disabled */ }
+}
+
+function clearWalletExistsFlag() {
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem(WALLET_EXISTS_FLAG);
+    }
+  } catch { /* private mode / disabled */ }
+}
+
+// LWK wraps Esplora fetch errors as a plain `Error` whose `message` contains
+// the upstream status (e.g. "error response 429 Too Many Requests" on 0.16.x).
+// We pattern-match on the stringified error because LWK does not expose a
+// typed discriminator; a breaking upstream change would silently degrade
+// this into the generic ESPLORA_UNAVAILABLE path, which is acceptable — the
+// 60s backoff UX is a nicety, not a correctness guarantee.
+function isRateLimitError(err) {
+  let cur = err;
+  for (let i = 0; i < 4 && cur; i++) {
+    const msg = String(cur.message ?? cur ?? "").toLowerCase();
+    if (msg.includes("429") || msg.includes("too many requests") || msg.includes("rate limit")) {
+      return true;
+    }
+    cur = cur.cause;
+  }
+  return false;
+}
 
 export function createWalletModule({
   indexedDbImpl,
@@ -95,7 +156,9 @@ export function createWalletModule({
   clock,
   network = "mainnet",
   esploraUrl,
-  esploraClientFactory
+  esploraProviders,
+  esploraClientFactory,
+  syncTimeoutMs
 } = {}) {
   const lwkLoaderFn = lwkLoader ?? loadLwk;
   const getNow = clock ?? now;
@@ -105,10 +168,28 @@ export function createWalletModule({
   let signer = null;
   let wollet = null;
   let lwkCache = null;
+  // Single in-flight syncWallet promise. Concurrent callers (mount +
+  // 30s timer + visibilitychange) share this promise so a fresh wallet's
+  // gap-limit fullScan (~40 Esplora requests) runs exactly once instead
+  // of N times stacked, which previously triggered the 429 cascade we
+  // saw in dev.
+  let syncPromise = null;
   let lastActivityAt = 0;
   let rateLimitUntil = 0;
   let lastScanAt = 0;
   let appliedCachedUpdate = false;
+  // Index into the provider list (see DEFAULT_PROVIDERS_MAINNET) of the most
+  // recent provider that returned a successful scan. Persists for the lifetime
+  // of this module instance so consecutive syncs don't retry known-failing
+  // providers first. Reset on module recreate (page reload).
+  let lastGoodProviderIndex = 0;
+  // Periodic-rediscovery counter. Without this, if provider[0] (Blockstream)
+  // 429s on the first sync of a session, we stick to the fallback forever
+  // even after Blockstream recovers. Every N successful syncs we force the
+  // next attempt to start at index 0 so a transient 429 doesn't produce a
+  // permanent demotion of the preferred provider for the rest of the session.
+  let syncsSinceLastRediscovery = 0;
+  const REDISCOVERY_INTERVAL = 10;
 
   function db() {
     if (!dbPromise) dbPromise = openDb(indexedDbImpl);
@@ -147,7 +228,12 @@ export function createWalletModule({
 
   async function hasWallet() {
     const database = await db();
-    return storeHasCredentials(database);
+    const exists = await storeHasCredentials(database);
+    // Backfill the lazy flag for installs that pre-date it: if IDB has a
+    // wallet but the flag is missing (older app version, first run post-
+    // upgrade), set it so subsequent #home visits skip the bundle download.
+    if (exists) markWalletExists();
+    return exists;
   }
 
   async function hasBiometric() {
@@ -215,6 +301,7 @@ export function createWalletModule({
       wrappedSeedKey: null,
       createdAt: getNow()
     });
+    markWalletExists();
 
     let biometric = null;
     if (enrollBiometric) {
@@ -265,9 +352,11 @@ export function createWalletModule({
     // state, check for mismatch, then actually unlock only if it matches.
     const l2 = await lwk();
     const net2 = makeNetwork(l2, network);
-    const { signer: probeSigner, descriptor: probeDesc } = buildDescriptorFromMnemonic(l2, mnemonicStr, net2);
+    const { signer: probeSigner, mnemonic: probeMnemonic, descriptor: probeDesc } = buildDescriptorFromMnemonic(l2, mnemonicStr, net2);
     const descriptorStr = probeDesc.toString();
     if (probeSigner?.free) { try { probeSigner.free(); } catch { /* best effort */ } }
+    if (probeDesc?.free) { try { probeDesc.free(); } catch { /* best effort */ } }
+    if (probeMnemonic?.free) { try { probeMnemonic.free(); } catch { /* best effort */ } }
 
     const existing = await readCredentials(database);
     if (existing?.descriptor && existing.descriptor !== descriptorStr) {
@@ -296,6 +385,7 @@ export function createWalletModule({
       wrappedSeedKey: null,
       createdAt: existing?.createdAt ?? getNow()
     });
+    markWalletExists();
 
     let biometric = null;
     if (enrollBiometric) {
@@ -359,6 +449,7 @@ export function createWalletModule({
       if (attempts >= MAX_PIN_ATTEMPTS) {
         await wipeSensitiveCredentials(database);
         zeroInMemory();
+        clearWalletExistsFlag();
         rateLimitUntil = 0;
         throw new WalletError(
           ERROR_CODES.WALLET_WIPED,
@@ -492,49 +583,181 @@ export function createWalletModule({
     return wollet;
   }
 
-  async function esploraClient(l, net) {
+  // Resolve the provider list. Priority:
+  //   1. `esploraProviders` — explicit array of {name, url}. Tests use this.
+  //   2. `esploraUrl` — legacy single-URL override. Wrapped in a 1-item list.
+  //   3. `DEFAULT_PROVIDERS_MAINNET` on mainnet; empty on other networks
+  //      (LWK picks its own default client).
+  function resolveProviders() {
+    if (Array.isArray(esploraProviders) && esploraProviders.length > 0) {
+      return esploraProviders;
+    }
+    if (esploraUrl) {
+      return [{ name: "custom", url: esploraUrl }];
+    }
+    if (network === "mainnet") return DEFAULT_PROVIDERS_MAINNET;
+    return [];
+  }
+
+  // Build one EsploraClient for a specific provider. Concurrency=1 keeps a
+  // gap-limit scan (~40 address lookups) serial so bursts don't trip per-IP
+  // limits, which previously wedged LWK in an internal retry loop. The
+  // injected `esploraClientFactory` gets the provider metadata so tests can
+  // fan out per-provider behavior.
+  async function buildEsploraClient(l, net, provider) {
     if (typeof esploraClientFactory === "function") {
-      return esploraClientFactory(l, net);
+      return esploraClientFactory(l, net, provider);
     }
-    const url = esploraUrl ?? (network === "mainnet" ? DEFAULT_ESPLORA_URL_MAINNET : null);
-    if (!url) {
-      // Let LWK pick its default for non-mainnet networks (testnet, regtest).
-      return net.defaultEsploraClient();
+    return new l.EsploraClient(net, provider.url, false, 1, false);
+  }
+
+  // Outer wall-clock guard on a single provider's fullScan. LWK 0.16.x retries
+  // 429s internally without surfacing the error, which can wedge the promise
+  // forever. We cap each provider attempt at 60s; the synthetic error message
+  // contains "rate limit" so isRateLimitError() classifies it and the
+  // fallback loop moves on to the next provider.
+  //
+  // 60s (not 30s) tolerates legitimately slow scans on bad mobile networks —
+  // a fresh wallet's ~40-address gap-limit serial scan can genuinely take
+  // 40-50s on congested 3G/4G without any rate-limit involvement. A 30s
+  // timeout in that scenario would false-positive into the exponential
+  // backoff, stranding the user in a 10-min cool-down when their only
+  // "problem" was a slow cell tower. The cost is a higher worst-case
+  // wait (2 providers × 60s = 120s) when both upstreams are genuinely
+  // hung, but the cached balance stays on screen the whole time and the
+  // "Tentar novamente" CTA lets users escape the wait manually.
+  //
+  // Overridable via the `syncTimeoutMs` option so tests can assert the
+  // timeout path deterministically without 60s real-time waits.
+  const SYNC_TIMEOUT_MS = typeof syncTimeoutMs === "number" ? syncTimeoutMs : 60_000;
+
+  // Run fullScan against one client, enforced by the 30s timeout. Returns the
+  // Update on success; throws the underlying error on failure (the caller
+  // decides whether to fall through to the next provider or surface it).
+  async function runSingleScan(client, w) {
+    let timer;
+    try {
+      return await Promise.race([
+        client.fullScan(w),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => {
+            reject(new Error(`fullScan timed out after ${SYNC_TIMEOUT_MS}ms — upstream likely rate limit`));
+          }, SYNC_TIMEOUT_MS);
+        })
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
     }
-    return new l.EsploraClient(net, url, false, 4, false);
   }
 
   // Drives a fresh Esplora scan and persists the resulting Update blob so
-  // the next mount can paint immediately. Idempotent; the UI calls it on
-  // mount and on a 30s timer while the view is visible.
-  async function syncWallet() {
+  // the next mount can paint immediately. Dedup'd via `syncPromise` — a
+  // second caller while the first is in-flight receives the same promise
+  // instead of starting a parallel scan. This prevents the 429 cascade
+  // where mount + 30s timer + visibilitychange stacked 3 concurrent
+  // fullScans (~40 Esplora requests each) on the same addresses.
+  //
+  // Falls through a provider list (DEFAULT_PROVIDERS_MAINNET by default):
+  // each provider gets one 30s attempt; rate-limit or network error moves
+  // to the next. Returns as soon as any provider succeeds, and records the
+  // winning index so the next sync starts there (warm path). Throws only
+  // if every provider fails — ESPLORA_RATE_LIMITED if at least one was
+  // rate-limited (UI triggers backoff), ESPLORA_UNAVAILABLE otherwise.
+  function syncWallet() {
+    if (syncPromise) return syncPromise;
+    syncPromise = syncWalletInner().finally(() => {
+      syncPromise = null;
+    });
+    return syncPromise;
+  }
+
+  async function syncWalletInner() {
     const w = await ensureViewWollet();
     const l = await lwk();
     const net = makeNetwork(l, network);
-    let client;
-    try {
-      client = await esploraClient(l, net);
-    } catch (err) {
-      throw new WalletError(
-        ERROR_CODES.ESPLORA_UNAVAILABLE,
-        "Failed to create Esplora client",
-        err
-      );
-    }
-    let update;
-    try {
-      update = await client.fullScan(w);
-    } catch (err) {
-      throw new WalletError(
-        ERROR_CODES.ESPLORA_UNAVAILABLE,
-        "Failed to sync with Esplora",
-        err
-      );
-    } finally {
-      if (client?.free) {
-        try { client.free(); } catch { /* best effort */ }
+    const providers = resolveProviders();
+
+    // Degenerate case: no provider list (non-mainnet without override). Use
+    // LWK's network-default client and preserve the old single-attempt
+    // semantics — still guarded by the 30s timeout.
+    if (providers.length === 0) {
+      const client = await net.defaultEsploraClient();
+      try {
+        const update = await runSingleScan(client, w);
+        return await persistScan(w, update);
+      } catch (err) {
+        if (isRateLimitError(err)) {
+          throw new WalletError(ERROR_CODES.ESPLORA_RATE_LIMITED, "Esplora rate-limited the sync (HTTP 429)", err);
+        }
+        throw new WalletError(ERROR_CODES.ESPLORA_UNAVAILABLE, "Failed to sync with Esplora", err);
+      } finally {
+        if (client?.free) {
+          try { client.free(); } catch { /* best effort */ }
+        }
       }
     }
+
+    // Start from the last provider we saw succeed (or 0 on cold start), then
+    // wrap around. Every REDISCOVERY_INTERVAL syncs we force startIndex=0 so
+    // a once-failed preferred provider eventually gets re-tested after
+    // recovery — otherwise a single 429 on Blockstream at mount time would
+    // demote it for the rest of the session.
+    const forceRediscovery = syncsSinceLastRediscovery >= REDISCOVERY_INTERVAL;
+    const startIndex = forceRediscovery
+      ? 0
+      : Math.min(lastGoodProviderIndex, providers.length - 1);
+    const errors = [];
+    let anyRateLimited = false;
+
+    for (let step = 0; step < providers.length; step++) {
+      const idx = (startIndex + step) % providers.length;
+      const provider = providers[idx];
+      let client;
+      try {
+        client = await buildEsploraClient(l, net, provider);
+      } catch (err) {
+        errors.push({ provider, err });
+        continue;
+      }
+      try {
+        const update = await runSingleScan(client, w);
+        lastGoodProviderIndex = idx;
+        syncsSinceLastRediscovery = forceRediscovery ? 0 : syncsSinceLastRediscovery + 1;
+        return await persistScan(w, update);
+      } catch (err) {
+        if (isRateLimitError(err)) anyRateLimited = true;
+        errors.push({ provider, err });
+      } finally {
+        if (client?.free) {
+          try { client.free(); } catch { /* best effort */ }
+        }
+      }
+    }
+
+    // Every provider failed. Surface rate-limit if any of them hit 429 (so
+    // the UI applies its exponential backoff); otherwise a generic network
+    // error code so the UI shows the cached balance + manual-retry CTA.
+    const lastErr = errors.length > 0 ? errors[errors.length - 1].err : new Error("no providers");
+    const summary = errors.map(e => `${e.provider.name}: ${String(e.err?.message ?? e.err)}`).join(" | ");
+    if (anyRateLimited) {
+      throw new WalletError(
+        ERROR_CODES.ESPLORA_RATE_LIMITED,
+        `All Esplora providers rate-limited (${summary})`,
+        lastErr
+      );
+    }
+    throw new WalletError(
+      ERROR_CODES.ESPLORA_UNAVAILABLE,
+      `All Esplora providers failed (${summary})`,
+      lastErr
+    );
+  }
+
+  // Persist an Update produced by a successful scan and return the result
+  // the caller sees. Factored out of syncWalletInner so both the
+  // provider-fallback loop and the no-provider branch share the same
+  // persistence semantics.
+  async function persistScan(w, update) {
     const scanAt = getNow();
     if (update) {
       w.applyUpdate(update);
@@ -550,14 +773,14 @@ export function createWalletModule({
         try { update.free(); } catch { /* best effort */ }
       }
     } else {
-      // No changes since last scan — still bump the timestamp so the UI
-      // can show "synced N seconds ago" accurately.
+      // No changes since last scan — still bump the timestamp so the UI can
+      // show "synced N seconds ago" accurately. Uses `patchSync` so the read
+      // and write happen in a single IDB transaction; a separate readSync +
+      // writeSync pair would race with a sibling tab that wrote a newer
+      // updateBlob in between, and we'd overwrite it with the stale value.
       try {
         const database = await db();
-        await writeSync(database, {
-          updateBlob: (await readSync(database))?.updateBlob ?? null,
-          lastScanAt: scanAt
-        });
+        await patchSync(database, { lastScanAt: scanAt });
       } catch { /* best effort */ }
     }
     lastScanAt = scanAt;
@@ -613,6 +836,7 @@ export function createWalletModule({
       if (attempts >= MAX_PIN_ATTEMPTS) {
         await wipeSensitiveCredentials(database);
         zeroInMemory();
+        clearWalletExistsFlag();
         rateLimitUntil = 0;
         throw new WalletError(
           ERROR_CODES.WALLET_WIPED,
@@ -637,6 +861,7 @@ export function createWalletModule({
     dbPromise = null;
     database.close();
     await destroyDatabase(indexedDbImpl);
+    clearWalletExistsFlag();
   }
 
   // Updates the biometric enrollment after the wallet was created (e.g. user
@@ -667,6 +892,46 @@ export function createWalletModule({
   async function generateMnemonic() {
     const l = await lwk();
     return l.Mnemonic.fromRandom(12).toString();
+  }
+
+  // Derive the wallet's CT descriptor from a mnemonic WITHOUT persisting or
+  // unlocking. Used by the onboarding UI to show a fingerprint of the wallet
+  // identity on the seed-display screen (so the user writes it down alongside
+  // the 12 words) and on the restore confirmation screen (so the user verifies
+  // the restored wallet matches what they wrote down).
+  //
+  // Same validation contract as validateMnemonic — throws INVALID_MNEMONIC on
+  // non-string / empty / bad-checksum input.
+  async function deriveDescriptor(mnemonicStr) {
+    if (typeof mnemonicStr !== "string" || !mnemonicStr.trim()) {
+      throw new WalletError(
+        ERROR_CODES.INVALID_MNEMONIC,
+        "mnemonic must be a non-empty string"
+      );
+    }
+    const l = await lwk();
+    let mnemonicObj;
+    try {
+      mnemonicObj = new l.Mnemonic(mnemonicStr.trim().toLowerCase());
+    } catch (err) {
+      throw new WalletError(
+        ERROR_CODES.INVALID_MNEMONIC,
+        "Invalid BIP39 mnemonic",
+        err
+      );
+    }
+    const net = makeNetwork(l, network);
+    const { signer, mnemonic: innerMnemonic, descriptor } = buildDescriptorFromMnemonic(l, mnemonicObj.toString(), net);
+    const descStr = descriptor.toString();
+    // Free every WASM-owned handle this derivation allocated. The comment
+    // above claims full cleanup — keep it honest: signer, the inner Mnemonic
+    // built by `buildDescriptorFromMnemonic`, the returned descriptor, and
+    // the outer validator-mnemonic all hold WASM memory until .free()'d.
+    if (signer?.free) { try { signer.free(); } catch { /* best effort */ } }
+    if (descriptor?.free) { try { descriptor.free(); } catch { /* best effort */ } }
+    if (innerMnemonic?.free) { try { innerMnemonic.free(); } catch { /* best effort */ } }
+    if (mnemonicObj?.free) { try { mnemonicObj.free(); } catch { /* best effort */ } }
+    return descStr;
   }
 
   // Checksum-validate a user-typed mnemonic WITHOUT persisting or unlocking.
@@ -893,30 +1158,52 @@ export function createWalletModule({
         err
       );
     }
-    let client;
-    try {
-      client = await esploraClient(l, net);
-    } catch (err) {
-      throw new WalletError(
-        ERROR_CODES.ESPLORA_UNAVAILABLE,
-        "Failed to create Esplora client",
-        err
-      );
+    // Broadcast through the same provider list used by syncWallet. Prefer the
+    // last-good provider (set by the sync loop), fall through to the rest on
+    // network/rate-limit failure, and surface BROADCAST_FAILED only after every
+    // provider refused the tx — a broadcast refused by the first provider but
+    // accepted by the second is still a successful broadcast.
+    const providers = resolveProviders();
+    let txidStr = null;
+    const broadcastErrors = [];
+    const startIndex = providers.length > 0
+      ? Math.min(lastGoodProviderIndex, providers.length - 1)
+      : 0;
+    const attempts = providers.length > 0 ? providers.length : 1;
+    for (let step = 0; step < attempts; step++) {
+      const provider = providers.length > 0
+        ? providers[(startIndex + step) % providers.length]
+        : null;
+      let client;
+      try {
+        client = provider
+          ? await buildEsploraClient(l, net, provider)
+          : await net.defaultEsploraClient();
+      } catch (err) {
+        broadcastErrors.push({ provider, err });
+        continue;
+      }
+      try {
+        const txid = await client.broadcast(finalized);
+        txidStr = typeof txid === "string" ? txid : txid?.toString?.() ?? "";
+        break;
+      } catch (err) {
+        broadcastErrors.push({ provider, err });
+      } finally {
+        if (client?.free) {
+          try { client.free(); } catch { /* best effort */ }
+        }
+      }
     }
-    let txidStr;
-    try {
-      const txid = await client.broadcast(finalized);
-      txidStr = typeof txid === "string" ? txid : txid?.toString?.() ?? "";
-    } catch (err) {
+    if (txidStr === null) {
+      const lastErr = broadcastErrors.length > 0
+        ? broadcastErrors[broadcastErrors.length - 1].err
+        : new Error("no providers");
       throw new WalletError(
         ERROR_CODES.BROADCAST_FAILED,
         "Broadcast rejected by the network",
-        err
+        lastErr
       );
-    } finally {
-      if (client?.free) {
-        try { client.free(); } catch { /* best effort */ }
-      }
     }
     touch();
     // Kick off a resync so the new outgoing tx shows up. Failures here are
@@ -936,6 +1223,7 @@ export function createWalletModule({
     isUnlocked,
     generateMnemonic,
     validateMnemonic,
+    deriveDescriptor,
     createWallet,
     restoreWallet,
     unlock,

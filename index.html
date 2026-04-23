@@ -6,7 +6,7 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
   <meta name="description" content="Aceite Pix, receba DePix. A forma mais simples de receber pagamentos e proteger seu dinheiro." />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-CfhkB0t1w4huapj30hvuB91Yj3BBXM349rph5EzFxd4=' https://challenges.cloudflare.com; img-src 'self' data: https://depix.eulen.app https://eulen.app https://response.eulen.app https://img.depixapp.com; connect-src 'self' https://depix-backend.vercel.app https://*.r2.cloudflarestorage.com https://blockstream.info; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; frame-src https://brswap.me https://challenges.cloudflare.com; trusted-types 'none'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-CfhkB0t1w4huapj30hvuB91Yj3BBXM349rph5EzFxd4=' https://challenges.cloudflare.com; img-src 'self' data: https://depix.eulen.app https://eulen.app https://response.eulen.app https://img.depixapp.com; connect-src 'self' https://depix-backend.vercel.app https://*.r2.cloudflarestorage.com https://blockstream.info https://liquid.network; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; frame-src https://brswap.me https://challenges.cloudflare.com; trusted-types 'none'" />
   <meta name="theme-color" content="#0a0f14" />
 
   <link rel="canonical" href="https://depixapp.com/" />
@@ -142,16 +142,16 @@
   }
   </script>
 
-  <link rel="manifest" href="manifest.json?v=129" />
-  <link rel="icon" href="icon-192.png?v=129" />
-  <link rel="apple-touch-icon" href="icon-192.png?v=129" />
+  <link rel="manifest" href="manifest.json?v=131" />
+  <link rel="icon" href="icon-192.png?v=131" />
+  <link rel="apple-touch-icon" href="icon-192.png?v=131" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
   <!-- Asset version must match APP_VERSION in service-worker.js -->
-  <link rel="stylesheet" href="style.css?v=129" />
+  <link rel="stylesheet" href="style.css?v=131" />
 </head>
 <body>
 
@@ -160,7 +160,7 @@
 
   <nav class="landing-nav">
     <div class="landing-nav-inner">
-      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=129" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
+      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=131" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
       <div class="landing-nav-right">
         <a href="https://blog.depixapp.com/" class="landing-nav-link">Blog</a>
         <a href="#login" class="landing-nav-cta">Entrar</a>
@@ -911,9 +911,28 @@
     <!-- ===== TELA: MINHA CARTEIRA (view-only, Liquid) ===== -->
     <div id="telaCarteira" class="hidden">
       <div class="wallet-home-total">
-        <span class="wallet-home-total-label">Saldo total</span>
-        <strong id="wallet-home-total-brl" class="wallet-home-total-value">R$ —</strong>
-        <span id="wallet-home-sync-state" class="wallet-home-sync-state" aria-live="polite"></span>
+        <div class="wallet-home-total-main">
+          <span class="wallet-home-total-label">Saldo total</span>
+          <strong id="wallet-home-total-brl" class="wallet-home-total-value">R$ —</strong>
+        </div>
+        <div class="wallet-home-total-actions">
+          <button id="wallet-home-transactions" class="wallet-home-icon-btn" type="button" aria-label="Histórico" title="Histórico">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </button>
+          <button id="wallet-home-settings" class="wallet-home-icon-btn" type="button" aria-label="Configurações da carteira" title="Configurações da carteira">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+          </button>
+        </div>
+        <div class="wallet-home-sync-row">
+          <span id="wallet-home-sync-state" class="wallet-home-sync-state" aria-live="polite"></span>
+          <button id="wallet-home-sync-retry" class="wallet-home-sync-retry hidden" type="button">Tentar novamente</button>
+        </div>
       </div>
 
       <div id="wallet-home-assets" class="wallet-home-assets" aria-label="Saldos por ativo">
@@ -936,11 +955,6 @@
       </div>
 
       <div id="wallet-home-msg" class="mensagem"></div>
-
-      <div class="wallet-home-links">
-        <button id="wallet-home-transactions" class="link-btn" type="button">Histórico</button>
-        <button id="wallet-home-settings" class="link-btn" type="button">Configurações da carteira</button>
-      </div>
     </div>
 
   </div>
@@ -2020,8 +2034,8 @@
   <div class="card">
     <h2 class="view-title">Vamos criar sua carteira</h2>
     <p class="info-text">Sua carteira é protegida por 12 palavras que só você tem. Anote em papel — <strong>não tire print, não escreva em nota do celular</strong>.</p>
-    <p class="info-text">Celular pode ser roubado, hackeado, quebrado ou o app pode ser desinstalado. Se isso acontecer, as 12 palavras no papel são a única forma de recuperar seu dinheiro.</p>
-    <p class="info-text wallet-warning">No iPhone, quando você instala o app na tela inicial, os dados da carteira <strong>não</strong> entram no backup do iCloud. Trocou de celular? Se você não tem as 12 palavras, perde o acesso.</p>
+    <p class="info-text">Celular pode ser roubado, hackeado, quebrado ou o app pode ser desinstalado. Se isso acontecer, as 12 palavras no papel são a única forma de recuperar seu dinheiro. O DepixApp não consegue recuperar acesso ao seu dinheiro, só você consegue fazer isso, através das suas 12 palavras anotadas em papel e guardadas em local seguro.</p>
+    <p class="info-text wallet-warning">No iPhone, quando você instala o app na tela inicial, os dados da carteira <strong>não</strong> entram no backup do iCloud. Trocou de celular? Se você não tem as 12 palavras, perdeu o acesso ao seu dinheiro.</p>
 
     <label class="wallet-consent-row">
       <input type="checkbox" id="wallet-create-consent-1" />
@@ -2046,6 +2060,15 @@
 
     <div id="wallet-create-seed-grid" class="wallet-seed-grid" role="list"></div>
 
+    <div class="wallet-identity-card">
+      <div class="wallet-identity-header">
+        <span class="wallet-identity-label">Identidade da carteira</span>
+        <button id="wallet-create-identity-help" class="icon-btn-sm" aria-label="O que é a identidade da carteira?">?</button>
+      </div>
+      <div id="wallet-create-identity-value" class="wallet-identity-value mono" aria-live="polite">…</div>
+      <p class="info-text wallet-identity-hint">Anote essa identidade junto com as 12 palavras. Ela ajuda a conferir a carteira quando você precisar restaurar.</p>
+    </div>
+
     <div id="wallet-create-seed-msg" class="mensagem"></div>
     <button id="wallet-create-seed-continue" style="width:100%;margin-top:12px">Já anotei em papel, próximo</button>
     <button id="wallet-create-seed-back" class="secondary" style="width:100%;margin-top:8px">Voltar</button>
@@ -2069,6 +2092,16 @@
     <h2 id="wallet-create-verify-modal-title">Revise sua anotação</h2>
     <p class="info-text">Você precisa anotar suas 12 palavras em papel e guardar em local seguro. Elas são a única forma de recuperar sua carteira. Revise sua anotação agora.</p>
     <button id="wallet-create-verify-modal-dismiss" style="width:100%;margin-top:12px">Entendi</button>
+  </div>
+</div>
+
+<div id="wallet-identity-info-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="wallet-identity-info-modal-title">
+  <div class="modal-box">
+    <h2 id="wallet-identity-info-modal-title">O que é a identidade da carteira?</h2>
+    <p class="info-text">É um código curto (8 caracteres) que funciona como uma <strong>impressão digital pública</strong> da sua carteira. É gerado automaticamente a partir das suas 12 palavras.</p>
+    <p class="info-text" style="margin-top:10px"><strong>Posso compartilhar?</strong> Sim, tranquilamente. Ela não dá acesso ao seu dinheiro — só as 12 palavras dão.</p>
+    <p class="info-text" style="margin-top:10px"><strong>Pra que serve?</strong> Se um dia você precisar restaurar a carteira, o app mostra a identidade gerada das 12 palavras digitadas. Se bater com a que você anotou, é sua carteira mesmo. Se não bater, alguma palavra foi anotada errada.</p>
+    <button id="wallet-identity-info-close" class="secondary" style="width:100%;margin-top:16px">Entendi</button>
   </div>
 </div>
 
@@ -2122,6 +2155,22 @@
     <div id="wallet-restore-input-msg" class="mensagem"></div>
     <button id="wallet-restore-input-continue" style="width:100%;margin-top:12px">Validar e avançar</button>
     <button id="wallet-restore-input-back" class="secondary" style="width:100%;margin-top:8px">Cancelar</button>
+  </div>
+</section>
+
+<section data-view="wallet-restore-confirm-identity" class="page hidden">
+  <div class="card">
+    <h2 class="view-title">Confira sua carteira</h2>
+    <p class="info-text">Essas 12 palavras geraram a carteira com a identidade abaixo. Compare com a identidade que você anotou junto com as 12 palavras.</p>
+    <div class="wallet-identity-card">
+      <div class="wallet-identity-header">
+        <span class="wallet-identity-label">Identidade gerada</span>
+        <button id="wallet-restore-identity-help" class="icon-btn-sm" aria-label="O que é a identidade da carteira?">?</button>
+      </div>
+      <div id="wallet-restore-confirm-identity-value" class="wallet-identity-value mono" aria-live="polite">…</div>
+    </div>
+    <button id="wallet-restore-confirm-yes" style="width:100%;margin-top:12px">Sim, é a minha carteira</button>
+    <button id="wallet-restore-confirm-back" class="secondary" style="width:100%;margin-top:8px">Voltar e corrigir</button>
   </div>
 </section>
 
@@ -2195,10 +2244,10 @@
     <h2 class="view-title">Movimentações da carteira</h2>
 
     <div class="wallet-tx-filters" role="radiogroup" aria-label="Filtrar por ativo">
-      <button class="wallet-tx-pill active" data-wallet-filter="all" type="button">Todos</button>
-      <button class="wallet-tx-pill" data-wallet-filter="DEPIX" type="button">DePix</button>
-      <button class="wallet-tx-pill" data-wallet-filter="USDT" type="button">USDt</button>
-      <button class="wallet-tx-pill" data-wallet-filter="LBTC" type="button">L-BTC</button>
+      <button class="wallet-tx-pill active" data-wallet-filter="all" type="button" role="radio" aria-checked="true">Todos</button>
+      <button class="wallet-tx-pill" data-wallet-filter="DEPIX" type="button" role="radio" aria-checked="false">DePix</button>
+      <button class="wallet-tx-pill" data-wallet-filter="USDT" type="button" role="radio" aria-checked="false">USDt</button>
+      <button class="wallet-tx-pill" data-wallet-filter="LBTC" type="button" role="radio" aria-checked="false">L-BTC</button>
     </div>
 
     <div id="wallet-tx-msg" class="mensagem"></div>
@@ -2385,10 +2434,18 @@
 <div id="wallet-export-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="wallet-export-title">
   <div class="modal-box">
     <h2 id="wallet-export-title">Backup das 12 palavras</h2>
-    <p class="info-text">Digite seu PIN. As palavras serão mostradas apenas nesta tela — anote em papel antes de fechar.</p>
-    <label for="wallet-export-pin">PIN</label>
-    <input id="wallet-export-pin" type="password" inputmode="numeric" pattern="\d*" autocomplete="off" maxlength="6" />
+    <p id="wallet-export-intro" class="info-text">Digite seu PIN. As palavras serão mostradas apenas nesta tela — anote em papel antes de fechar.</p>
+    <div id="wallet-export-pin-wrap">
+      <label for="wallet-export-pin">PIN</label>
+      <input id="wallet-export-pin" type="password" inputmode="numeric" pattern="\d*" autocomplete="off" maxlength="6" />
+    </div>
     <div id="wallet-export-words" class="wallet-seed-grid hidden" style="margin-top:12px"></div>
+    <div id="wallet-export-identity" class="wallet-identity-card hidden" style="margin-top:12px">
+      <div class="wallet-identity-header">
+        <span class="wallet-identity-label">Identidade da carteira</span>
+      </div>
+      <div id="wallet-export-identity-value" class="wallet-identity-value mono" aria-live="polite">…</div>
+    </div>
     <div id="wallet-export-msg" class="mensagem"></div>
     <div class="wallet-action-row">
       <button id="wallet-export-cancel" class="secondary">Fechar</button>
@@ -3006,6 +3063,6 @@
 
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 <!-- Asset version must match APP_VERSION in service-worker.js -->
-<script type="module" src="script.js?v=129"></script>
+<script type="module" src="script.js?v=131"></script>
 </body>
 </html>

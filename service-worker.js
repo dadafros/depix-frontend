@@ -1,6 +1,6 @@
 // Service Worker — DePix PWA
 // Bump APP_VERSION on every release. Keep in sync with ?v= query strings in index.html.
-const APP_VERSION = 129;
+const APP_VERSION = 131;
 const CACHE_NAME = `depix-v${APP_VERSION}`;
 
 // Timeout for WASM fetch before falling back to cache. WASM binaries are large
@@ -27,6 +27,17 @@ const JS_MODULES = [
   "wallet-bundle-loader.js"
 ];
 
+// Brand logos for the wallet asset rows. DePix reuses icon-192.png above
+// (the app icon IS the DePix brand). The liquid-tether SVG + liquid-bitcoin
+// PNG are vendored from the official Blockstream / BTCPay artwork so the
+// wallet home shows the same logos users recognise from other Liquid apps.
+// Referenced from wallet/asset-registry.js with origin-absolute paths.
+const ICON_FILES = [
+  "icons/depix.png",
+  "icons/liquid-tether.svg",
+  "icons/liquid-bitcoin.png"
+];
+
 const STATIC_FILES = [
   "./",
   "./index.html",
@@ -36,7 +47,8 @@ const STATIC_FILES = [
   `./icon-192.png?v=${APP_VERSION}`,
   `./icon-512.png?v=${APP_VERSION}`,
   ...JS_MODULES.map(f => `./${f}?v=${APP_VERSION}`),
-  ...JS_MODULES.map(f => `./${f}`)
+  ...JS_MODULES.map(f => `./${f}`),
+  ...ICON_FILES.map(f => `./${f}`)
 ];
 
 // Install — cache all static assets and activate immediately

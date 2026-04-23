@@ -4431,6 +4431,47 @@ textarea:focus {
   -webkit-user-select: none;
 }
 
+/* Wallet identity fingerprint (XXXX-XXXX).
+   Public value — the user can copy it to compare, unlike the seed words
+   which are explicitly `user-select: none`. Font size is intentionally
+   large because it's only 9 characters (incl. hyphen) and legibility on
+   paper transcription dominates. */
+.wallet-identity-card {
+  background: rgba(56, 227, 172, 0.06);
+  border: 1px solid rgba(56, 227, 172, 0.14);
+  border-radius: 10px;
+  padding: 12px;
+  margin-top: 16px;
+}
+.wallet-identity-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.wallet-identity-label {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.wallet-identity-value {
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 22px;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding: 8px 0;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.wallet-identity-hint {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  margin: 10px 0 0;
+  line-height: 1.4;
+}
+
 /* Verification — create flow */
 .wallet-verify-block {
   margin: 14px 0;
@@ -4555,15 +4596,57 @@ textarea:focus {
 
 /* ===== Wallet home (view-only Liquid dashboard) ===== */
 .wallet-home-total {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  /* Row 1: label + value (left) · icon buttons (right).
+     Row 2: sync-state spans both columns so it can center across the
+     full card width instead of only within the left-hand main column. */
+  gap: 8px 12px;
   padding: 16px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-accent);
   border-radius: 14px;
   margin-bottom: 16px;
+}
+.wallet-home-total-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.wallet-home-total-actions {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  justify-self: end;
+}
+/* History + Settings icons inside the balance card. Override the global
+   `input, button { width: 100%; margin-bottom: 12px; padding: 14px }`
+   rule so the icons stay square and compact. */
+.wallet-home-icon-btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  margin-bottom: 0;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.18s, color 0.18s, border-color 0.18s;
+}
+.wallet-home-icon-btn:hover:not(:disabled) {
+  background: var(--bg-elevated-hover);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.wallet-home-icon-btn svg {
+  width: 18px;
+  height: 18px;
 }
 .wallet-home-total-label {
   font-size: 0.78rem;
@@ -4577,12 +4660,51 @@ textarea:focus {
   color: var(--text-primary);
   letter-spacing: -0.02em;
 }
+/* Row 2 of the balance card — sync status text + optional retry pill. The
+   row spans both grid columns (label+value · icon-buttons) so it centers
+   across the card instead of only the left half. */
+.wallet-home-sync-row {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
 .wallet-home-sync-state {
+  text-align: center;
   font-size: 0.72rem;
   color: var(--text-tertiary);
 }
+.wallet-home-sync-state:empty {
+  display: none;
+}
 .wallet-home-sync-state.error {
   color: var(--color-warning);
+}
+/* "Tentar novamente" pill shown only when all Esplora providers fail. The
+   `width: auto; margin-bottom: 0` cancel the global `input, button
+   { width: 100%; margin-bottom: 12px }` so the pill sizes to its text
+   instead of consuming the whole row. */
+.wallet-home-sync-retry {
+  width: auto;
+  margin-bottom: 0;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s, border-color 0.18s;
+}
+.wallet-home-sync-retry:hover:not(:disabled) {
+  background: var(--bg-elevated-hover);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.wallet-home-sync-retry:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .wallet-home-assets {
@@ -4604,15 +4726,12 @@ textarea:focus {
   flex-shrink: 0;
   width: 36px;
   height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: var(--accent-subtle);
-  color: var(--accent);
-  font-family: 'Space Grotesk', system-ui, sans-serif;
-  font-weight: 600;
-  font-size: 0.8rem;
+  /* No background + no clip. Brand logos (Tether pin, Liquid-Bitcoin
+     teardrop, DePix full-brand mark) have their own silhouettes with
+     transparent corners — clipping to a circle was chopping off the
+     pin/teardrop tips and the dark backdrop was bleeding through every
+     transparent pixel. `contain` keeps the full logo inside the box. */
+  object-fit: contain;
 }
 .wallet-home-asset-body {
   flex: 1;
@@ -4682,20 +4801,16 @@ textarea:focus {
   color: var(--accent);
 }
 
-.wallet-home-links {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 12px;
-  border-top: 1px solid var(--border-subtle);
-  padding-top: 12px;
-}
+/* Generic link-style button used in modals + auxiliary flows (e.g. "Usar PIN"
+   fallback inside the unlock modal). Sized to content to avoid the global
+   `input, button { width: 100% }` rule. */
 .link-btn {
+  width: auto;
+  margin-bottom: 0;
   background: none;
   border: none;
   color: var(--accent);
   font-size: 0.9rem;
-  text-align: left;
   padding: 6px 0;
   cursor: pointer;
   text-decoration: none;
@@ -4747,6 +4862,10 @@ textarea:focus {
 }
 .wallet-receive-copy {
   flex-shrink: 0;
+  /* override global `input, button { width: 100% }` so this trailing button
+     does not consume the flex row and squeeze the address span to 0. */
+  width: auto;
+  margin-bottom: 0;
   background: var(--accent-subtle);
   color: var(--accent);
   border: none;
@@ -4823,6 +4942,10 @@ textarea:focus {
 }
 .wallet-tx-pill {
   flex-shrink: 0;
+  /* override global `input, button { width: 100% }` — pills must size to
+     content, otherwise each one takes 100% of the row and scrolls forever. */
+  width: auto;
+  margin-bottom: 0;
   padding: 6px 14px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
@@ -4912,9 +5035,16 @@ textarea:focus {
 }
 .wallet-setting-row button {
   flex-shrink: 0;
+  /* override global `input, button { width: 100% }` — trailing action must
+     size to content, otherwise it consumes the flex row and collapses the
+     body text column to ~0, wrapping titles one word per line. */
+  width: auto;
+  margin-bottom: 0;
   padding: 8px 14px;
 }
 .wallet-settings-danger {
+  width: auto;
+  margin-bottom: 0;
   background: rgba(255, 107, 107, 0.12);
   border: 1px solid rgba(255, 107, 107, 0.3);
   color: var(--color-error);
@@ -4925,6 +5055,16 @@ textarea:focus {
 }
 .wallet-settings-danger:hover {
   background: rgba(255, 107, 107, 0.2);
+}
+/* Inside a wallet-action-row (wipe modal), match the sibling .secondary
+   button dimensions so Cancelar and Apagar render at the same height.
+   Without this the compact 8px padding + smaller font-size from the
+   settings-row context makes the danger button visibly shorter than
+   its neighbour. */
+.wallet-action-row .wallet-settings-danger {
+  padding: 14px;
+  border-radius: 10px;
+  font-size: 16px;
 }
 
 /* ===== Wallet send ===== */

@@ -158,6 +158,31 @@ export function classifyLockoutState({
   return "discreet";
 }
 
+/**
+ * Compute the 4-byte SHA-256 fingerprint of a wallet descriptor, formatted
+ * as "XXXX-XXXX" (uppercase hex with a hyphen in the middle).
+ *
+ * Used as a short, human-readable "wallet identity" the user can write down
+ * alongside the 12 seed words. On restore, the same derivation runs and the
+ * user compares visually against their note.
+ *
+ * Space = 2^32 ≈ 4B possibilities — more than enough to distinguish one
+ * wallet from another. Not a BIP standard; the `?` help modal makes clear
+ * it's a DepixApp-generated fingerprint, not a secret.
+ *
+ * Returns "" for empty/non-string input. Async because Web Crypto is async.
+ */
+export async function computeFingerprint(descriptor) {
+  if (typeof descriptor !== "string" || !descriptor) return "";
+  const bytes = new TextEncoder().encode(descriptor);
+  const hash = await crypto.subtle.digest("SHA-256", bytes);
+  const u8 = new Uint8Array(hash, 0, 4);
+  const hex = Array.from(u8)
+    .map(b => b.toString(16).padStart(2, "0").toUpperCase())
+    .join("");
+  return `${hex.slice(0, 4)}-${hex.slice(4)}`;
+}
+
 // --------------------------------------------------------------------------
 // DOM registration.
 // --------------------------------------------------------------------------
@@ -227,6 +252,7 @@ export function registerWalletRoutes({
   const state = {
     pendingMnemonic: null,
     pendingPin: null,
+    pendingDescriptor: null, // set by restore "Validar e avançar"; consumed by confirm-identity
     challenge: null, // { positions: number[], options: string[][], answered: boolean[] }
     restoreWords: new Array(12).fill(""),
     error: ""
@@ -235,6 +261,7 @@ export function registerWalletRoutes({
   function resetFlowState() {
     state.pendingMnemonic = null;
     state.pendingPin = null;
+    state.pendingDescriptor = null;
     state.challenge = null;
     state.restoreWords = new Array(12).fill("");
     state.error = "";
@@ -313,9 +340,9 @@ export function registerWalletRoutes({
   });
 
   // ====================================================================
-  // #wallet-create-seed — render the 12 words in a grid.
+  // #wallet-create-seed — render the 12 words in a grid + wallet identity.
   // ====================================================================
-  route("#wallet-create-seed", () => {
+  route("#wallet-create-seed", async () => {
     const grid = q("wallet-create-seed-grid");
     if (!grid) return;
     clearMsg("wallet-create-seed-msg");
@@ -340,6 +367,21 @@ export function registerWalletRoutes({
       cell.appendChild(w);
       grid.appendChild(cell);
     });
+    // Derive + show the wallet identity fingerprint alongside the 12 words
+    // so the user writes both down in one go. LWK is already loaded (the
+    // intro click awaited generateMnemonic), so this is effectively free.
+    const identityEl = q("wallet-create-identity-value");
+    if (identityEl) {
+      identityEl.textContent = "…";
+      try {
+        const descriptor = await wallet.deriveDescriptor(state.pendingMnemonic);
+        identityEl.textContent = await computeFingerprint(descriptor);
+      } catch {
+        // The 12 words are the primary artifact — never let an identity
+        // failure block the seed display. Fall back to a discreet placeholder.
+        identityEl.textContent = "—";
+      }
+    }
   });
 
   q("wallet-create-seed-continue")?.addEventListener("click", () => {
@@ -722,14 +764,18 @@ export function registerWalletRoutes({
       btn.textContent = "Validando…";
     }
     try {
-      await wallet.validateMnemonic(mnemonicStr);
+      // deriveDescriptor does everything validateMnemonic does (checksum)
+      // plus gives us the descriptor we need for the identity confirmation
+      // screen. Single call, no double-parse.
+      const descriptor = await wallet.deriveDescriptor(mnemonicStr);
       state.pendingMnemonic = mnemonicStr;
-      navigate("#wallet-restore-pin");
+      state.pendingDescriptor = descriptor;
+      navigate("#wallet-restore-confirm-identity");
     } catch (err) {
       if (isWalletError(err, ERROR_CODES.INVALID_MNEMONIC)) {
         showMsg(
           "wallet-restore-input-msg",
-          "Uma ou mais das 12 palavras está errada. Confira sua anotação e tente novamente.",
+          "Essa combinação de 12 palavras não passou na verificação. Quase sempre é um erro de digitação ou de ordem — confira cada palavra com sua anotação.",
           "error"
         );
       } else {
@@ -745,6 +791,44 @@ export function registerWalletRoutes({
 
   q("wallet-restore-input-back")?.addEventListener("click", () => {
     navigate("#wallet-gate");
+  });
+
+  // ====================================================================
+  // #wallet-restore-confirm-identity — show the derived fingerprint and
+  // ask the user to verify it matches what they wrote down before the
+  // restore actually persists a new wallet. Closes the 1-in-16 BIP39
+  // false-positive gap: a typo that happens to checksum correctly will
+  // still produce a different fingerprint from what the user noted.
+  // ====================================================================
+  route("#wallet-restore-confirm-identity", async () => {
+    if (!state.pendingDescriptor) {
+      // Direct hash entry (bookmark / URL edit) — nothing to confirm.
+      navigate("#wallet-restore-input");
+      return;
+    }
+    const el = q("wallet-restore-confirm-identity-value");
+    if (el) {
+      el.textContent = "…";
+      try {
+        el.textContent = await computeFingerprint(state.pendingDescriptor);
+      } catch {
+        el.textContent = "—";
+      }
+    }
+  });
+
+  q("wallet-restore-confirm-yes")?.addEventListener("click", () => {
+    navigate("#wallet-restore-pin");
+  });
+
+  q("wallet-restore-confirm-back")?.addEventListener("click", () => {
+    // State preserved: restoreWords stay, pendingDescriptor stays (will be
+    // recomputed on next "Validar e avançar" if the user edits a word).
+    // The input screen reads state.error on render — surface a hint so the
+    // user knows why they came back (otherwise the screen looks neutral and
+    // the click seems unacknowledged).
+    state.error = "A identidade gerada não bateu com a que você anotou. Revise cada palavra — uma pequena diferença muda toda a carteira.";
+    navigate("#wallet-restore-input");
   });
 
   // ====================================================================
@@ -794,7 +878,7 @@ export function registerWalletRoutes({
         // though it is about the 12 words. Send them back to the input
         // screen with an unambiguous message (plan Sub-fase 3 Restore
         // Tela 1: "Combinação inválida" is the intended copy THERE).
-        state.error = "Uma ou mais das 12 palavras está errada. Confira sua anotação e tente novamente.";
+        state.error = "Essa combinação de 12 palavras não passou na verificação. Quase sempre é um erro de digitação ou de ordem — confira cada palavra com sua anotação.";
         navigate("#wallet-restore-input");
       } else if (isWalletError(err, ERROR_CODES.DESCRIPTOR_MISMATCH)) {
         // Plan Sub-fase 3 calls for a Continue/Cancel modal on the input
@@ -876,6 +960,7 @@ export function registerWalletRoutes({
   route("#wallet-restore-done", () => {
     state.pendingMnemonic = null;
     state.pendingPin = null;
+    state.pendingDescriptor = null;
     state.restoreWords = new Array(12).fill("");
     if (showToast) showToast("Carteira restaurada com sucesso.");
   });
@@ -887,15 +972,36 @@ export function registerWalletRoutes({
   });
 
   // ====================================================================
+  // Wallet identity help modal — opened by the `?` button next to
+  // "Identidade da carteira" on both the create-seed screen and the
+  // restore-confirm-identity screen. One modal, two triggers.
+  // ====================================================================
+  function openIdentityInfoModal() {
+    q("wallet-identity-info-modal")?.classList.remove("hidden");
+  }
+  q("wallet-create-identity-help")?.addEventListener("click", openIdentityInfoModal);
+  q("wallet-restore-identity-help")?.addEventListener("click", openIdentityInfoModal);
+  q("wallet-identity-info-close")?.addEventListener("click", () => {
+    q("wallet-identity-info-modal")?.classList.add("hidden");
+  });
+
+  // ====================================================================
   // Wallet home panel — lives inside #home (telaCarteira). Driven by
   // CustomEvents `wallet-home:mount` / `wallet-home:unmount` dispatched
   // by script.js when the user toggles the 4-mode home switch.
   // ====================================================================
   const SYNC_INTERVAL_MS = 30_000;
+  // Exponential backoff when Esplora rate-limits the wallet (HTTP 429).
+  // Series: 60s → 120s → 240s → 480s → capped at 600s. Reset to 0 on the
+  // first successful sync. The timer respects `nextSyncAllowedAt` and
+  // skips ticks that fall inside the cool-down window.
+  const RATE_LIMIT_BACKOFF_START_MS = 60_000;
+  const RATE_LIMIT_BACKOFF_MAX_MS = 600_000;
   let homeSyncTimer = null;
   let homeMounted = false;
   let homeFilter = "all";
-  let lastBalancesRender = 0;
+  let consecutiveRateLimits = 0;
+  let nextSyncAllowedAt = 0;
 
   function persistHomeMode(mode) {
     try {
@@ -965,19 +1071,33 @@ export function registerWalletRoutes({
     assetsHost.textContent = "";
     let totalBrl = 0;
     let anyBrl = false;
+    // If any asset with a non-zero balance couldn't convert (quote missing),
+    // the partial sum would understate the total by orders of magnitude —
+    // e.g. R$50 DePix + 100 USDt would show "R$ 50" when USDt can't convert.
+    // Render "R$ —" whenever that happens; never a misleading partial.
+    let anyMissingWithBalance = false;
     for (const asset of DISPLAY_ORDER) {
       const sats = balances[asset.id] ?? 0n;
       const brl = convertSatsToBrl(sats, asset, quoteValues);
       if (typeof brl === "number") {
         totalBrl += brl;
         anyBrl = true;
+      } else if (sats > 0n) {
+        anyMissingWithBalance = true;
       }
       const row = d.createElement("div");
       row.className = "wallet-home-asset";
-      const icon = d.createElement("div");
+      // Render the official brand logo via <img>. Source files live at
+      // /icons/* (service-worker pre-cached) or /icon-192.png (DePix).
+      // Set loading="lazy" as a cheap hint; at 36px these are tiny anyway.
+      const icon = d.createElement("img");
       icon.className = "wallet-home-asset-icon";
-      icon.style.background = asset.color;
-      icon.textContent = asset.symbol.charAt(0);
+      icon.src = asset.iconUrl;
+      icon.alt = asset.symbol;
+      icon.width = 36;
+      icon.height = 36;
+      icon.loading = "lazy";
+      icon.decoding = "async";
       const body = d.createElement("div");
       body.className = "wallet-home-asset-body";
       const name = d.createElement("div");
@@ -1003,8 +1123,9 @@ export function registerWalletRoutes({
       row.appendChild(amounts);
       assetsHost.appendChild(row);
     }
-    totalEl.textContent = anyBrl ? formatBrlNumber(totalBrl) : "R$ —";
-    lastBalancesRender = Date.now();
+    totalEl.textContent = (anyBrl && !anyMissingWithBalance)
+      ? formatBrlNumber(totalBrl)
+      : "R$ —";
 
     if (quoteResult?.stale) {
       showMsg("wallet-home-msg", "Cotação com atraso. Valores em BRL podem estar desatualizados.", "warning");
@@ -1019,20 +1140,80 @@ export function registerWalletRoutes({
     if (text && kind) el.classList.add(kind);
   }
 
+  // Show/hide the "Tentar novamente" CTA beneath the sync status copy. We
+  // surface it whenever the last sync failed — cached balance is still on
+  // screen, and a manual retry bypasses the exponential backoff so users
+  // who just switched network (Wi-Fi ⇆ cellular, VPN on/off) don't have
+  // to wait N minutes for the auto-timer.
+  function setRetryCtaVisible(visible) {
+    const btn = q("wallet-home-sync-retry");
+    if (!btn) return;
+    btn.classList.toggle("hidden", !visible);
+    btn.disabled = false;
+  }
+
+  function formatBackoffSeconds(ms) {
+    const s = Math.max(1, Math.round(ms / 1000));
+    if (s < 60) return `${s}s`;
+    const m = Math.round(s / 60);
+    return `${m}min`;
+  }
+
   async function syncAndRender({ background = false } = {}) {
     if (!homeMounted) return;
     if (!background) updateSyncState("Sincronizando…", null);
     try {
       await wallet.syncWallet();
+      // Reset rate-limit state on any successful sync. Any prior 429 series
+      // is considered resolved; the next failure starts backoff from 60s.
+      consecutiveRateLimits = 0;
+      nextSyncAllowedAt = 0;
       updateSyncState("Atualizado agora", "success");
+      setRetryCtaVisible(false);
     } catch (err) {
-      if (isWalletError(err, ERROR_CODES.ESPLORA_UNAVAILABLE)) {
+      if (isWalletError(err, ERROR_CODES.ESPLORA_RATE_LIMITED)) {
+        consecutiveRateLimits++;
+        const backoffMs = Math.min(
+          RATE_LIMIT_BACKOFF_START_MS * 2 ** (consecutiveRateLimits - 1),
+          RATE_LIMIT_BACKOFF_MAX_MS
+        );
+        nextSyncAllowedAt = Date.now() + backoffMs;
+        updateSyncState(
+          `Serviço sobrecarregado. Próxima tentativa em ${formatBackoffSeconds(backoffMs)}.`,
+          "warning"
+        );
+      } else if (isWalletError(err, ERROR_CODES.ESPLORA_UNAVAILABLE)) {
         updateSyncState("Sem conexão com o servidor. Mostrando último saldo conhecido.", "warning");
       } else {
         updateSyncState("Falha na sincronização.", "error");
       }
+      setRetryCtaVisible(true);
     }
     await renderWalletHomeBalances({ background });
+  }
+
+  // Manual retry: user taps "Tentar novamente". Clears the backoff floor
+  // (their explicit intent beats our automatic cool-down) and kicks a fresh
+  // sync. Disables the button while the scan is in-flight so repeated taps
+  // don't stack — the dedup inside wallet.syncWallet() would coalesce them
+  // anyway, but the visual feedback matters.
+  async function onManualRetry() {
+    const btn = q("wallet-home-sync-retry");
+    if (btn) {
+      btn.disabled = true;
+    }
+    nextSyncAllowedAt = 0;
+    consecutiveRateLimits = 0;
+    await syncAndRender({ background: false });
+  }
+
+  // `offsetParent === null` is true whenever any ancestor has `display: none`
+  // (our `.hidden` class), so this catches BOTH a mode switch within #home
+  // AND the router hiding the #home section entirely (navigation to
+  // #wallet-receive etc.). homeMounted alone only flips on mode switch.
+  function isWalletHomeVisible() {
+    const host = q("telaCarteira");
+    return !!host && host.offsetParent !== null;
   }
 
   function startHomeSyncTimer() {
@@ -1041,6 +1222,10 @@ export function registerWalletRoutes({
     homeSyncTimer = w.setInterval(() => {
       if (!homeMounted) return;
       if (d.visibilityState && d.visibilityState !== "visible") return;
+      if (!isWalletHomeVisible()) return;
+      // Respect the rate-limit backoff. Ticks inside the cool-down are
+      // dropped silently; the user already sees "Próxima tentativa em Ns".
+      if (Date.now() < nextSyncAllowedAt) return;
       void syncAndRender({ background: true });
     }, SYNC_INTERVAL_MS);
   }
@@ -1054,14 +1239,31 @@ export function registerWalletRoutes({
 
   async function onWalletHomeMount() {
     homeMounted = true;
+    // Invalidate the receive-address cache so wipe+restore in the same session
+    // never shows an address derived from the previous seed. Module-scoped
+    // cache from the old wallet would otherwise persist until a full reload.
+    cachedReceiveAddress = null;
     showMsg("wallet-home-msg", "", null);
-    updateSyncState("Sincronizando…", null);
     // First paint from the cached Update blob (instant, offline-safe).
     try {
       await renderWalletHomeBalances({ background: true });
     } catch { /* noop */ }
-    // Then trigger a fresh scan in the background.
-    void syncAndRender({ background: false });
+    // If a previous sync left us inside a rate-limit cool-down, surface the
+    // remaining wait instead of triggering a sync that will just 429 again.
+    // Also offer the manual-retry CTA so users who just changed network
+    // (Wi-Fi ⇆ cellular, VPN on/off) can bypass the cool-down.
+    const remainingMs = nextSyncAllowedAt - Date.now();
+    if (remainingMs > 0) {
+      updateSyncState(
+        `Serviço sobrecarregado. Próxima tentativa em ${formatBackoffSeconds(remainingMs)}.`,
+        "warning"
+      );
+      setRetryCtaVisible(true);
+    } else {
+      setRetryCtaVisible(false);
+      updateSyncState("Sincronizando…", null);
+      void syncAndRender({ background: false });
+    }
     startHomeSyncTimer();
   }
 
@@ -1074,11 +1276,12 @@ export function registerWalletRoutes({
     w.addEventListener("wallet-home:mount", () => { void onWalletHomeMount(); });
     w.addEventListener("wallet-home:unmount", () => { onWalletHomeUnmount(); });
     // Also respond to visibility changes so a hidden-then-visible PWA
-    // kicks a fresh sync immediately.
+    // kicks a fresh sync immediately — unless we're in a rate-limit
+    // cool-down, in which case focus-returns shouldn't bypass the backoff.
     d.addEventListener?.("visibilitychange", () => {
-      if (homeMounted && d.visibilityState === "visible") {
-        void syncAndRender({ background: true });
-      }
+      if (!homeMounted || d.visibilityState !== "visible") return;
+      if (Date.now() < nextSyncAllowedAt) return;
+      void syncAndRender({ background: true });
     });
   }
 
@@ -1094,6 +1297,9 @@ export function registerWalletRoutes({
   });
   q("wallet-home-settings")?.addEventListener("click", () => {
     navigate("#wallet-settings");
+  });
+  q("wallet-home-sync-retry")?.addEventListener("click", () => {
+    void onManualRetry();
   });
 
   // ====================================================================
@@ -1279,7 +1485,14 @@ export function registerWalletRoutes({
     try {
       const fn = obj?.[name];
       if (typeof fn === "function") return fn.call(obj);
-    } catch { /* fallthrough */ }
+    } catch (err) {
+      // Log only when the handle actually threw — absent/non-function reads
+      // stay silent (that path is structurally fine). Grep-able prefix so
+      // LWK upgrades that rename balance()/type()/timestamp()/txid() surface
+      // in devtools instead of silently rendering "—"/"tx" (OBS-01 follow-up
+      // will wire a telemetry counter through this signal in Sub-fase 6).
+      console.warn("[wallet-tx] safeCall", name, err);
+    }
     return undefined;
   }
 
@@ -1313,14 +1526,14 @@ export function registerWalletRoutes({
       body.className = "wallet-tx-row-body";
       const type = safeCall(tx, "type") ?? "tx";
       const label = d.createElement("div");
-      label.className = "wallet-tx-row-label";
+      label.className = "wallet-tx-row-title";
       label.textContent = type === "incoming"
         ? "Recebido"
         : type === "outgoing"
           ? "Enviado"
           : String(type);
       const meta = d.createElement("div");
-      meta.className = "wallet-tx-row-meta";
+      meta.className = "wallet-tx-row-sub";
       const ts = safeCall(tx, "timestamp");
       const txid = safeCall(tx, "txid");
       const txidStr = (txid && typeof txid.toString === "function") ? txid.toString() : String(txid ?? "");
@@ -1354,6 +1567,12 @@ export function registerWalletRoutes({
     }
   }
 
+  // Plan Sub-fase 4 preferred "Extrato unificado" (toggle inside #reports).
+  // We shipped the dedicated #wallet-transactions view (plano B) because the
+  // #reports refactor would exceed ~150 LOC — date range, pagination,
+  // CSV/PDF export and polling all live there and would need to branch on
+  // mode. Dedicated view keeps this PR's diff reviewable; future maintainer
+  // can promote to unified extrato if desired without new wallet scope.
   route("#wallet-transactions", () => {
     void renderTransactions();
   });
@@ -1368,7 +1587,11 @@ export function registerWalletRoutes({
       const filter = pill.getAttribute("data-wallet-filter") || "all";
       homeFilter = filter;
       for (const other of d.querySelectorAll("[data-wallet-filter]")) {
-        other.classList.toggle("active", other === pill);
+        const selected = other === pill;
+        other.classList.toggle("active", selected);
+        // Flip aria-checked alongside .active so screen readers announce the
+        // selected state — .active alone is not exposed to the a11y tree.
+        other.setAttribute("aria-checked", selected ? "true" : "false");
       }
       void renderTransactions();
     });
@@ -1488,6 +1711,18 @@ export function registerWalletRoutes({
       words.textContent = "";
       words.classList.add("hidden");
     }
+    // Restore the pre-reveal layout: show PIN input + Cancelar button,
+    // hide the identity fingerprint card, reset intro copy.
+    q("wallet-export-pin-wrap")?.classList.remove("hidden");
+    q("wallet-export-cancel")?.classList.remove("hidden");
+    const identity = q("wallet-export-identity");
+    if (identity) identity.classList.add("hidden");
+    const identityValue = q("wallet-export-identity-value");
+    if (identityValue) identityValue.textContent = "…";
+    const intro = q("wallet-export-intro");
+    if (intro) {
+      intro.textContent = "Digite seu PIN. As palavras serão mostradas apenas nesta tela — anote em papel antes de fechar.";
+    }
     clearMsg("wallet-export-msg");
     const confirm = q("wallet-export-confirm");
     if (confirm) {
@@ -1541,6 +1776,34 @@ export function registerWalletRoutes({
         cell.appendChild(w);
         wordsEl.appendChild(cell);
       });
+      // Post-reveal layout: the PIN input and the duplicate Cancelar
+      // button are no longer useful; hide them so the only prominent
+      // action is the now-relabeled "Fechar" confirm button. Also swap
+      // the intro copy to the anote-em-papel emphasis.
+      q("wallet-export-pin-wrap")?.classList.add("hidden");
+      q("wallet-export-cancel")?.classList.add("hidden");
+      const intro = q("wallet-export-intro");
+      if (intro) {
+        intro.textContent = "Anote em papel antes de fechar. Sem as 12 palavras e sem a identidade da carteira, os fundos não podem ser recuperados.";
+      }
+      // Mirror the create-seed screen: show the wallet identity fingerprint
+      // alongside the 12 words so user writes both down together. Descriptor
+      // is plaintext in IDB, no extra unlock needed.
+      const identityCard = q("wallet-export-identity");
+      const identityValue = q("wallet-export-identity-value");
+      if (identityCard && identityValue) {
+        identityCard.classList.remove("hidden");
+        identityValue.textContent = "…";
+        try {
+          const descriptor = await wallet.getDescriptor();
+          identityValue.textContent = descriptor
+            ? await computeFingerprint(descriptor)
+            : "—";
+        } catch {
+          // Fingerprint is a convenience, never block the word reveal.
+          identityValue.textContent = "—";
+        }
+      }
       if (confirm) {
         confirm.textContent = "Fechar";
         confirm.disabled = false;
@@ -1611,6 +1874,31 @@ export function registerWalletRoutes({
       if (btn) btn.disabled = false;
     }
   });
+
+  // Any wallet modal that can hold sensitive residue (seed words, PIN input)
+  // must close and reset on route change — otherwise a `.modal` with
+  // `position: fixed; z-index: 2500` overlays the new view and the seed stays
+  // readable in the DOM heap even after CSS hides it. Belt-and-suspenders for
+  // SEC-07 (DOM residue after backup).
+  if (w && typeof w.addEventListener === "function") {
+    w.addEventListener("hashchange", () => {
+      const exportModal = q("wallet-export-modal");
+      if (exportModal && !exportModal.classList.contains("hidden")) {
+        exportModal.classList.add("hidden");
+        resetExportModal();
+      }
+      const wipeModal = q("wallet-wipe-modal");
+      if (wipeModal && !wipeModal.classList.contains("hidden")) {
+        wipeModal.classList.add("hidden");
+        resetWipeModal();
+      }
+      const biometricModal = q("wallet-biometric-pin-modal");
+      if (biometricModal && !biometricModal.classList.contains("hidden")) {
+        biometricModal.classList.add("hidden");
+        resetBiometricPinModal();
+      }
+    });
+  }
 
   // ====================================================================
   // #wallet-send — asset picker + preview + unlock + broadcast.
@@ -2033,7 +2321,6 @@ export function registerWalletRoutes({
     _renderReceiveQr: renderReceiveQr,
     _renderTransactions: renderTransactions,
     _refreshBiometricRow: refreshBiometricRow,
-    _lastBalancesRender: () => lastBalancesRender,
     _openUnlockModal: openUnlockModal,
     _closeUnlockModal: closeUnlockModal,
     _onSendPreviewClick: onSendPreviewClick,
