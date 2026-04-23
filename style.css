@@ -4378,18 +4378,32 @@ textarea:focus {
   font-size: 14px;
 }
 
-/* Seed word display — create flow */
+/* Seed word display — create flow.
+   Seed words are the ONLY thing standing between the user and their funds;
+   they MUST be fully legible for pen-and-paper transcription. Hence the
+   belt-and-suspenders strategy below:
+     1. 2-column grid — on the 420px max-card, each cell gets ~170px of
+        content width. BIP39 max word length is 8 characters, so even at
+        14px monospace (~8.4px/char) there is >2× headroom.
+     2. No truncation — `text-overflow: ellipsis` + `white-space: nowrap`
+        is the wrong strategy for values the user must read in full.
+        Removed entirely: we let the word occupy whatever height it needs.
+     3. `overflow-wrap: anywhere` — safety net. If a future change or a
+        pathological device (large-text accessibility zoom, narrow
+        viewport) makes the word wider than its cell, it wraps cleanly
+        to a second line instead of clipping. 100% transcribable either
+        way. */
 .wallet-seed-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   margin: 14px 0;
 }
 .wallet-seed-cell {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 8px;
+  gap: 8px;
+  padding: 12px 10px;
   border-radius: 8px;
   background: var(--bg-input, rgba(255, 255, 255, 0.04));
   border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
@@ -4398,18 +4412,20 @@ textarea:focus {
 .wallet-seed-index {
   flex-shrink: 0;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
-  min-width: 18px;
+  min-width: 20px;
+  text-align: right;
 }
 .wallet-seed-word {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 14px;
+  font-size: 15px;
+  line-height: 1.2;
   color: var(--text-primary);
   user-select: none;
   -webkit-user-select: none;
@@ -4458,25 +4474,30 @@ textarea:focus {
   cursor: not-allowed;
 }
 
-/* Restore flow — 12 input grid with BIP39 autocomplete */
+/* Restore flow — 12 input grid with BIP39 autocomplete.
+   Mirrors the create-seed grid (plan: "mesmo layout da Tela 2"). 2 cols
+   give each input ~150px of typing room at 15px mono — 8-char BIP39 max
+   fits with headroom, and the autocomplete dropdown below gets the same
+   width so the suggestions are legible. */
 .wallet-restore-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   margin: 14px 0;
 }
 .wallet-restore-cell {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   min-width: 0;
 }
 .wallet-restore-index {
   flex-shrink: 0;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
-  min-width: 18px;
+  min-width: 20px;
+  text-align: right;
 }
 .wallet-restore-input-wrapper {
   position: relative;
@@ -4486,13 +4507,14 @@ textarea:focus {
 .wallet-restore-input {
   width: 100%;
   box-sizing: border-box;
-  padding: 8px 6px;
+  padding: 10px 10px;
   border-radius: 8px;
   background: var(--bg-input, rgba(255, 255, 255, 0.04));
   border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
   color: var(--text-primary);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 13px;
+  font-size: 15px;
+  line-height: 1.2;
   outline: none;
 }
 .wallet-restore-input:focus {
