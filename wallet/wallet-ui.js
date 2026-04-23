@@ -128,6 +128,31 @@ export function classifyLockoutState({
   return "discreet";
 }
 
+/**
+ * Compute the 4-byte SHA-256 fingerprint of a wallet descriptor, formatted
+ * as "XXXX-XXXX" (uppercase hex with a hyphen in the middle).
+ *
+ * Used as a short, human-readable "wallet identity" the user can write down
+ * alongside the 12 seed words. On restore, the same derivation runs and the
+ * user compares visually against their note.
+ *
+ * Space = 2^32 ≈ 4B possibilities — more than enough to distinguish one
+ * wallet from another. Not a BIP standard; the `?` help modal makes clear
+ * it's a DepixApp-generated fingerprint, not a secret.
+ *
+ * Returns "" for empty/non-string input. Async because Web Crypto is async.
+ */
+export async function computeFingerprint(descriptor) {
+  if (typeof descriptor !== "string" || !descriptor) return "";
+  const bytes = new TextEncoder().encode(descriptor);
+  const hash = await crypto.subtle.digest("SHA-256", bytes);
+  const u8 = new Uint8Array(hash, 0, 4);
+  const hex = Array.from(u8)
+    .map(b => b.toString(16).padStart(2, "0").toUpperCase())
+    .join("");
+  return `${hex.slice(0, 4)}-${hex.slice(4)}`;
+}
+
 // --------------------------------------------------------------------------
 // DOM registration.
 // --------------------------------------------------------------------------
@@ -194,6 +219,7 @@ export function registerWalletRoutes({
   const state = {
     pendingMnemonic: null,
     pendingPin: null,
+    pendingDescriptor: null, // set by restore "Validar e avançar"; consumed by confirm-identity
     challenge: null, // { positions: number[], options: string[][], answered: boolean[] }
     restoreWords: new Array(12).fill(""),
     error: ""
@@ -202,6 +228,7 @@ export function registerWalletRoutes({
   function resetFlowState() {
     state.pendingMnemonic = null;
     state.pendingPin = null;
+    state.pendingDescriptor = null;
     state.challenge = null;
     state.restoreWords = new Array(12).fill("");
     state.error = "";
@@ -280,9 +307,9 @@ export function registerWalletRoutes({
   });
 
   // ====================================================================
-  // #wallet-create-seed — render the 12 words in a grid.
+  // #wallet-create-seed — render the 12 words in a grid + wallet identity.
   // ====================================================================
-  route("#wallet-create-seed", () => {
+  route("#wallet-create-seed", async () => {
     const grid = q("wallet-create-seed-grid");
     if (!grid) return;
     clearMsg("wallet-create-seed-msg");
@@ -307,6 +334,21 @@ export function registerWalletRoutes({
       cell.appendChild(w);
       grid.appendChild(cell);
     });
+    // Derive + show the wallet identity fingerprint alongside the 12 words
+    // so the user writes both down in one go. LWK is already loaded (the
+    // intro click awaited generateMnemonic), so this is effectively free.
+    const identityEl = q("wallet-create-identity-value");
+    if (identityEl) {
+      identityEl.textContent = "…";
+      try {
+        const descriptor = await wallet.deriveDescriptor(state.pendingMnemonic);
+        identityEl.textContent = await computeFingerprint(descriptor);
+      } catch {
+        // The 12 words are the primary artifact — never let an identity
+        // failure block the seed display. Fall back to a discreet placeholder.
+        identityEl.textContent = "—";
+      }
+    }
   });
 
   q("wallet-create-seed-continue")?.addEventListener("click", () => {
@@ -688,14 +730,18 @@ export function registerWalletRoutes({
       btn.textContent = "Validando…";
     }
     try {
-      await wallet.validateMnemonic(mnemonicStr);
+      // deriveDescriptor does everything validateMnemonic does (checksum)
+      // plus gives us the descriptor we need for the identity confirmation
+      // screen. Single call, no double-parse.
+      const descriptor = await wallet.deriveDescriptor(mnemonicStr);
       state.pendingMnemonic = mnemonicStr;
-      navigate("#wallet-restore-pin");
+      state.pendingDescriptor = descriptor;
+      navigate("#wallet-restore-confirm-identity");
     } catch (err) {
       if (isWalletError(err, ERROR_CODES.INVALID_MNEMONIC)) {
         showMsg(
           "wallet-restore-input-msg",
-          "Uma ou mais das 12 palavras está errada. Confira sua anotação e tente novamente.",
+          "Essa combinação de 12 palavras não passou na verificação. Quase sempre é um erro de digitação ou de ordem — confira cada palavra com sua anotação.",
           "error"
         );
       } else {
@@ -711,6 +757,40 @@ export function registerWalletRoutes({
 
   q("wallet-restore-input-back")?.addEventListener("click", () => {
     navigate("#wallet-gate");
+  });
+
+  // ====================================================================
+  // #wallet-restore-confirm-identity — show the derived fingerprint and
+  // ask the user to verify it matches what they wrote down before the
+  // restore actually persists a new wallet. Closes the 1-in-16 BIP39
+  // false-positive gap: a typo that happens to checksum correctly will
+  // still produce a different fingerprint from what the user noted.
+  // ====================================================================
+  route("#wallet-restore-confirm-identity", async () => {
+    if (!state.pendingDescriptor) {
+      // Direct hash entry (bookmark / URL edit) — nothing to confirm.
+      navigate("#wallet-restore-input");
+      return;
+    }
+    const el = q("wallet-restore-confirm-identity-value");
+    if (el) {
+      el.textContent = "…";
+      try {
+        el.textContent = await computeFingerprint(state.pendingDescriptor);
+      } catch {
+        el.textContent = "—";
+      }
+    }
+  });
+
+  q("wallet-restore-confirm-yes")?.addEventListener("click", () => {
+    navigate("#wallet-restore-pin");
+  });
+
+  q("wallet-restore-confirm-back")?.addEventListener("click", () => {
+    // State preserved: restoreWords stay, pendingDescriptor stays (will be
+    // recomputed on next "Validar e avançar" if the user edits a word).
+    navigate("#wallet-restore-input");
   });
 
   // ====================================================================
@@ -760,7 +840,7 @@ export function registerWalletRoutes({
         // though it is about the 12 words. Send them back to the input
         // screen with an unambiguous message (plan Sub-fase 3 Restore
         // Tela 1: "Combinação inválida" is the intended copy THERE).
-        state.error = "Uma ou mais das 12 palavras está errada. Confira sua anotação e tente novamente.";
+        state.error = "Essa combinação de 12 palavras não passou na verificação. Quase sempre é um erro de digitação ou de ordem — confira cada palavra com sua anotação.";
         navigate("#wallet-restore-input");
       } else if (isWalletError(err, ERROR_CODES.DESCRIPTOR_MISMATCH)) {
         // Plan Sub-fase 3 calls for a Continue/Cancel modal on the input
@@ -842,6 +922,7 @@ export function registerWalletRoutes({
   route("#wallet-restore-done", () => {
     state.pendingMnemonic = null;
     state.pendingPin = null;
+    state.pendingDescriptor = null;
     state.restoreWords = new Array(12).fill("");
     if (showToast) showToast("Carteira restaurada com sucesso.");
   });
@@ -849,5 +930,19 @@ export function registerWalletRoutes({
   q("wallet-restore-done-home")?.addEventListener("click", () => {
     resetFlowState();
     navigate("#home");
+  });
+
+  // ====================================================================
+  // Wallet identity help modal — opened by the `?` button next to
+  // "Identidade da carteira" on both the create-seed screen and the
+  // restore-confirm-identity screen. One modal, two triggers.
+  // ====================================================================
+  function openIdentityInfoModal() {
+    q("wallet-identity-info-modal")?.classList.remove("hidden");
+  }
+  q("wallet-create-identity-help")?.addEventListener("click", openIdentityInfoModal);
+  q("wallet-restore-identity-help")?.addEventListener("click", openIdentityInfoModal);
+  q("wallet-identity-info-close")?.addEventListener("click", () => {
+    q("wallet-identity-info-modal")?.classList.add("hidden");
   });
 }

@@ -559,6 +559,42 @@ export function createWalletModule({
     return l.Mnemonic.fromRandom(12).toString();
   }
 
+  // Derive the wallet's CT descriptor from a mnemonic WITHOUT persisting or
+  // unlocking. Used by the onboarding UI to show a fingerprint of the wallet
+  // identity on the seed-display screen (so the user writes it down alongside
+  // the 12 words) and on the restore confirmation screen (so the user verifies
+  // the restored wallet matches what they wrote down).
+  //
+  // Same validation contract as validateMnemonic — throws INVALID_MNEMONIC on
+  // non-string / empty / bad-checksum input.
+  async function deriveDescriptor(mnemonicStr) {
+    if (typeof mnemonicStr !== "string" || !mnemonicStr.trim()) {
+      throw new WalletError(
+        ERROR_CODES.INVALID_MNEMONIC,
+        "mnemonic must be a non-empty string"
+      );
+    }
+    const l = await lwk();
+    let mnemonicObj;
+    try {
+      mnemonicObj = new l.Mnemonic(mnemonicStr.trim().toLowerCase());
+    } catch (err) {
+      throw new WalletError(
+        ERROR_CODES.INVALID_MNEMONIC,
+        "Invalid BIP39 mnemonic",
+        err
+      );
+    }
+    const net = makeNetwork(l, network);
+    const { signer, descriptor } = buildDescriptorFromMnemonic(l, mnemonicObj.toString(), net);
+    const descStr = descriptor.toString();
+    // Free the ephemeral LWK objects — this derivation does not hold onto the
+    // Signer; closure state stays untouched.
+    if (signer?.free) { try { signer.free(); } catch { /* best effort */ } }
+    if (mnemonicObj?.free) { try { mnemonicObj.free(); } catch { /* best effort */ } }
+    return descStr;
+  }
+
   // Checksum-validate a user-typed mnemonic WITHOUT persisting or unlocking.
   // Used by the restore UI's "Validar e avançar" button so a bad checksum
   // surfaces on the input screen (where "palavras erradas" is unambiguous)
@@ -594,6 +630,7 @@ export function createWalletModule({
     isUnlocked,
     generateMnemonic,
     validateMnemonic,
+    deriveDescriptor,
     createWallet,
     restoreWallet,
     unlock,

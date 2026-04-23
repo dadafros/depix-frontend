@@ -2296,6 +2296,7 @@ const WALLET_ROUTE_HASHES = [
   "#wallet-create-biometric",
   "#wallet-create-done",
   "#wallet-restore-input",
+  "#wallet-restore-confirm-identity",
   "#wallet-restore-pin",
   "#wallet-restore-biometric",
   "#wallet-restore-done"

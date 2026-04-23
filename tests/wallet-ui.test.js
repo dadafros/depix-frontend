@@ -13,7 +13,8 @@ import {
   buildChallengeOptions,
   filterBip39Words,
   isPinInputValid,
-  classifyLockoutState
+  classifyLockoutState,
+  computeFingerprint
 } from "../wallet/wallet-ui.js";
 import { BIP39_WORDLIST } from "../wallet/bip39-wordlist.js";
 
@@ -164,5 +165,39 @@ describe("classifyLockoutState", () => {
 
   it("defaults attempts to 0 and gives 'discreet'", () => {
     expect(classifyLockoutState({ now })).toBe("discreet");
+  });
+});
+
+describe("computeFingerprint", () => {
+  it("returns the XXXX-XXXX shape for a non-empty input", async () => {
+    const fp = await computeFingerprint("some-descriptor");
+    expect(fp).toMatch(/^[0-9A-F]{4}-[0-9A-F]{4}$/);
+  });
+
+  it("is deterministic — same input → same fingerprint", async () => {
+    const a = await computeFingerprint("ct(slip77(d4),wpkh(xp/*))");
+    const b = await computeFingerprint("ct(slip77(d4),wpkh(xp/*))");
+    expect(a).toBe(b);
+  });
+
+  it("different inputs produce different fingerprints", async () => {
+    const a = await computeFingerprint("descriptor-one");
+    const b = await computeFingerprint("descriptor-two");
+    const c = await computeFingerprint("descriptor-three");
+    expect(new Set([a, b, c]).size).toBe(3);
+  });
+
+  it('matches the known SHA-256 prefix for "test" (9F86-D081)', async () => {
+    // sha256("test") = 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b...
+    //                  ^^^^^^^^ first 4 bytes
+    // With our uppercase + hyphen formatting → 9F86-D081.
+    expect(await computeFingerprint("test")).toBe("9F86-D081");
+  });
+
+  it("returns '' for empty / null / non-string input", async () => {
+    expect(await computeFingerprint("")).toBe("");
+    expect(await computeFingerprint(null)).toBe("");
+    expect(await computeFingerprint(undefined)).toBe("");
+    expect(await computeFingerprint(42)).toBe("");
   });
 });
