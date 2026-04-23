@@ -19,11 +19,15 @@
 
 // Icon URLs are origin-absolute so they resolve consistently whether the
 // wallet bundle runs out of /dist/wallet-bundle-<hash>.js or a dev volume
-// mount. DePix uses the app icon (icon-192.png IS the DePix brand logo,
-// already pre-cached by the service worker). USDt + L-BTC use the
-// official Blockstream/Tether artwork vendored from the DePix monorepo's
-// BTCPayServer Liquid plugin (submodules/btcpayserver/.../imlegacy/) —
-// both are what Blockstream itself ships for these assets.
+// mount. All three are the ASSET logos (not the app icon):
+//   * DePix       — depix-marketing's canonical brand mark, used on IG
+//                   templates with alt="DePix". Distinct from icon-192.png
+//                   which is the PWA app launcher icon, not the coin.
+//   * USDt + L-BTC — official Blockstream/Tether artwork vendored from
+//                   the DePix monorepo's BTCPayServer Liquid plugin
+//                   (submodules/btcpayserver/.../imlegacy/). Same files
+//                   BTCPay uses for AltcoinsPlugin.LiquidAssets.cs and
+//                   AltcoinsPlugin.Liquid.cs.
 
 export const ASSETS = Object.freeze({
   DEPIX: Object.freeze({
@@ -33,7 +37,7 @@ export const ASSETS = Object.freeze({
     decimals: 8,
     color: "#38e3ac",
     brlFormula: "peg",
-    iconUrl: "/icon-192.png"
+    iconUrl: "/icons/depix.png"
   }),
   USDT: Object.freeze({
     id: "ce091c998b83c78bb71a632313ba3760f1763d9cfcffae02258ffa9865a37bd2",
