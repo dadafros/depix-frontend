@@ -4,6 +4,7 @@ import {
   DISPLAY_ORDER,
   isKnownAsset,
   getAssetByIdentifier,
+  getAssetKeyById,
   satsToAmount,
   satsToDecimalNumber,
   convertSatsToBrl,
@@ -54,6 +55,20 @@ describe("isKnownAsset / getAssetByIdentifier", () => {
     expect(getAssetByIdentifier(ASSETS.LBTC.id)).toBe(ASSETS.LBTC);
     expect(getAssetByIdentifier("nope")).toBe(null);
     expect(getAssetByIdentifier(null)).toBe(null);
+  });
+
+  it("getAssetKeyById returns the registry key for known ids", () => {
+    expect(getAssetKeyById(ASSETS.DEPIX.id)).toBe("DEPIX");
+    expect(getAssetKeyById(ASSETS.USDT.id)).toBe("USDT");
+    expect(getAssetKeyById(ASSETS.LBTC.id)).toBe("LBTC");
+  });
+
+  it("getAssetKeyById returns null for unknown or invalid input", () => {
+    expect(getAssetKeyById("deadbeef")).toBe(null);
+    expect(getAssetKeyById("")).toBe(null);
+    expect(getAssetKeyById(null)).toBe(null);
+    expect(getAssetKeyById(undefined)).toBe(null);
+    expect(getAssetKeyById(42)).toBe(null);
   });
 });
 

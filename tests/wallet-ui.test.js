@@ -15,9 +15,11 @@ import {
   isPinInputValid,
   classifyLockoutState,
   computeFingerprint,
-  parseAmountToSats
+  parseAmountToSats,
+  interpretScannedQr
 } from "../wallet/wallet-ui.js";
 import { BIP39_WORDLIST } from "../wallet/bip39-wordlist.js";
+import { ASSETS } from "../wallet/asset-registry.js";
 
 // Seeded PRNG for determinism. Small LCG — good enough to drive shuffles and
 // index picks in tests without pulling a dependency. Never use for crypto.
@@ -242,5 +244,51 @@ describe("parseAmountToSats", () => {
     expect(() => parseAmountToSats(1, 8)).toThrow(TypeError);
     expect(() => parseAmountToSats("1", -1)).toThrow(RangeError);
     expect(() => parseAmountToSats("1", "8")).toThrow(RangeError);
+  });
+});
+
+describe("interpretScannedQr", () => {
+  const ADDR = "lq1qqpzry9x8gf2tvdw0s3jn54khce6mua7lqpzry9x8gf2tvdw0s3jn54khce6mua7lqpzry9x8gf2tvdw0s3jn5psx4kgu9l78v";
+
+  it("returns address-only fields for a plain Liquid address", () => {
+    expect(interpretScannedQr(ADDR, "DEPIX")).toEqual({
+      address: ADDR,
+      amount: null,
+      switchToAssetKey: null,
+    });
+  });
+
+  it("returns null for an invalid scan payload", () => {
+    expect(interpretScannedQr("not a liquid address", "DEPIX")).toBe(null);
+    expect(interpretScannedQr("", "DEPIX")).toBe(null);
+  });
+
+  it("returns the amount string when a BIP21 URI carries ?amount=", () => {
+    const out = interpretScannedQr(`liquid:${ADDR}?amount=0.25`, "DEPIX");
+    expect(out).toEqual({ address: ADDR, amount: "0.25", switchToAssetKey: null });
+  });
+
+  it("sets switchToAssetKey when the URI's assetid maps to a different known asset", () => {
+    const uri = `liquid:${ADDR}?assetid=${ASSETS.USDT.id}`;
+    const out = interpretScannedQr(uri, "DEPIX");
+    expect(out).toEqual({ address: ADDR, amount: null, switchToAssetKey: "USDT" });
+  });
+
+  it("leaves switchToAssetKey null when assetid matches the current asset", () => {
+    const uri = `liquid:${ADDR}?assetid=${ASSETS.DEPIX.id}`;
+    const out = interpretScannedQr(uri, "DEPIX");
+    expect(out.switchToAssetKey).toBe(null);
+  });
+
+  it("leaves switchToAssetKey null when assetid is unknown", () => {
+    const uri = `liquid:${ADDR}?assetid=${"ab".repeat(32)}`;
+    const out = interpretScannedQr(uri, "DEPIX");
+    expect(out).toEqual({ address: ADDR, amount: null, switchToAssetKey: null });
+  });
+
+  it("combines amount and asset switch in a single BIP21 URI", () => {
+    const uri = `liquid:${ADDR}?amount=1.5&assetid=${ASSETS.LBTC.id}`;
+    const out = interpretScannedQr(uri, "DEPIX");
+    expect(out).toEqual({ address: ADDR, amount: "1.5", switchToAssetKey: "LBTC" });
   });
 });

@@ -27,11 +27,13 @@ import {
   ASSETS,
   DISPLAY_ORDER,
   getAssetByIdentifier,
+  getAssetKeyById,
   convertSatsToBrl,
   formatAssetAmount,
   satsToAmount
 } from "./asset-registry.js";
-import { validateLiquidAddress } from "../validation.js";
+import { validateLiquidAddress, parseLiquidUri } from "../validation.js";
+import { scanQRCode, isQrScannerSupported, QR_SCANNER_ERRORS } from "../qr-scanner.js";
 import { getDefaultTelemetryClient, TELEMETRY_EVENTS } from "./telemetry.js";
 import { archiveWithdrawTxid } from "./withdraw-archive.js";
 import { getDefaultConfigClient } from "./config.js";
@@ -185,6 +187,25 @@ export async function computeFingerprint(descriptor) {
     .map(b => b.toString(16).padStart(2, "0").toUpperCase())
     .join("");
   return `${hex.slice(0, 4)}-${hex.slice(4)}`;
+}
+
+/**
+ * Pure helper for the QR scan click handler: parse a scanned raw text as a
+ * Liquid address or BIP21 URI, and return the fields the UI should apply to
+ * the send form. `null` means "not a valid Liquid destination, caller should
+ * bail out silently". `switchToAssetKey` is only set when the URI's asset id
+ * maps to a known wallet asset AND differs from `currentAssetKey`.
+ */
+export function interpretScannedQr(rawText, currentAssetKey) {
+  const parsed = parseLiquidUri(rawText);
+  if (!parsed.valid) return null;
+  const { address, amount, assetId } = parsed.data;
+  let switchToAssetKey = null;
+  if (assetId) {
+    const key = getAssetKeyById(assetId);
+    if (key && key !== currentAssetKey) switchToAssetKey = key;
+  }
+  return { address, amount: amount || null, switchToAssetKey };
 }
 
 // Wallet identity cache — the home header chip reads this key to display
@@ -2613,6 +2634,51 @@ export function registerWalletRoutes({
     }
     clearSendPreview();
   });
+
+  if (!isQrScannerSupported()) {
+    q("wallet-send-dest-scan")?.classList.add("hidden");
+  }
+  q("wallet-send-dest-scan")?.addEventListener("click", async () => {
+    try {
+      const result = await scanQRCode({
+        title: "Escanear endereço Liquid",
+        hint: "Aponte para o QR do endereço de destino.",
+        validate: (text) => {
+          const parsed = parseLiquidUri(text);
+          if (!parsed.valid) return { ok: false, error: parsed.error };
+          return { ok: true };
+        },
+      });
+      const interpretation = interpretScannedQr(result.rawText, sendState.assetKey);
+      if (!interpretation) return;
+      const { address, amount, switchToAssetKey } = interpretation;
+
+      const destInput = q("wallet-send-dest");
+      if (destInput) {
+        destInput.value = address;
+        destInput.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+
+      if (switchToAssetKey) selectSendAsset(switchToAssetKey);
+
+      if (amount) {
+        const amountInput = q("wallet-send-amount");
+        if (amountInput) {
+          amountInput.value = amount;
+          amountInput.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+      }
+
+      clearSendPreview();
+      if (showToast) showToast("QR code lido.");
+    } catch (err) {
+      if (err && (err.code === QR_SCANNER_ERRORS.CANCELLED || err.code === QR_SCANNER_ERRORS.ABORTED)) {
+        return;
+      }
+      // Permission / camera errors already surface their own in-modal state.
+    }
+  });
+
   q("wallet-send-preview-btn")?.addEventListener("click", () => { void onSendPreviewClick(); });
   q("wallet-send-confirm")?.addEventListener("click", () => {
     // Plan (Sub-fase 5 → "Cache de sessão pós-unlock"): the signer is held in

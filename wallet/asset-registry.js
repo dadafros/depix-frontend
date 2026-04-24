@@ -83,6 +83,14 @@ export function getAssetByIdentifier(id) {
   return null;
 }
 
+export function getAssetKeyById(id) {
+  if (typeof id !== "string") return null;
+  for (const [key, asset] of Object.entries(ASSETS)) {
+    if (asset.id === id) return key;
+  }
+  return null;
+}
+
 // Convert an integer sats amount to a decimal string, BigInt-safe.
 // Trailing zeros are trimmed; whole amounts render without a decimal point.
 // e.g. (1234567890n, 8) → "12.3456789"

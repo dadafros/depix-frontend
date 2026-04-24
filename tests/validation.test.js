@@ -10,6 +10,7 @@ import {
   validatePixKey,
   formatPixKey,
   preparePixKeyForApi,
+  parseLiquidUri,
 } from "../validation.js";
 
 describe("validateLiquidAddress", () => {
@@ -935,6 +936,149 @@ describe("preparePixKeyForApi", () => {
 
     it("should return null for empty input", () => {
       expect(preparePixKeyForApi("")).toBeNull();
+    });
+  });
+});
+
+describe("parseLiquidUri", () => {
+  const VALID_LQ1 = "lq1qqpzry9x8gf2tvdw0s3jn54khce6mua7lqpzry9x8gf2tvdw0s3jn54khce6mua7lqpzry9x8gf2tvdw0s3jn5psx4kgu9l78v";
+  const VALID_EX1 = "ex1qqpzry9x8gf2tvdw0s3jn54khce6mua7lmkqn9x";
+  const DEPIX_ASSET_ID = "02f22f8d9c76ab41661a2729e4752e2c5d1a263012141b86ea98af5472df5189";
+
+  describe("plain addresses (no URI scheme)", () => {
+    it("parses a plain lq1 address", () => {
+      const r = parseLiquidUri(VALID_LQ1);
+      expect(r.valid).toBe(true);
+      expect(r.data.address).toBe(VALID_LQ1);
+      expect(r.data.hasUri).toBe(false);
+      expect(r.data.amount).toBeNull();
+      expect(r.data.assetId).toBeNull();
+      expect(r.data.label).toBeNull();
+      expect(r.data.message).toBeNull();
+    });
+
+    it("parses a plain ex1 address", () => {
+      const r = parseLiquidUri(VALID_EX1);
+      expect(r.valid).toBe(true);
+      expect(r.data.address).toBe(VALID_EX1);
+      expect(r.data.hasUri).toBe(false);
+    });
+
+    it("trims whitespace from plain address", () => {
+      const r = parseLiquidUri(`  ${VALID_LQ1}  `);
+      expect(r.valid).toBe(true);
+      expect(r.data.address).toBe(VALID_LQ1);
+    });
+
+    it("rejects garbage input", () => {
+      const r = parseLiquidUri("not-an-address");
+      expect(r.valid).toBe(false);
+      expect(r.error).toBeTruthy();
+    });
+
+    it("rejects empty string", () => {
+      const r = parseLiquidUri("");
+      expect(r.valid).toBe(false);
+    });
+  });
+
+  describe("BIP21 URI parsing", () => {
+    it("parses liquid:<addr> with no query", () => {
+      const r = parseLiquidUri(`liquid:${VALID_LQ1}`);
+      expect(r.valid).toBe(true);
+      expect(r.data.address).toBe(VALID_LQ1);
+      expect(r.data.hasUri).toBe(true);
+      expect(r.data.amount).toBeNull();
+      expect(r.data.assetId).toBeNull();
+    });
+
+    it("parses liquid:<addr>?amount=0.01", () => {
+      const r = parseLiquidUri(`liquid:${VALID_LQ1}?amount=0.01`);
+      expect(r.valid).toBe(true);
+      expect(r.data.amount).toBe("0.01");
+    });
+
+    it("parses assetid and lowercases it", () => {
+      const upper = DEPIX_ASSET_ID.toUpperCase();
+      const r = parseLiquidUri(`liquid:${VALID_LQ1}?assetid=${upper}`);
+      expect(r.valid).toBe(true);
+      expect(r.data.assetId).toBe(DEPIX_ASSET_ID);
+    });
+
+    it("rejects assetid that is not 64-hex", () => {
+      const r = parseLiquidUri(`liquid:${VALID_LQ1}?assetid=notHex`);
+      expect(r.valid).toBe(false);
+      expect(r.error).toContain("Asset");
+    });
+
+    it("rejects assetid with length ≠ 64", () => {
+      const short = "02f22f8d9c76ab41661a2729e4752e2c5d1a263012141b86ea98af5472df518";
+      const r = parseLiquidUri(`liquid:${VALID_LQ1}?assetid=${short}`);
+      expect(r.valid).toBe(false);
+    });
+
+    it("preserves unknown params in data.params", () => {
+      const r = parseLiquidUri(`liquid:${VALID_LQ1}?foo=bar&custom=xyz`);
+      expect(r.valid).toBe(true);
+      expect(r.data.params.foo).toBe("bar");
+      expect(r.data.params.custom).toBe("xyz");
+    });
+
+    it("is case-insensitive on the scheme", () => {
+      const r1 = parseLiquidUri(`LIQUID:${VALID_LQ1}`);
+      const r2 = parseLiquidUri(`Liquid:${VALID_LQ1}`);
+      expect(r1.valid).toBe(true);
+      expect(r2.valid).toBe(true);
+      expect(r1.data.hasUri).toBe(true);
+      expect(r2.data.hasUri).toBe(true);
+    });
+
+    it("URL-decodes label and message", () => {
+      const r = parseLiquidUri(`liquid:${VALID_LQ1}?label=Hello%20World&message=%C3%89%20bom`);
+      expect(r.valid).toBe(true);
+      expect(r.data.label).toBe("Hello World");
+      expect(r.data.message).toBe("É bom");
+    });
+
+    it("trims whitespace from URI input", () => {
+      const r = parseLiquidUri(`  liquid:${VALID_LQ1}?amount=1  `);
+      expect(r.valid).toBe(true);
+      expect(r.data.amount).toBe("1");
+    });
+
+    it("rejects liquid:<invalid_address>", () => {
+      const r = parseLiquidUri("liquid:not-a-valid-address");
+      expect(r.valid).toBe(false);
+    });
+
+    it("accepts amount with decimal dot", () => {
+      const r = parseLiquidUri(`liquid:${VALID_LQ1}?amount=1.5`);
+      expect(r.valid).toBe(true);
+      expect(r.data.amount).toBe("1.5");
+    });
+
+    it("nulls out amount with comma (BIP21 spec requires dot)", () => {
+      const r = parseLiquidUri(`liquid:${VALID_LQ1}?amount=1,50`);
+      expect(r.valid).toBe(true);
+      expect(r.data.amount).toBeNull();
+    });
+
+    it("nulls out negative amount", () => {
+      const r = parseLiquidUri(`liquid:${VALID_LQ1}?amount=-1`);
+      expect(r.valid).toBe(true);
+      expect(r.data.amount).toBeNull();
+    });
+
+    it("parses full URI with all fields", () => {
+      const uri = `liquid:${VALID_LQ1}?amount=0.5&assetid=${DEPIX_ASSET_ID}&label=Pedido%2042&message=Obrigado`;
+      const r = parseLiquidUri(uri);
+      expect(r.valid).toBe(true);
+      expect(r.data.address).toBe(VALID_LQ1);
+      expect(r.data.amount).toBe("0.5");
+      expect(r.data.assetId).toBe(DEPIX_ASSET_ID);
+      expect(r.data.label).toBe("Pedido 42");
+      expect(r.data.message).toBe("Obrigado");
+      expect(r.data.hasUri).toBe(true);
     });
   });
 });
