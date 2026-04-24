@@ -15,7 +15,16 @@
 // import it. That's why the endpoint is hardcoded and we don't take a
 // fetch injection dependency.
 
-const DEFAULT_ENDPOINT = "https://depix-backend.vercel.app/api/wallet/telemetry";
+// Mirror api.js API_BASE: on the Docker dev env (localhost:2323) nginx proxies
+// /api/* to the backend container, so a bare path keeps dev/test telemetry
+// local. Everywhere else (depixapp.com) we must hit the backend absolute URL.
+// Using a single hardcoded prod URL would pollute prod metrics with every
+// manual-test/E2E event fired during development.
+const DEFAULT_ENDPOINT = (typeof window !== "undefined" &&
+  window.location?.hostname === "localhost" &&
+  window.location?.port === "2323")
+  ? "/api/wallet/telemetry"
+  : "https://depix-backend.vercel.app/api/wallet/telemetry";
 
 const EVENTS = Object.freeze({
   WALLET_CREATED: "wallet.created",

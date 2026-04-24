@@ -15,7 +15,13 @@ describe("createConfigClient", () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResp({ walletEnabled: true, timestamp: 1 }));
     const c = createConfigClient({ fetchImpl });
     await expect(c.isWalletEnabled()).resolves.toBe(true);
-    expect(fetchImpl).toHaveBeenCalledWith("/api/config", expect.objectContaining({ credentials: "omit" }));
+    // jsdom's default URL is http://localhost:3000, so the env-check in
+    // config.js resolves to the absolute prod URL (the dev branch only fires
+    // on localhost:2323 under the nginx proxy). See the DEFAULT_ENDPOINT note.
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "https://depix-backend.vercel.app/api/config",
+      expect.objectContaining({ credentials: "omit" })
+    );
   });
 
   it("returns walletEnabled=false when backend says so", async () => {

@@ -2496,6 +2496,13 @@ export function registerWalletRoutes({
         amountInput.value = prefill.amountBrl.toFixed(2);
         amountInput.dispatchEvent(new Event("input", { bubbles: true }));
       }
+    } else {
+      // No fresh prefill event for THIS mount. Any pendingWithdrawalId left
+      // over from a prior withdraw flow (user backed out of unlock, navigated
+      // away before broadcasting, then re-entered #wallet-send manually) is
+      // stale — attaching it to the next unrelated send would POST the wrong
+      // liquid_txid to /api/withdraw/txid and corrupt support reconciliation.
+      pendingWithdrawalId = null;
     }
   });
 

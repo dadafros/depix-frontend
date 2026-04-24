@@ -81,9 +81,12 @@ async function tryLoad(url, fetchImpl, delayImpl) {
       }
     }
   }
-  // Anonymous signal for ops dashboards: every retry hit the 10s timeout.
-  // This is the one event that is NOT wired from the UI — by the time we get
-  // here, the wallet bundle never booted, so no UI handler ever sees the error.
+  // Anonymous signal for ops dashboards: at least one retry timed out before
+  // the final failure. Other retries in the same sequence may have failed for
+  // different reasons — this is not a guarantee that every attempt hit the
+  // timeout. This is the one event that is NOT wired from the UI — by the
+  // time we get here, the wallet bundle never booted, so no UI handler ever
+  // sees the error.
   if (sawTimeout) {
     try {
       getDefaultTelemetryClient().track(TELEMETRY_EVENTS.WASM_LOAD_TIMEOUT, {

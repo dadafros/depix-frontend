@@ -26,6 +26,10 @@ export async function archiveWithdrawTxid({ withdrawalId, liquidTxid } = {}) {
       body: JSON.stringify({ withdrawalId, liquidTxid: liquidTxid.toLowerCase() })
     });
     if (res.status === 204) return { ok: true };
+    // 409 = this withdrawal already had its liquid_txid set. The server
+    // contract is one-shot, so a 409 means an earlier POST already won —
+    // treat it as idempotent success, not a retry-worthy failure.
+    if (res.status === 409) return { ok: true, alreadyArchived: true };
     return { ok: false, reason: `http-${res.status}` };
   } catch (err) {
     return { ok: false, reason: "network", error: err };

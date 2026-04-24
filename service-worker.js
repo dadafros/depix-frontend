@@ -1,6 +1,6 @@
 // Service Worker — DePix PWA
 // Bump APP_VERSION on every release. Keep in sync with ?v= query strings in index.html.
-const APP_VERSION = 133;
+const APP_VERSION = 134;
 const CACHE_NAME = `depix-v${APP_VERSION}`;
 
 // Timeout for WASM fetch before falling back to cache. WASM binaries are large
@@ -25,7 +25,10 @@ const JS_MODULES = [
   "qr-print.js",
   "image-resize.js",
   "wallet-bundle-loader.js",
-  "wallet-home-gate.js"
+  "wallet-home-gate.js",
+  "wallet/config.js",
+  "wallet/telemetry.js",
+  "wallet/withdraw-archive.js"
 ];
 
 // Brand logos for the wallet asset rows. DePix reuses icon-192.png above
