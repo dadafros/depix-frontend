@@ -1143,7 +1143,7 @@ document.getElementById("btnGerar")?.addEventListener("click", async () => {
   // exists) or an external address the user has explicitly selected via
   // the home tile's "Usar endereço externo" toggle. For users without a
   // wallet this always resolves to the external path — zero regression.
-  const { addr } = await resolveHomeDestination();
+  const { addr, source } = await resolveHomeDestination();
 
   if (!valorInput.value) {
     setMsg("mensagem", "Informe o valor");
@@ -1188,6 +1188,15 @@ document.getElementById("btnGerar")?.addEventListener("click", async () => {
 
     qrCopyPaste = data.response.qrCopyPaste;
     lastDepositQrId = data.response.id;
+
+    // Swap the hint BEFORE reveal so the user never sees the stale copy
+    // during the brief window before renderBrandedQr paints the QR image.
+    const hintEl = document.getElementById("qrHint");
+    if (hintEl) {
+      const walletLabel = source === "wallet" ? "integrada" : "externa";
+      hintEl.innerHTML = `Escaneie com o app do seu banco ou copie o código Pix para pagar.<br>O valor irá cair na sua carteira ${walletLabel}.`;
+    }
+
     document.getElementById("formDeposito").classList.add("hidden");
     document.getElementById("resultado").classList.remove("hidden");
 
