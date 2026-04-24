@@ -5130,12 +5130,6 @@ textarea:focus {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.wallet-send-asset-balance {
-  flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-}
 .wallet-send-amount-wrap {
   display: flex;
   align-items: center;
@@ -5191,7 +5185,8 @@ textarea:focus {
   border-radius: 10px;
   color: var(--text-primary);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.85rem;
+  /* 1rem = 16px; iOS Safari zooms on focus when <16px. */
+  font-size: 1rem;
 }
 #wallet-send-dest:focus {
   outline: none;
@@ -5280,7 +5275,7 @@ textarea:focus {
   flex-direction: column;
   gap: 6px;
 }
-.wallet-send-success-field strong {
+.wallet-send-success-field label {
   font-size: 0.82rem;
   color: var(--text-secondary);
   font-weight: 500;

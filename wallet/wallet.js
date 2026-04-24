@@ -1015,7 +1015,7 @@ export function createWalletModule({
     } catch {
       // Fee introspection is best-effort; the UI shows "—" when it fails.
     }
-    return 0n;
+    return null;
   }
 
   // Builds an unsigned PSET for a send without requiring unlock. Running
@@ -1039,7 +1039,7 @@ export function createWalletModule({
     }
     if (sendAll && resolved !== ASSETS.LBTC) {
       throw new WalletError(
-        ERROR_CODES.UNSUPPORTED_ASSET,
+        ERROR_CODES.SENDALL_NOT_SUPPORTED,
         "sendAll is only supported for L-BTC"
       );
     }
