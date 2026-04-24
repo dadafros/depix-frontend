@@ -2499,7 +2499,10 @@ async function loadTransactions() {
 }
 
 function applyFilters() {
-  const type = document.querySelector(".extrato-pill.active")?.dataset.filterType || "all";
+  // Scoped to [data-filter-type] because the wallet-transactions view reuses
+  // the .extrato-pill class with different data attrs — an unscoped selector
+  // would read the first active .extrato-pill in DOM order regardless of view.
+  const type = document.querySelector(".extrato-pill[data-filter-type].active")?.dataset.filterType || "all";
   const status = document.getElementById("filter-status")?.value || "";
   const startDate = document.getElementById("filter-start-date")?.value || "";
   const endDate = document.getElementById("filter-end-date")?.value || "";
@@ -2805,10 +2808,13 @@ function collapseFilterPanel(panelId, toggleId) {
   }
 }
 
-// Extrato: pill toggle filters (type)
-document.querySelectorAll(".extrato-pill").forEach(btn => {
+// Extrato: pill toggle filters (type).
+// Scoped to `[data-filter-type]` so the wallet-transactions view (which
+// reuses .extrato-pill visually but uses `[data-wallet-asset]` /
+// `[data-wallet-direction]`) doesn't cross-wire into the extrato handler.
+document.querySelectorAll(".extrato-pill[data-filter-type]").forEach(btn => {
   btn.addEventListener("click", () => {
-    document.querySelectorAll(".extrato-pill").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".extrato-pill[data-filter-type]").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
     applyFilters();
     updateFilterBadge();
@@ -2839,9 +2845,9 @@ function getDateFromPeriod(period) {
   return { start: "", end: "" };
 }
 
-document.querySelectorAll(".extrato-period-btn").forEach(btn => {
+document.querySelectorAll(".extrato-period-btn[data-period]").forEach(btn => {
   btn.addEventListener("click", () => {
-    document.querySelectorAll(".extrato-period-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".extrato-period-btn[data-period]").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
     const period = btn.dataset.period;
     const customRange = document.getElementById("extrato-custom-range");
@@ -2864,9 +2870,9 @@ document.querySelectorAll(".extrato-period-btn").forEach(btn => {
 
 // Extrato: update filter badge count
 function updateFilterBadge() {
-  const type = document.querySelector(".extrato-pill.active")?.dataset.filterType || "all";
+  const type = document.querySelector(".extrato-pill[data-filter-type].active")?.dataset.filterType || "all";
   const status = document.getElementById("filter-status")?.value || "";
-  const period = document.querySelector(".extrato-period-btn.active")?.dataset.period || "all";
+  const period = document.querySelector(".extrato-period-btn[data-period].active")?.dataset.period || "all";
   const search = (document.getElementById("filter-search")?.value || "").trim();
   const count = (type !== "all" ? 1 : 0) + (status ? 1 : 0) + (period !== "all" ? 1 : 0) + (search ? 1 : 0);
   const badge = document.getElementById("extrato-filter-badge");
@@ -2947,13 +2953,13 @@ document.getElementById("extrato-clear-filters")?.addEventListener("click", () =
   const searchInput = document.getElementById("filter-search");
   if (searchInput) searchInput.value = "";
   // Reset type
-  document.querySelectorAll(".extrato-pill").forEach(b => b.classList.remove("active"));
+  document.querySelectorAll(".extrato-pill[data-filter-type]").forEach(b => b.classList.remove("active"));
   document.querySelector('.extrato-pill[data-filter-type="all"]')?.classList.add("active");
   // Reset status
   const status = document.getElementById("filter-status");
   if (status) status.value = "";
   // Reset period
-  document.querySelectorAll(".extrato-period-btn").forEach(b => b.classList.remove("active"));
+  document.querySelectorAll(".extrato-period-btn[data-period]").forEach(b => b.classList.remove("active"));
   document.querySelector('.extrato-period-btn[data-period="all"]')?.classList.add("active");
   document.getElementById("extrato-custom-range")?.classList.add("hidden");
   const startDate = document.getElementById("filter-start-date");

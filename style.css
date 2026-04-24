@@ -5088,41 +5088,28 @@ textarea:focus {
   padding: 12px 28px;
 }
 
-/* ===== Wallet transactions list ===== */
-.wallet-tx-filters {
+/* ===== Wallet transactions list =====
+   Filter/toolbar UI reuses .extrato-* classes (see "TRANSACTIONS LIST" block).
+   Card + list here mirror [data-view="transactions"] .card so the wallet
+   history gets the same scrollable-flex layout the Extrato uses for its
+   infinite-scroll sentinel. Keep in sync if the extrato container changes. */
+[data-view="wallet-transactions"] .card {
   display: flex;
-  gap: 6px;
-  margin-bottom: 12px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-}
-.wallet-tx-pill {
-  flex-shrink: 0;
-  /* override global `input, button { width: 100% }` — pills must size to
-     content, otherwise each one takes 100% of the row and scrolls forever. */
-  width: auto;
-  margin-bottom: 0;
-  padding: 6px 14px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: 999px;
-  color: var(--text-secondary);
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: background 0.18s, color 0.18s, border-color 0.18s;
-}
-.wallet-tx-pill:hover {
-  background: var(--bg-elevated-hover);
-}
-.wallet-tx-pill.active {
-  background: var(--accent-muted);
-  border-color: var(--accent);
-  color: var(--accent);
+  flex-direction: column;
+  max-height: calc(100dvh - 48px);
+  overflow: hidden;
 }
 .wallet-tx-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  margin: 16px 0;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 12px;
 }
 .wallet-tx-row {
   display: flex;

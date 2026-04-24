@@ -142,16 +142,16 @@
   }
   </script>
 
-  <link rel="manifest" href="manifest.json?v=139" />
-  <link rel="icon" href="icon-192.png?v=139" />
-  <link rel="apple-touch-icon" href="icon-192.png?v=139" />
+  <link rel="manifest" href="manifest.json?v=140" />
+  <link rel="icon" href="icon-192.png?v=140" />
+  <link rel="apple-touch-icon" href="icon-192.png?v=140" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
   <!-- Asset version must match APP_VERSION in service-worker.js -->
-  <link rel="stylesheet" href="style.css?v=139" />
+  <link rel="stylesheet" href="style.css?v=140" />
 </head>
 <body>
 
@@ -160,7 +160,7 @@
 
   <nav class="landing-nav">
     <div class="landing-nav-inner">
-      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=139" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
+      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=140" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
       <div class="landing-nav-right">
         <a href="https://blog.depixapp.com/" class="landing-nav-link">Blog</a>
         <a href="#login" class="landing-nav-cta">Entrar</a>
@@ -2331,11 +2331,62 @@
   <div class="card wallet-transactions-card">
     <h2 class="view-title">Movimentações da carteira</h2>
 
-    <div class="wallet-tx-filters" role="radiogroup" aria-label="Filtrar por ativo">
-      <button class="wallet-tx-pill active" data-wallet-filter="all" type="button" role="radio" aria-checked="true">Todos</button>
-      <button class="wallet-tx-pill" data-wallet-filter="DEPIX" type="button" role="radio" aria-checked="false">DePix</button>
-      <button class="wallet-tx-pill" data-wallet-filter="USDT" type="button" role="radio" aria-checked="false">USDt</button>
-      <button class="wallet-tx-pill" data-wallet-filter="LBTC" type="button" role="radio" aria-checked="false">L-BTC</button>
+    <div class="extrato-filters">
+      <div class="extrato-toolbar">
+        <div class="extrato-search-row">
+          <svg class="extrato-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input id="wallet-tx-filter-search" type="text" placeholder="Buscar…" autocomplete="off" />
+          <button id="wallet-tx-filter-search-clear" class="extrato-search-clear hidden" type="button" aria-label="Limpar busca">&times;</button>
+          <span id="wallet-tx-search-hint" class="extrato-search-hint">TXID ou valor</span>
+        </div>
+        <button id="wallet-tx-filter-toggle" class="extrato-filter-toggle" type="button">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+          Filtros
+          <span id="wallet-tx-filter-badge" class="extrato-filter-badge hidden">0</span>
+          <svg class="extrato-filter-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+      </div>
+      <div id="wallet-tx-filter-panel" class="extrato-filter-panel hidden">
+        <div class="extrato-filter-group">
+          <label class="extrato-filter-label">Ativo</label>
+          <div class="extrato-type-toggle" role="radiogroup" aria-label="Filtrar por ativo">
+            <button class="extrato-pill active" data-wallet-asset="all" type="button" role="radio" aria-checked="true">Todos</button>
+            <button class="extrato-pill" data-wallet-asset="DEPIX" type="button" role="radio" aria-checked="false">DePix</button>
+            <button class="extrato-pill" data-wallet-asset="USDT" type="button" role="radio" aria-checked="false">USDt</button>
+            <button class="extrato-pill" data-wallet-asset="LBTC" type="button" role="radio" aria-checked="false">L-BTC</button>
+          </div>
+        </div>
+        <div class="extrato-filter-group">
+          <label class="extrato-filter-label">Tipo</label>
+          <div class="extrato-type-toggle" role="radiogroup" aria-label="Filtrar por tipo">
+            <button class="extrato-pill active" data-wallet-direction="all" type="button" role="radio" aria-checked="true">Todos</button>
+            <button class="extrato-pill" data-wallet-direction="in" type="button" role="radio" aria-checked="false">Recebidos</button>
+            <button class="extrato-pill" data-wallet-direction="out" type="button" role="radio" aria-checked="false">Enviados</button>
+          </div>
+        </div>
+        <div class="extrato-filter-group">
+          <label class="extrato-filter-label">Período</label>
+          <div class="extrato-period-presets" role="radiogroup" aria-label="Filtrar por período">
+            <button class="extrato-period-btn active" data-wallet-period="all" type="button" role="radio" aria-checked="true">Todos</button>
+            <button class="extrato-period-btn" data-wallet-period="today" type="button" role="radio" aria-checked="false">Hoje</button>
+            <button class="extrato-period-btn" data-wallet-period="7d" type="button" role="radio" aria-checked="false">7 dias</button>
+            <button class="extrato-period-btn" data-wallet-period="30d" type="button" role="radio" aria-checked="false">30 dias</button>
+            <button class="extrato-period-btn" data-wallet-period="90d" type="button" role="radio" aria-checked="false">90 dias</button>
+            <button class="extrato-period-btn" data-wallet-period="custom" type="button" role="radio" aria-checked="false">Intervalo</button>
+          </div>
+          <div id="wallet-tx-custom-range" class="extrato-date-row hidden">
+            <div class="extrato-date-field">
+              <span class="extrato-date-prefix">De</span>
+              <input id="wallet-tx-start-date" type="date" />
+            </div>
+            <div class="extrato-date-field">
+              <span class="extrato-date-prefix">Até</span>
+              <input id="wallet-tx-end-date" type="date" />
+            </div>
+          </div>
+        </div>
+        <button id="wallet-tx-clear-filters" class="extrato-clear-filters hidden" type="button">Limpar filtros</button>
+      </div>
     </div>
 
     <div id="wallet-tx-msg" class="mensagem"></div>
@@ -2343,7 +2394,9 @@
     <div id="wallet-tx-empty" class="hidden">
       <p class="info-text">Nenhuma transação encontrada.</p>
     </div>
-    <div id="wallet-tx-list" class="wallet-tx-list"></div>
+    <div id="wallet-tx-list" class="wallet-tx-list">
+      <div id="wallet-tx-sentinel" aria-hidden="true" style="height:1px"></div>
+    </div>
 
     <div class="wallet-action-row">
       <button id="wallet-tx-back" class="secondary">Voltar</button>
@@ -3258,6 +3311,6 @@
 
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 <!-- Asset version must match APP_VERSION in service-worker.js -->
-<script type="module" src="script.js?v=139"></script>
+<script type="module" src="script.js?v=140"></script>
 </body>
 </html>
