@@ -2535,7 +2535,34 @@ export function registerWalletRoutes({
     pendingWithdrawalId = typeof withdrawalId === "string" ? withdrawalId : null;
   });
 
+  // Lock the #wallet-send view into "withdraw review" mode when the prefill
+  // came from /api/withdraw. Eulen fixes the asset (always DePix), the exact
+  // deposit amount, and the destination — any user edit would decouple the
+  // broadcast from the withdraw row and break reconciliation. We hide the
+  // input fields entirely and jump straight into the preview so the user only
+  // sees the review summary + Confirmar envio.
+  function setWithdrawLockState(locked) {
+    const section = d?.querySelector?.('[data-view="wallet-send"]');
+    if (!section) return;
+    const fields = section.querySelectorAll(".wallet-send-field");
+    fields.forEach(field => field.classList.toggle("hidden", locked));
+    const title = section.querySelector(".view-title");
+    if (title) title.textContent = locked ? "Confirmar saque" : "Enviar";
+    const info = section.querySelector(".info-text");
+    if (info) {
+      info.textContent = locked
+        ? "Tudo certo. Confirme os dados do saque abaixo para enviar."
+        : "Envie DePix, USDt ou L-BTC para um endereço Liquid externo.";
+    }
+  }
+
   route("#wallet-send", async () => {
+    // Resolve withdraw-flow state up front so the field wrappers hide before
+    // the section paints; otherwise the amount/dest inputs flash briefly
+    // between mount and the auto-preview kicking in.
+    const isWithdrawFlow = pendingSendPrefill !== null && pendingWithdrawalId !== null;
+    setWithdrawLockState(isWithdrawFlow);
+
     clearMsg("wallet-send-msg");
     const amountInput = q("wallet-send-amount");
     const destInput = q("wallet-send-dest");
@@ -2576,6 +2603,10 @@ export function registerWalletRoutes({
       // stale — attaching it to the next unrelated send would POST the wrong
       // liquid_txid to /api/withdraw/txid and corrupt support reconciliation.
       pendingWithdrawalId = null;
+    }
+
+    if (isWithdrawFlow) {
+      await onSendPreviewClick();
     }
   });
 
