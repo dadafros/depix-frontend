@@ -132,14 +132,14 @@ export function convertSatsToBrl(sats, asset, quotes) {
   return null;
 }
 
-// Small helper for the home row: pick the right number of fractional digits
-// per asset. Fiat-adjacent (USDt, DePix) shows 2; L-BTC shows 8.
+// Render a sats amount as a decimal string with the asset's full precision.
+// Trailing zeros are trimmed by `satsToAmount` (e.g. 37_231_000_000n at 8
+// decimals → "37.231", not "37.23100000"). The previous behavior clamped
+// DePix / USDt to 2 decimals via `.toFixed(2)`, which silently rounded
+// real balances ("37.23" for an actual 37.231) and caused the Max button
+// to leave sub-0.01 dust unspendable. BRL equivalents are formatted
+// elsewhere via `formatBRL` / `Intl.NumberFormat` — don't mix the two.
 export function formatAssetAmount(sats, asset) {
   if (!asset) return "0";
-  const raw = satsToAmount(sats, asset.decimals);
-  if (asset.symbol === "L-BTC") return raw;
-  // DePix / USDt — clamp to 2 decimals for display.
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return raw;
-  return n.toFixed(2);
+  return satsToAmount(sats, asset.decimals);
 }
