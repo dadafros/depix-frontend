@@ -88,7 +88,7 @@ Duração: ~15 min em iPhone real.
 
 ### 7. Kill switch (opcional se ambiente de staging)
 
-- [ ] Ativar `WALLET_KILL_SWITCH=1` no staging.
+- [ ] Ativar kill switch no staging via Telegram: `/walletoff`.
 - [ ] Reabrir PWA (após 5min do cache TTL).
 - [ ] Verificar banner laranja de manutenção visível.
 - [ ] Verificar view-only ainda funciona (saldo + receber + histórico).

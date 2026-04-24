@@ -15,13 +15,14 @@ doc com o primeiro incidente real — ele é proposital curto agora.
 
 ### 1. Ativar kill switch (parar novas wallets imediatamente)
 
-No backend, defina `WALLET_KILL_SWITCH=1` no env de produção e redeploy:
+No bot Telegram administrativo, envie:
 
-```bash
-cd depix-backend
-vercel env add WALLET_KILL_SWITCH production  # valor: 1
-vercel deploy --prod
 ```
+/walletoff
+```
+
+O bot grava a flag `wallet:kill_switch=1` no Redis do backend. Sem redeploy,
+sem mexer em env do Vercel.
 
 Efeito:
 - `GET /api/config` passa a retornar `{ walletEnabled: false }`.
@@ -32,9 +33,10 @@ Efeito:
 
 ### 2. Reverter kill switch
 
-```bash
-vercel env rm WALLET_KILL_SWITCH production
-vercel deploy --prod
+No bot Telegram:
+
+```
+/walleton
 ```
 
 Frontend refaz fetch a cada 5min (TTL do cache), então a reativação demora

@@ -4,7 +4,9 @@
 //
 // The server-side contract is enforced in `api/_lib/routes/config.js`:
 //   - `{ walletEnabled: boolean, timestamp: number }`
-//   - `walletEnabled` turns false only when WALLET_KILL_SWITCH env is set.
+//   - `walletEnabled` turns false when the Redis flag `wallet:kill_switch`
+//     is set. Toggled via the Telegram admin commands `/walletoff` and
+//     `/walleton` — never via env vars.
 //
 // Why in-memory only: we don't want a stale "false" persisted across reloads
 // to block users when the operator has already cleared the switch. Every
