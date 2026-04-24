@@ -287,9 +287,6 @@ document.getElementById("wallet-guide-link")?.addEventListener("click", (e) => {
   e.preventDefault();
   document.getElementById("wallet-guide-modal")?.classList.remove("hidden");
 });
-document.getElementById("wallet-maintenance-help")?.addEventListener("click", () => {
-  document.getElementById("wallet-guide-modal")?.classList.remove("hidden");
-});
 document.getElementById("btn-wallet-guide-register")?.addEventListener("click", () => {
   document.getElementById("wallet-guide-modal")?.classList.add("hidden");
   openExternalWalletModal();
@@ -3072,7 +3069,6 @@ async function refreshWalletModeAvailability() {
   const walletExists = true;
   const walletEnabled = await isWalletFeatureEnabled();
   const plan = planHomeToggle({ walletExists, walletEnabled });
-  const banner = document.getElementById("wallet-maintenance-banner");
   // Override: when the user has explicitly committed to an external wallet
   // (destination=external), we hide the Minha Carteira tab even though the
   // wallet still lives in IDB. Getting it back is a two-click journey via
@@ -3082,7 +3078,6 @@ async function refreshWalletModeAvailability() {
   const showWalletBtn = plan.showWalletBtn && !(walletExists && destination === "external");
   const shouldForceDeposit = plan.forceDeposit || (!showWalletBtn && modoWallet);
   walletBtn.classList.toggle("hidden", !showWalletBtn);
-  banner?.classList.toggle("hidden", !plan.showBanner);
   // Wallet availability gates the destination selector — refresh after the
   // toggle visibility updates so the tile + chip reflect the new state.
   void refreshHomeDestination();
