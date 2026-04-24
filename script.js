@@ -24,7 +24,14 @@ import { planHomeToggle } from "./wallet-home-gate.js";
 // fall back to the legacy selected-address picker (`addresses.js`). Failing
 // silently here is intentional: the caller already handles a null return by
 // surfacing "selecione um endereço".
+//
+// The raw IDB probe (`hasWalletInIdbRaw`, hoisted — defined later in this
+// file) answers "is there a wallet?" without paying the ~200kb wallet bundle
+// download. Users without a wallet must never trigger `loadWalletBundle()`
+// just to get their deposit address (plan Sub-fase 1: "Usuários sem wallet
+// não carregam o bundle").
 async function resolveWalletReceiveAddress() {
+  if (!(await hasWalletInIdbRaw())) return null;
   try {
     const bundle = await loadWalletBundle();
     const w = bundle.getDefaultWallet();
@@ -1341,18 +1348,37 @@ document.getElementById("btnSacar")?.addEventListener("click", async () => {
     lastWithdrawalId = r.id;
 
     if (hasWallet) {
-      window.dispatchEvent(new CustomEvent("wallet-send:prefill", {
-        detail: {
-          assetKey: "DEPIX",
-          amountBrl: r.depositAmountInCents / 100,
-          dest: r.depositAddress,
-          withdrawalId: r.id
-        }
-      }));
-      try { localStorage.setItem("depix-home-mode", "wallet"); } catch { /* ignore */ }
-      document.getElementById("formSaque").classList.add("hidden");
-      navigate("#wallet-send");
-      return;
+      // Bootstrap the wallet UI BEFORE dispatching the prefill event.
+      // `registerWalletRoutes()` — invoked inside `ensureWalletBootstrapped()`
+      // — is what registers the `wallet-send:prefill` listener. Dispatching
+      // before that runs fires the event into the void (CustomEvent delivery
+      // is synchronous) and the user lands on an empty #wallet-send form with
+      // no way to recover the live Eulen deposit address. If the bundle fails
+      // to load we fall through to the legacy saque UI so the user can still
+      // broadcast manually from any Liquid wallet.
+      let walletReady = false;
+      try {
+        await ensureWalletBootstrapped();
+        walletReady = true;
+      } catch (err) {
+        console.error("wallet bundle load failed on withdraw handoff", err);
+        showToast("Não foi possível carregar a carteira. Use o endereço abaixo para enviar manualmente.");
+      }
+      if (walletReady) {
+        window.dispatchEvent(new CustomEvent("wallet-send:prefill", {
+          detail: {
+            assetKey: "DEPIX",
+            amountBrl: r.depositAmountInCents / 100,
+            dest: r.depositAddress,
+            withdrawalId: r.id
+          }
+        }));
+        try { localStorage.setItem("depix-home-mode", "wallet"); } catch { /* ignore */ }
+        document.getElementById("formSaque").classList.add("hidden");
+        navigate("#wallet-send");
+        return;
+      }
+      // else: fall through to the legacy depositAddress/QR card below.
     }
 
     document.getElementById("saqueDepositAmount").innerText = formatDePix(r.depositAmountInCents);

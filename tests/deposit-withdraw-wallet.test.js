@@ -208,4 +208,25 @@ describe("wallet-send:prefill CustomEvent contract", () => {
       window.removeEventListener("wallet-send:prefill", handler);
     }
   });
+
+  it("dispatching BEFORE listener registration loses the event — pins the race", () => {
+    // Regression test for the Sub-fase 6 race: the withdraw handler in
+    // script.js used to dispatch `wallet-send:prefill` BEFORE the wallet
+    // bundle bootstrapped, meaning `registerWalletRoutes()` had not yet
+    // registered the listener. CustomEvent delivery is synchronous — if no
+    // listener is present at dispatch time, the event is gone forever. The
+    // fix moves `await ensureWalletBootstrapped()` in front of the dispatch;
+    // this test documents why the ordering matters.
+    const captured = [];
+    window.dispatchEvent(new CustomEvent("wallet-send:prefill", {
+      detail: { assetKey: "DEPIX", amountBrl: 1, dest: "lq1q", withdrawalId: "wd-late" }
+    }));
+    const handler = evt => captured.push(evt.detail);
+    window.addEventListener("wallet-send:prefill", handler);
+    try {
+      expect(captured).toEqual([]);
+    } finally {
+      window.removeEventListener("wallet-send:prefill", handler);
+    }
+  });
 });

@@ -46,10 +46,20 @@ describe("archiveWithdrawTxid", () => {
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
-  it("reports http status on non-204 responses", async () => {
+  it("treats 409 as idempotent success (row already had liquid_txid set)", async () => {
+    // A 409 means an earlier POST for the same withdrawal already won the
+    // one-shot write. From the client's perspective that is success, not
+    // failure — the correlation is archived. Returning { ok: false } would
+    // flag this as a false failure if a future telemetry hook reads .reason.
     apiFetch.mockResolvedValueOnce({ status: 409 });
     const r = await archiveWithdrawTxid({ withdrawalId: "abc", liquidTxid: VALID_TXID });
-    expect(r).toEqual({ ok: false, reason: "http-409" });
+    expect(r).toEqual({ ok: true, alreadyArchived: true });
+  });
+
+  it("reports http status on other non-204 responses", async () => {
+    apiFetch.mockResolvedValueOnce({ status: 500 });
+    const r = await archiveWithdrawTxid({ withdrawalId: "abc", liquidTxid: VALID_TXID });
+    expect(r).toEqual({ ok: false, reason: "http-500" });
   });
 
   it("reports network error without throwing", async () => {

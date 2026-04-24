@@ -3585,7 +3585,7 @@ textarea:focus {
 .wallet-maintenance-banner-link {
   background: none; border: none; cursor: pointer;
   color: #ed8936; font-size: 12px; white-space: nowrap; text-decoration: underline; flex-shrink: 0;
-  padding: 0;
+  padding: 0; width: auto; margin-bottom: 0;
 }
 
 /* Verify account page */

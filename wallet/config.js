@@ -10,7 +10,16 @@
 // to block users when the operator has already cleared the switch. Every
 // cold start re-checks, and the 5min window covers a single session.
 
-const DEFAULT_ENDPOINT = "/api/config";
+// Mirror api.js API_BASE: on the Docker dev env (localhost:2323) the nginx
+// proxy forwards /api/* to the backend container, so a bare path is correct.
+// Everywhere else (depixapp.com / GitHub Pages) we must hit the backend's
+// absolute URL — a bare /api/config returns 404 and the kill switch falls
+// open silently. See CLAUDE.md "Red flags" (bare /api/ path on GH Pages).
+const DEFAULT_ENDPOINT = (typeof window !== "undefined" &&
+  window.location?.hostname === "localhost" &&
+  window.location?.port === "2323")
+  ? "/api/config"
+  : "https://depix-backend.vercel.app/api/config";
 const CACHE_TTL_MS = 5 * 60_000;
 const DEFAULT_TIMEOUT_MS = 4_000;
 
@@ -84,4 +93,11 @@ let defaultClient = null;
 export function getDefaultConfigClient() {
   if (!defaultClient) defaultClient = createConfigClient();
   return defaultClient;
+}
+
+// Drop the module-level singleton. Tests that swap fetch implementations or
+// spec environments (jsdom vs node) need to force a rebuild; production code
+// should not call this.
+export function resetDefaultConfigClient() {
+  defaultClient = null;
 }
