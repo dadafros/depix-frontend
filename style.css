@@ -3573,6 +3573,55 @@ textarea:focus {
   color: var(--accent); font-size: 12px; white-space: nowrap; text-decoration: none; flex-shrink: 0;
 }
 
+/* Home destination selector — wallet vs external address picker per Sub-fase 6 plan */
+.home-destination {
+  margin-bottom: 14px;
+  text-align: left;
+}
+.home-destination-label {
+  margin: 0 0 6px; font-size: 12px; color: var(--text-tertiary);
+  text-transform: uppercase; letter-spacing: 0.4px;
+}
+.home-destination-tile {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  background: rgba(79, 209, 197, 0.08);
+  border: 1px solid rgba(79, 209, 197, 0.28);
+  border-radius: 10px;
+}
+.home-destination-check {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--accent); color: #0b2a2b; flex-shrink: 0;
+}
+.home-destination-body {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.home-destination-title {
+  font-size: 14px; color: var(--text-primary); font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.home-destination-sub {
+  font-size: 12px; color: var(--text-secondary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Secondary link — must override the global input,button { width:100%; margin-bottom:12px; padding:14px } */
+.home-destination-link {
+  background: none; border: none; cursor: pointer;
+  color: var(--accent); font-size: 12px; font-weight: 500;
+  text-decoration: underline; text-align: left;
+  padding: 6px 0 0; width: auto; margin: 0;
+}
+.home-destination-link:hover { color: #7de4d9; }
+
+/* Header chip — wallet-flavored variant when the destination is the in-app wallet */
+.addr-chip.addr-chip-wallet {
+  background: rgba(79, 209, 197, 0.14);
+  border-color: rgba(79, 209, 197, 0.38);
+  color: var(--accent);
+}
+
 /* Wallet maintenance banner (kill switch on + user has wallet) */
 .wallet-maintenance-banner {
   background: rgba(237, 137, 54, 0.08); border: 1px solid rgba(237, 137, 54, 0.22);
