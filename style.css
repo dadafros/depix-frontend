@@ -3573,6 +3573,96 @@ textarea:focus {
   color: var(--accent); font-size: 12px; white-space: nowrap; text-decoration: none; flex-shrink: 0;
 }
 
+/* Onboarding (#no-address) — dropdown + dynamic hint + Continuar button */
+.empty-state-select-label {
+  display: block; margin: 12px 0 6px; font-size: 12px;
+  color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.4px;
+  text-align: left;
+}
+.empty-state-select {
+  width: 100%; box-sizing: border-box;
+  padding: 12px 14px; margin-bottom: 8px;
+  background: var(--bg-elevated); color: var(--text-primary);
+  border: 1px solid var(--border-subtle); border-radius: 10px;
+  font-size: 14px;
+}
+.empty-state-select:focus {
+  outline: none; border-color: var(--accent);
+}
+.empty-state-hint {
+  margin: 4px 0 14px; font-size: 12px; color: var(--text-tertiary);
+  line-height: 1.5; text-align: center;
+}
+.empty-state-hint:last-child { margin-bottom: 0; }
+.empty-state-advanced {
+  font-size: 11px; color: var(--text-tertiary); font-weight: 400;
+  margin-left: 4px;
+}
+
+/* Header chip displayed below the mode toggle (Sub-fase 6 layout) */
+.addr-chip.addr-chip-under-toggle {
+  display: block; width: 100%; box-sizing: border-box;
+  margin: 10px 0 12px; text-align: center;
+}
+
+/* Minha Carteira — maintenance replacement (kill-switch ON + wallet exists) */
+.wallet-home-maintenance-view {
+  text-align: center;
+  padding: 8px 4px 0;
+}
+.wallet-home-maintenance-icon {
+  color: #ed8936;
+  display: flex; justify-content: center; align-items: center;
+  margin-bottom: 12px;
+}
+.wallet-home-maintenance-title {
+  margin: 0 0 10px; font-size: 16px; color: var(--text-primary);
+}
+.wallet-home-maintenance-copy {
+  margin: 0 0 10px; font-size: 13px; color: var(--text-secondary);
+  line-height: 1.55;
+}
+.wallet-home-maintenance-copy:last-of-type { margin-bottom: 18px; }
+.wallet-home-maintenance-view button { width: 100%; margin-bottom: 0; }
+
+/* Carteira Externa + Carteira Integrada modals — educational blocks */
+.wallet-info-block {
+  background: rgba(79, 209, 197, 0.06);
+  border: 1px solid rgba(79, 209, 197, 0.18);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 0 0 14px;
+  text-align: left;
+}
+.wallet-info-block .info-text { margin: 0 0 8px; }
+.wallet-info-block .info-text:last-child { margin-bottom: 0; }
+.wallet-info-heading {
+  margin: 0 0 8px; font-size: 14px; font-weight: 600; color: var(--text-primary);
+}
+.wallet-info-list {
+  margin: 0; padding-left: 18px; color: var(--text-secondary); font-size: 13px; line-height: 1.5;
+}
+.wallet-info-list li { margin-bottom: 4px; }
+.wallet-info-list li:last-child { margin-bottom: 0; }
+
+.wallet-section {
+  margin: 14px 0;
+  text-align: left;
+}
+.wallet-section-title {
+  margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--text-primary);
+  text-transform: uppercase; letter-spacing: 0.4px;
+}
+.wallet-section > .info-text { margin: 0 0 10px; }
+.wallet-section code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 5px; border-radius: 4px; font-size: 12px;
+}
+
+#integrated-wallet-ctas { margin: 16px 0 0; }
+#integrated-wallet-ctas button + button { margin-top: 8px; }
+#integrated-wallet-ctas button[disabled] { opacity: 0.5; cursor: not-allowed; }
+
 /* Home destination selector — wallet vs external address picker per Sub-fase 6 plan */
 .home-destination {
   margin-bottom: 14px;
@@ -4835,7 +4925,7 @@ textarea:focus {
 
 .wallet-home-actions {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 12px;
 }
