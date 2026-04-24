@@ -187,6 +187,23 @@ export async function computeFingerprint(descriptor) {
   return `${hex.slice(0, 4)}-${hex.slice(4)}`;
 }
 
+// Wallet identity cache — the home header chip reads this key to display
+// "Carteira Integrada: XXXX-XXXX" without paying a bundle-load tax on the
+// legacy path. Populated whenever we compute the fingerprint (create /
+// restore / export screens). Cleared on wipe (see wallet.js wipe path).
+const IDENTITY_CACHE_KEY = "depix-wallet-identity";
+
+export function cacheWalletIdentity(fingerprint) {
+  if (typeof fingerprint !== "string" || !fingerprint) return;
+  try { localStorage.setItem(IDENTITY_CACHE_KEY, fingerprint); }
+  catch { /* private mode — chip falls back to the bare label */ }
+}
+
+export function clearWalletIdentityCache() {
+  try { localStorage.removeItem(IDENTITY_CACHE_KEY); }
+  catch { /* private mode */ }
+}
+
 // --------------------------------------------------------------------------
 // DOM registration.
 // --------------------------------------------------------------------------
@@ -401,7 +418,9 @@ export function registerWalletRoutes({
       identityEl.textContent = "…";
       try {
         const descriptor = await wallet.deriveDescriptor(state.pendingMnemonic);
-        identityEl.textContent = await computeFingerprint(descriptor);
+        const fp = await computeFingerprint(descriptor);
+        identityEl.textContent = fp;
+        cacheWalletIdentity(fp);
       } catch {
         // The 12 words are the primary artifact — never let an identity
         // failure block the seed display. Fall back to a discreet placeholder.
@@ -843,7 +862,9 @@ export function registerWalletRoutes({
     if (el) {
       el.textContent = "…";
       try {
-        el.textContent = await computeFingerprint(state.pendingDescriptor);
+        const fp = await computeFingerprint(state.pendingDescriptor);
+        el.textContent = fp || "—";
+        if (fp) cacheWalletIdentity(fp);
       } catch {
         el.textContent = "—";
       }
@@ -1283,6 +1304,27 @@ export function registerWalletRoutes({
     // never shows an address derived from the previous seed. Module-scoped
     // cache from the old wallet would otherwise persist until a full reload.
     cachedReceiveAddress = null;
+    // Backfill the wallet-identity cache used by the home chip when the
+    // current wallet predates that feature. One-shot per session; bundle is
+    // already loaded at this point so it's essentially free.
+    let cachedIdentity = "";
+    try { cachedIdentity = localStorage.getItem("depix-wallet-identity") || ""; }
+    catch { /* private mode */ }
+    if (!cachedIdentity) {
+      try {
+        const descriptor = await wallet.getDescriptor();
+        if (descriptor) {
+          const fp = await computeFingerprint(descriptor);
+          if (fp) {
+            cacheWalletIdentity(fp);
+            // Nudge the home chip to pick up the freshly-cached fingerprint.
+            if (w && typeof w.dispatchEvent === "function") {
+              w.dispatchEvent(new CustomEvent("wallet-identity:changed"));
+            }
+          }
+        }
+      } catch { /* best effort */ }
+    }
     showMsg("wallet-home-msg", "", null);
     // First paint from the cached Update blob (instant, offline-safe).
     try {
@@ -1328,9 +1370,6 @@ export function registerWalletRoutes({
   // Home panel action buttons.
   q("wallet-home-receive")?.addEventListener("click", () => {
     navigate("#wallet-receive");
-  });
-  q("wallet-home-qr")?.addEventListener("click", () => {
-    void openFullscreenQr();
   });
   q("wallet-home-transactions")?.addEventListener("click", () => {
     navigate("#wallet-transactions");
@@ -1673,6 +1712,19 @@ export function registerWalletRoutes({
   route("#wallet-settings", () => {
     showMsg("wallet-settings-msg", "", null);
     void refreshBiometricRow();
+    // Honor the "auto-open export" flag set by the wallet-restore-guide
+    // modal's "Mostrar minhas 12 palavras" CTA. One-shot — we clear the
+    // flag on read so a later manual visit to wallet-settings does not
+    // reopen the export modal.
+    let autoExport = false;
+    try {
+      autoExport = localStorage.getItem("depix-pending-seed-export") === "1";
+      if (autoExport) localStorage.removeItem("depix-pending-seed-export");
+    } catch { /* private mode */ }
+    if (autoExport) {
+      const btn = q("wallet-settings-export");
+      if (btn) setTimeout(() => btn.click(), 0);
+    }
   });
 
   q("wallet-settings-back")?.addEventListener("click", () => {
@@ -1836,9 +1888,9 @@ export function registerWalletRoutes({
         identityValue.textContent = "…";
         try {
           const descriptor = await wallet.getDescriptor();
-          identityValue.textContent = descriptor
-            ? await computeFingerprint(descriptor)
-            : "—";
+          const fp = descriptor ? await computeFingerprint(descriptor) : "";
+          identityValue.textContent = fp || "—";
+          if (fp) cacheWalletIdentity(fp);
         } catch {
           // Fingerprint is a convenience, never block the word reveal.
           identityValue.textContent = "—";

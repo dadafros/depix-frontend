@@ -126,6 +126,9 @@ function clearWalletExistsFlag() {
   try {
     if (typeof localStorage !== "undefined") {
       localStorage.removeItem(WALLET_EXISTS_FLAG);
+      // The header-chip fingerprint cache is tied to this wallet's lifetime;
+      // drop it together so a new wallet installation starts with no stale id.
+      localStorage.removeItem("depix-wallet-identity");
     }
   } catch { /* private mode / disabled */ }
 }
