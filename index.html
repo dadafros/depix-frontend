@@ -2308,21 +2308,26 @@
 
     <div class="wallet-send-field">
       <label class="wallet-send-field-label">Ativo</label>
-      <div id="wallet-send-assets" class="wallet-send-assets" role="radiogroup" aria-label="Escolher ativo">
-        <!-- populated by wallet-ui.js -->
+      <div id="wallet-send-asset-dropdown" class="custom-dropdown wallet-send-asset-dropdown">
+        <button type="button" id="wallet-send-asset-toggle" class="custom-dropdown-toggle wallet-send-asset-toggle">
+          <span class="wallet-send-asset-toggle-inner">
+            <img id="wallet-send-asset-toggle-icon" class="wallet-send-asset-toggle-icon" alt="" width="24" height="24" />
+            <span class="wallet-send-asset-toggle-labels">
+              <span id="wallet-send-asset-toggle-symbol" class="wallet-send-asset-toggle-symbol">DePix</span>
+              <span id="wallet-send-asset-toggle-name" class="wallet-send-asset-toggle-name">DePix</span>
+            </span>
+          </span>
+          <svg class="custom-dropdown-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div id="wallet-send-asset-options" class="custom-dropdown-options wallet-send-asset-options hidden" role="listbox" aria-label="Escolher ativo"></div>
       </div>
     </div>
 
     <div class="wallet-send-field">
-      <div class="wallet-send-field-head">
-        <label for="wallet-send-amount" class="wallet-send-field-label">Valor</label>
-        <label class="wallet-send-sendall hidden" id="wallet-send-sendall-wrap">
-          <input type="checkbox" id="wallet-send-sendall" />
-          <span>Enviar tudo</span>
-        </label>
-      </div>
+      <label for="wallet-send-amount" class="wallet-send-field-label">Valor</label>
       <div class="wallet-send-amount-wrap">
         <input id="wallet-send-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0,00" />
+        <button id="wallet-send-max" type="button" class="wallet-send-max" aria-label="Preencher com o saldo máximo">Max</button>
         <span id="wallet-send-amount-suffix" class="wallet-send-amount-suffix">DePix</span>
       </div>
       <p id="wallet-send-balance" class="wallet-send-balance">Saldo disponível: —</p>

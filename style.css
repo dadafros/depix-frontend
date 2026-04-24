@@ -5089,52 +5089,121 @@ textarea:focus {
   color: var(--text-secondary);
   font-weight: 500;
 }
-.wallet-send-assets {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.wallet-send-asset-dropdown { margin-bottom: 0; }
+.wallet-send-asset-toggle {
+  padding: 10px 12px;
+  font-size: 1rem;
+  background: var(--bg-elevated);
+  border-color: var(--border-subtle);
 }
-.wallet-send-asset {
+.wallet-send-asset-toggle-inner {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  cursor: pointer;
-  transition: border-color 120ms ease, background 120ms ease;
-  text-align: left;
-  width: 100%;
-  color: var(--text-primary);
-  font: inherit;
-}
-.wallet-send-asset:hover {
-  background: rgba(79, 209, 197, 0.06);
-}
-.wallet-send-asset.selected {
-  border-color: var(--accent);
-  background: rgba(79, 209, 197, 0.1);
-}
-.wallet-send-asset-dot {
-  flex-shrink: 0;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--accent);
-}
-.wallet-send-asset-name {
-  flex: 1;
+  gap: 12px;
   min-width: 0;
+  flex: 1;
+}
+.wallet-send-asset-toggle-icon {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  object-fit: contain;
+}
+.wallet-send-asset-toggle-labels {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+.wallet-send-asset-toggle-symbol {
+  font-size: 0.98rem;
+  color: var(--text-primary);
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.wallet-send-asset-toggle-name {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wallet-send-asset-options {
+  padding: 4px 0;
+}
+.wallet-send-asset-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 1rem;
+  color: var(--text-primary);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  transition: background 0.15s;
+  width: 100%;
+  background: transparent;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  text-align: left;
+  word-break: normal;
+  margin: 0;
+}
+.wallet-send-asset-option:last-child { border-bottom: none; }
+.wallet-send-asset-option.selected {
+  background: rgba(79, 209, 197, 0.1);
+}
+.wallet-send-asset-option-icon {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  object-fit: contain;
+}
+.wallet-send-asset-option-labels {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  line-height: 1.2;
+}
+.wallet-send-asset-option-symbol {
+  font-size: 0.98rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wallet-send-asset-option-name {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wallet-send-asset-option-balance {
+  flex-shrink: 0;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+@media (hover: hover) {
+  .wallet-send-asset-option:hover {
+    background: rgba(79, 209, 197, 0.06);
+  }
 }
 .wallet-send-amount-wrap {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px;
+  min-height: 48px;
+  padding: 0 12px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: 10px;
@@ -5148,16 +5217,18 @@ textarea:focus {
   background: transparent;
   border: 0;
   color: var(--text-primary);
-  font-size: 1.25rem;
-  font-variant-numeric: tabular-nums;
+  /* 16px matches the global input size; both sides of the row sit on the
+   * same baseline so the value lines up with the asset suffix. */
+  font-size: 1rem;
+  line-height: 1;
   outline: none;
   padding: 0;
-  text-align: center;
-  margin-bottom: 0;
+  margin: 0;
 }
 .wallet-send-amount-suffix {
   flex-shrink: 0;
   font-size: 0.9rem;
+  line-height: 1;
   color: var(--text-secondary);
   font-weight: 500;
 }
@@ -5166,24 +5237,29 @@ textarea:focus {
   font-size: 0.8rem;
   color: var(--text-secondary);
 }
-.wallet-send-sendall {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+.wallet-send-max {
   flex-shrink: 0;
-  white-space: nowrap;
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  cursor: pointer;
-  user-select: none;
-}
-/* Cancels the global `input { width: 100%; margin-bottom: 12px }` so the
- * checkbox sizes to its intrinsic ~14px box instead of stretching to fill
- * the label (which previously forced "Enviar tudo" to wrap to two lines). */
-.wallet-send-sendall input {
-  margin: 0;
   width: auto;
-  flex-shrink: 0;
+  margin: 0;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  background: rgba(79, 209, 197, 0.12);
+  border: 1px solid rgba(79, 209, 197, 0.25);
+  border-radius: 999px;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.wallet-send-max:hover {
+  background: rgba(79, 209, 197, 0.2);
+  border-color: var(--accent);
+}
+.wallet-send-max:active {
+  background: rgba(79, 209, 197, 0.28);
 }
 #wallet-send-dest {
   width: 100%;
