@@ -1950,37 +1950,104 @@ export function registerWalletRoutes({
     }
   }
 
-  function renderSendAssets() {
-    const host = q("wallet-send-assets");
+  function getSendAssetBalanceSats(asset) {
+    const balMap = sendState.balances;
+    if (!balMap || typeof balMap !== "object") return 0n;
+    const val = balMap[asset.id];
+    if (typeof val === "bigint") return val;
+    if (typeof val === "number") return BigInt(val);
+    return 0n;
+  }
+
+  function renderSendAssetDropdown() {
+    const toggleIcon = q("wallet-send-asset-toggle-icon");
+    const toggleSymbol = q("wallet-send-asset-toggle-symbol");
+    const toggleName = q("wallet-send-asset-toggle-name");
+    const current = currentSendAsset();
+    if (toggleIcon) {
+      toggleIcon.src = current.iconUrl;
+      toggleIcon.alt = current.symbol;
+    }
+    if (toggleSymbol) toggleSymbol.textContent = current.symbol;
+    if (toggleName) toggleName.textContent = current.name;
+
+    const host = q("wallet-send-asset-options");
     if (!host) return;
     host.textContent = "";
     for (const asset of DISPLAY_ORDER) {
       const key = assetKeyFromObject(asset);
       const btn = d.createElement("button");
       btn.type = "button";
-      btn.className = "wallet-send-asset";
-      btn.setAttribute("role", "radio");
+      btn.className = "wallet-send-asset-option";
+      btn.setAttribute("role", "option");
       btn.dataset.assetKey = key;
       const selected = sendState.assetKey === key;
-      btn.setAttribute("aria-checked", selected ? "true" : "false");
+      btn.setAttribute("aria-selected", selected ? "true" : "false");
       if (selected) btn.classList.add("selected");
-      const dot = d.createElement("span");
-      dot.className = "wallet-send-asset-dot";
-      dot.style.background = asset.color;
-      btn.appendChild(dot);
+      const icon = d.createElement("img");
+      icon.className = "wallet-send-asset-option-icon";
+      icon.src = asset.iconUrl;
+      icon.alt = asset.symbol;
+      icon.width = 28;
+      icon.height = 28;
+      icon.loading = "lazy";
+      btn.appendChild(icon);
+      const labels = d.createElement("span");
+      labels.className = "wallet-send-asset-option-labels";
+      const symbol = d.createElement("span");
+      symbol.className = "wallet-send-asset-option-symbol";
+      symbol.textContent = asset.symbol;
+      labels.appendChild(symbol);
       const name = d.createElement("span");
-      name.className = "wallet-send-asset-name";
-      name.textContent = asset.symbol;
-      btn.appendChild(name);
-      btn.addEventListener("click", () => selectSendAsset(key));
+      name.className = "wallet-send-asset-option-name";
+      name.textContent = asset.name;
+      labels.appendChild(name);
+      btn.appendChild(labels);
+      if (!sendState.balancesError) {
+        const bal = getSendAssetBalanceSats(asset);
+        const balEl = d.createElement("span");
+        balEl.className = "wallet-send-asset-option-balance";
+        balEl.textContent = `${formatAssetAmount(bal, asset)} ${asset.symbol}`;
+        btn.appendChild(balEl);
+      }
+      btn.addEventListener("click", () => {
+        selectSendAsset(key);
+        closeSendAssetDropdown();
+      });
       host.appendChild(btn);
     }
   }
 
+  function openSendAssetDropdown() {
+    const dd = q("wallet-send-asset-dropdown");
+    const opts = q("wallet-send-asset-options");
+    dd?.classList.add("open");
+    opts?.classList.remove("hidden");
+  }
+
+  function closeSendAssetDropdown() {
+    const dd = q("wallet-send-asset-dropdown");
+    const opts = q("wallet-send-asset-options");
+    dd?.classList.remove("open");
+    opts?.classList.add("hidden");
+  }
+
+  function toggleSendAssetDropdown() {
+    const opts = q("wallet-send-asset-options");
+    if (opts?.classList.contains("hidden")) openSendAssetDropdown();
+    else closeSendAssetDropdown();
+  }
+
   function selectSendAsset(key) {
     sendState.assetKey = key;
-    if (key !== "LBTC") sendState.sendAll = false;
-    renderSendAssets();
+    sendState.sendAll = false;
+    const amountInput = q("wallet-send-amount");
+    if (amountInput) {
+      amountInput.disabled = false;
+      amountInput.value = "";
+    }
+    sendState.amountSats = null;
+    renderSendAssetDropdown();
     refreshSendFieldsForAsset();
     clearSendPreview();
   }
@@ -1989,19 +2056,7 @@ export function registerWalletRoutes({
     const asset = currentSendAsset();
     const suffix = q("wallet-send-amount-suffix");
     if (suffix) suffix.textContent = asset.symbol;
-    const sendAllWrap = q("wallet-send-sendall-wrap");
-    if (sendAllWrap) sendAllWrap.classList.toggle("hidden", sendState.assetKey !== "LBTC");
-    const sendAllInput = q("wallet-send-sendall");
-    if (sendAllInput) sendAllInput.checked = sendState.sendAll;
-    const amountInput = q("wallet-send-amount");
-    if (amountInput) amountInput.disabled = sendState.sendAll;
-    const balMap = sendState.balances;
-    let bal = 0n;
-    if (balMap && typeof balMap === "object") {
-      const val = balMap[asset.id];
-      if (typeof val === "bigint") bal = val;
-      else if (typeof val === "number") bal = BigInt(val);
-    }
+    const bal = getSendAssetBalanceSats(asset);
     const balEl = q("wallet-send-balance");
     if (balEl) {
       if (sendState.balancesError) {
@@ -2010,6 +2065,40 @@ export function registerWalletRoutes({
         balEl.textContent = `Saldo disponível: ${formatAssetAmount(bal, asset)} ${asset.symbol}`;
       }
     }
+    const maxBtn = q("wallet-send-max");
+    if (maxBtn) {
+      const hasBalance = !sendState.balancesError && bal > 0n;
+      maxBtn.disabled = !hasBalance;
+      maxBtn.classList.toggle("hidden", !hasBalance);
+    }
+  }
+
+  function onMaxClick() {
+    const asset = currentSendAsset();
+    const bal = getSendAssetBalanceSats(asset);
+    if (bal <= 0n) return;
+    const amountInput = q("wallet-send-amount");
+    if (asset === ASSETS.LBTC) {
+      // L-BTC send-all uses LWK's drainLbtcWallet so the fee is auto-deducted
+      // from the wallet's L-BTC total. Display the balance in the input as a
+      // hint but disable manual edits until the user un-maxes.
+      sendState.sendAll = true;
+      sendState.amountSats = null;
+      if (amountInput) {
+        amountInput.value = formatAssetAmount(bal, asset);
+        amountInput.disabled = true;
+      }
+    } else {
+      // Non-LBTC assets: fees are paid from L-BTC reserves, so sending the
+      // full asset balance is just a normal addRecipient with amount = bal.
+      sendState.sendAll = false;
+      sendState.amountSats = bal;
+      if (amountInput) {
+        amountInput.disabled = false;
+        amountInput.value = formatAssetAmount(bal, asset);
+      }
+    }
+    clearSendPreview();
   }
 
   function clearSendPreview() {
@@ -2263,15 +2352,17 @@ export function registerWalletRoutes({
     if (amountInput) { amountInput.value = ""; amountInput.disabled = false; }
     if (destInput) destInput.value = "";
     q("wallet-send-dest-hint")?.classList.add("hidden");
+    closeSendAssetDropdown();
     clearSendPreview();
     sendState.assetKey = "DEPIX";
     sendState.sendAll = false;
     sendState.destAddr = "";
     sendState.amountSats = null;
     sendState.preview = null;
-    renderSendAssets();
+    renderSendAssetDropdown();
     refreshSendFieldsForAsset();
     await loadSendBalances();
+    renderSendAssetDropdown();
     refreshSendFieldsForAsset();
   });
 
@@ -2286,12 +2377,28 @@ export function registerWalletRoutes({
     persistHomeMode("wallet");
     navigate("#home");
   });
-  q("wallet-send-sendall")?.addEventListener("change", evt => {
-    sendState.sendAll = Boolean(evt.target?.checked);
-    refreshSendFieldsForAsset();
+  q("wallet-send-asset-toggle")?.addEventListener("click", toggleSendAssetDropdown);
+  q("wallet-send-max")?.addEventListener("click", onMaxClick);
+  // Close the asset dropdown on any outside click — matches the behavior of
+  // the merchant-address dropdown (the pattern we copied the markup from).
+  if (d && typeof d.addEventListener === "function") {
+    d.addEventListener("click", evt => {
+      const dd = q("wallet-send-asset-dropdown");
+      if (!dd || !dd.classList.contains("open")) return;
+      const target = evt.target;
+      if (!target || typeof target.nodeType !== "number") return;
+      if (!dd.contains(target)) closeSendAssetDropdown();
+    });
+  }
+  q("wallet-send-amount")?.addEventListener("input", () => {
+    // Manual edit after Max click means we're no longer in drain-all mode.
+    if (sendState.sendAll) {
+      sendState.sendAll = false;
+      const amountInput = q("wallet-send-amount");
+      if (amountInput) amountInput.disabled = false;
+    }
     clearSendPreview();
   });
-  q("wallet-send-amount")?.addEventListener("input", () => clearSendPreview());
   q("wallet-send-dest")?.addEventListener("input", () => {
     const v = (q("wallet-send-dest")?.value ?? "").trim();
     const hint = q("wallet-send-dest-hint");
