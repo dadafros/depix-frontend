@@ -3,9 +3,7 @@
 // Kill-switch end-to-end invariant — plan item "kill-switch.test.js":
 //   * `GET /api/config` returns `walletEnabled: false` → the home toggle
 //     is hidden for users WITHOUT a wallet (new-user block).
-//   * Users WITH an existing wallet keep view-only access and see the
-//     maintenance banner + "Como faço?" button that opens the existing
-//     SideSwap guide modal.
+//   * Users WITH an existing wallet keep view-only access.
 //   * The kill switch never force-wipes local IndexedDB — a user's seed
 //     + descriptor stay intact across the toggle.
 //
@@ -81,7 +79,6 @@ describe("kill switch — new users (no local wallet)", () => {
 
     const plan = planHomeToggle({ walletExists, walletEnabled });
     expect(plan.showWalletBtn).toBe(false);
-    expect(plan.showBanner).toBe(false);
     expect(plan.forceDeposit).toBe(true);
   });
 
@@ -97,13 +94,11 @@ describe("kill switch — new users (no local wallet)", () => {
     // No wallet yet → toggle stays hidden even when enabled, by design.
     expect(plan.showWalletBtn).toBe(false);
     expect(plan.forceDeposit).toBe(true);
-    // And the banner is never shown to users who don't have a wallet at all.
-    expect(plan.showBanner).toBe(false);
   });
 });
 
 describe("kill switch — users with an existing wallet", () => {
-  it("preserves view-only access + shows the maintenance banner", async () => {
+  it("preserves view-only access", async () => {
     const fetchImpl = async () => jsonResp({ walletEnabled: false });
     const config = createConfigClient({ fetchImpl });
     const wallet = newWallet();
@@ -116,7 +111,6 @@ describe("kill switch — users with an existing wallet", () => {
 
     const plan = planHomeToggle({ walletExists, walletEnabled });
     expect(plan.showWalletBtn).toBe(true);
-    expect(plan.showBanner).toBe(true);
     // No "restore preferred mode" — we don't want the app to open directly
     // on #wallet-home during maintenance because the send flow is blocked.
     expect(plan.allowRestorePreferred).toBe(false);
@@ -141,7 +135,8 @@ describe("kill switch — users with an existing wallet", () => {
       walletExists: await wallet.hasWallet(),
       walletEnabled: await config.isWalletEnabled()
     });
-    expect(plan.showBanner).toBe(true);
+    expect(plan.showWalletBtn).toBe(true);
+    expect(plan.allowRestorePreferred).toBe(false);
 
     // Cache TTL is 5min; advance past it so the client re-fetches.
     killEnabled = true;
@@ -151,7 +146,6 @@ describe("kill switch — users with an existing wallet", () => {
       walletExists: await wallet.hasWallet(),
       walletEnabled: await config.isWalletEnabled()
     });
-    expect(plan.showBanner).toBe(false);
     expect(plan.showWalletBtn).toBe(true);
     expect(plan.allowRestorePreferred).toBe(true);
   });
@@ -160,7 +154,7 @@ describe("kill switch — users with an existing wallet", () => {
     // The explicit wording in the plan: "Sem force-wipe remoto — IndexedDB
     // local fica intocado." A kill switch flip must NOT delete local seed.
     // We probe this via the view-only surface (descriptor + receive address)
-    // because that's the exact thing the maintenance banner keeps exposed.
+    // because that's the exact thing view-only mode keeps exposed.
     const fetchImpl = async () => jsonResp({ walletEnabled: false });
     const config = createConfigClient({ fetchImpl });
     const wallet = newWallet();
@@ -194,7 +188,7 @@ describe("kill switch — fail-open behavior", () => {
       walletExists: await wallet.hasWallet(),
       walletEnabled: await config.isWalletEnabled()
     });
-    expect(plan.showBanner).toBe(false);
     expect(plan.showWalletBtn).toBe(true);
+    expect(plan.allowRestorePreferred).toBe(true);
   });
 });
