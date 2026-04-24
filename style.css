@@ -3659,6 +3659,13 @@ textarea:focus {
   padding: 1px 5px; border-radius: 4px; font-size: 12px;
 }
 
+.external-wallet-help { margin: -4px 0 10px; font-size: 13px; }
+.external-wallet-help .link-button {
+  background: none; border: none; padding: 0; margin: 0;
+  width: auto; color: var(--accent); font-size: 13px;
+  text-decoration: underline; cursor: pointer;
+}
+
 #integrated-wallet-ctas { margin: 16px 0 0; }
 #integrated-wallet-ctas button + button { margin-top: 8px; }
 #integrated-wallet-ctas button[disabled] { opacity: 0.5; cursor: not-allowed; }
