@@ -1897,6 +1897,10 @@ export function registerWalletRoutes({
         biometricModal.classList.add("hidden");
         resetBiometricPinModal();
       }
+      const unlockModal = q("wallet-unlock-modal");
+      if (unlockModal && !unlockModal.classList.contains("hidden")) {
+        closeUnlockModal();
+      }
     });
   }
 
@@ -1913,7 +1917,8 @@ export function registerWalletRoutes({
     destAddr: "",
     sendAll: false,
     preview: null,
-    balances: null
+    balances: null,
+    balancesError: false
   };
 
   function resetSendState() {
@@ -1937,9 +1942,11 @@ export function registerWalletRoutes({
 
   async function loadSendBalances() {
     try {
-      sendState.balances = await wallet.getBalances();
+      sendState.balances = normalizeBalances(await wallet.getBalances());
+      sendState.balancesError = false;
     } catch {
       sendState.balances = null;
+      sendState.balancesError = true;
     }
   }
 
@@ -1996,7 +2003,13 @@ export function registerWalletRoutes({
       else if (typeof val === "number") bal = BigInt(val);
     }
     const balEl = q("wallet-send-balance");
-    if (balEl) balEl.textContent = `Saldo disponível: ${formatAssetAmount(bal, asset)} ${asset.symbol}`;
+    if (balEl) {
+      if (sendState.balancesError) {
+        balEl.textContent = `Saldo disponível: — ${asset.symbol}`;
+      } else {
+        balEl.textContent = `Saldo disponível: ${formatAssetAmount(bal, asset)} ${asset.symbol}`;
+      }
+    }
   }
 
   function clearSendPreview() {
@@ -2022,11 +2035,16 @@ export function registerWalletRoutes({
       if (preview.sendAll) amountEl.textContent = `Tudo (${asset?.symbol ?? ""})`;
       else amountEl.textContent = `${formatAssetAmount(amountSats, asset)} ${asset?.symbol ?? ""}`;
     }
+    const feeKnown = typeof preview.feeSats === "bigint";
     if (feeEl) {
-      feeEl.textContent = `${formatAssetAmount(preview.feeSats, lbtc)} ${lbtc.symbol}`;
+      feeEl.textContent = feeKnown
+        ? `${formatAssetAmount(preview.feeSats, lbtc)} ${lbtc.symbol}`
+        : `— ${lbtc.symbol}`;
     }
     if (totalEl) {
-      if (asset === lbtc) {
+      if (!feeKnown) {
+        totalEl.textContent = `— ${lbtc.symbol}`;
+      } else if (asset === lbtc) {
         const total = (amountSats ?? 0n) + preview.feeSats;
         totalEl.textContent = preview.sendAll
           ? `Tudo + taxa (${lbtc.symbol})`
@@ -2080,6 +2098,8 @@ export function registerWalletRoutes({
         showMsg("wallet-send-msg", "Endereço Liquid inválido para esta rede.", "error");
       } else if (isWalletError(err, ERROR_CODES.INVALID_AMOUNT)) {
         showMsg("wallet-send-msg", "Informe um valor válido (ex.: 10,50).", "error");
+      } else if (isWalletError(err, ERROR_CODES.SENDALL_NOT_SUPPORTED)) {
+        showMsg("wallet-send-msg", "\"Enviar tudo\" só está disponível para L-BTC.", "error");
       } else if (isWalletError(err, ERROR_CODES.ESPLORA_UNAVAILABLE)) {
         showMsg("wallet-send-msg", "Sem resposta do Esplora. Tente novamente.", "error");
       } else {
@@ -2125,6 +2145,7 @@ export function registerWalletRoutes({
     bioSection?.classList.add("hidden");
     pinSection?.classList.remove("hidden");
     modal.classList.remove("hidden");
+    let autoBiometric = false;
     try {
       const [has, supported] = await Promise.all([
         wallet.hasBiometric(),
@@ -2134,11 +2155,19 @@ export function registerWalletRoutes({
         bioSection?.classList.remove("hidden");
         pinSection?.classList.add("hidden");
         q("wallet-unlock-biometric-btn")?.focus();
+        autoBiometric = true;
       } else {
         q("wallet-unlock-pin")?.focus();
       }
     } catch {
       q("wallet-unlock-pin")?.focus();
+    }
+    // Plan (Sub-fase 5 → "biometria auto"): once the modal knows biometric is
+    // enrolled + supported, fire the platform prompt immediately so the user
+    // doesn't have to tap an extra button before Face ID / Touch ID shows up.
+    // The `Usar biometria` button stays as a manual retry after cancellation.
+    if (autoBiometric) {
+      void unlockWithBiometricAndBroadcast();
     }
   }
 
@@ -2265,23 +2294,29 @@ export function registerWalletRoutes({
     if (!v) {
       hint.classList.add("hidden");
       hint.textContent = "";
-      hint.classList.remove("success", "error");
+      hint.classList.remove("ok", "err");
       return;
     }
     const { valid, error } = validateLiquidAddress(v);
     if (valid) {
       hint.textContent = "Endereço válido.";
-      hint.classList.remove("hidden", "error");
-      hint.classList.add("success");
+      hint.classList.remove("hidden", "err");
+      hint.classList.add("ok");
     } else {
       hint.textContent = error || "Endereço inválido.";
-      hint.classList.remove("hidden", "success");
-      hint.classList.add("error");
+      hint.classList.remove("hidden", "ok");
+      hint.classList.add("err");
     }
     clearSendPreview();
   });
   q("wallet-send-preview-btn")?.addEventListener("click", () => { void onSendPreviewClick(); });
-  q("wallet-send-confirm")?.addEventListener("click", () => { void openUnlockModal(); });
+  q("wallet-send-confirm")?.addEventListener("click", () => {
+    // Plan (Sub-fase 5 → "Cache de sessão pós-unlock"): the signer is held in
+    // a closure for 15 min after a successful unlock, so subsequent sends in
+    // the same session must skip the biometric/PIN prompt entirely.
+    if (wallet.isUnlocked()) { void doBroadcastAfterUnlock(); return; }
+    void openUnlockModal();
+  });
 
   q("wallet-unlock-cancel")?.addEventListener("click", closeUnlockModal);
   q("wallet-unlock-confirm")?.addEventListener("click", () => onUnlockConfirmClick());

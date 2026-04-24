@@ -368,7 +368,7 @@ describe("wallet.prepareSend", () => {
       destAddr: DEST,
       sendAll: true
     })).rejects.toMatchObject({
-      code: ERROR_CODES.UNSUPPORTED_ASSET
+      code: ERROR_CODES.SENDALL_NOT_SUPPORTED
     });
   }, 60_000);
 });
@@ -414,6 +414,48 @@ describe("wallet.confirmSend", () => {
     await expect(wallet.confirmSend(preview.psetBase64)).rejects.toMatchObject({
       code: ERROR_CODES.BROADCAST_FAILED
     });
+  }, 60_000);
+
+  it("falls back to the second provider when the first broadcast fails", async () => {
+    // Guards the multi-provider happy-fallback branch in confirmSend: when the
+    // first provider refuses the tx but a later provider accepts it, we return
+    // a valid txid instead of raising BROADCAST_FAILED. This is the branch
+    // most likely to regress as the provider list evolves.
+    const fakeLwk = makeFakeLwkWithSend();
+    const esploraClients = [];
+    const providers = [
+      { name: "primary", url: "http://fake-primary" },
+      { name: "secondary", url: "http://fake-secondary" }
+    ];
+    const wallet = createWalletModule({
+      indexedDbImpl: new IDBFactory(),
+      cryptoImpl: webcrypto,
+      lwkLoader: async () => fakeLwk,
+      esploraProviders: providers,
+      esploraClientFactory: (_l, _net, provider) => {
+        const c = new fakeLwk.EsploraClient({}, provider?.url);
+        esploraClients.push(c);
+        if (provider?.name === "primary") {
+          c.broadcast = async () => {
+            c.broadcastCount++;
+            throw new Error("primary rejected");
+          };
+        }
+        return c;
+      }
+    });
+    await wallet.createWallet({ pin: STRONG_PIN });
+    const preview = await wallet.prepareSend({
+      asset: "LBTC",
+      amountSats: 50_000n,
+      destAddr: DEST
+    });
+    const { txid } = await wallet.confirmSend(preview.psetBase64);
+    expect(txid).toBe(FAKE_TXID);
+    const primary = esploraClients.filter(c => c._url === "http://fake-primary");
+    const secondary = esploraClients.filter(c => c._url === "http://fake-secondary");
+    expect(primary.some(c => c.broadcastCount >= 1)).toBe(true);
+    expect(secondary.some(c => c.broadcastCount >= 1)).toBe(true);
   }, 60_000);
 
   it("re-syncs the wallet after a successful broadcast", async () => {
