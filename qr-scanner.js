@@ -101,6 +101,9 @@ export function scanQRCode(opts = {}) {
       listeners: [],
       abortListener: null,
       finished: false,
+      lastErrorCode: null,
+      lastErrorMessage: null,
+      previousFocus: typeof document !== "undefined" ? document.activeElement : null,
     };
     active = session;
 
@@ -118,6 +121,7 @@ export function scanQRCode(opts = {}) {
     attachCloseListeners(session);
     showState("prompting");
     modalEl.classList.remove("hidden");
+    focusInitialControl();
 
     void startStream(session);
   });
@@ -183,7 +187,15 @@ function ensureModalMounted() {
   videoEl = modalEl.querySelector("#qr-scanner-video");
 
   offscreenCanvas = document.createElement("canvas");
-  offscreenCtx = offscreenCanvas.getContext("2d");
+  offscreenCtx = offscreenCanvas.getContext("2d", { willReadFrequently: true });
+}
+
+function focusInitialControl() {
+  if (!modalEl) return;
+  const cancelBtn = modalEl.querySelector("#qr-scanner-cancel");
+  if (cancelBtn && typeof cancelBtn.focus === "function") {
+    try { cancelBtn.focus(); } catch { /* ignore */ }
+  }
 }
 
 function applyOptionsToModal(opts) {
@@ -205,7 +217,11 @@ function applyOptionsToModal(opts) {
 }
 
 function attachCloseListeners(session) {
-  const onClose = () => closeWith(QR_SCANNER_ERRORS.CANCELLED, "Fechado pelo usuário.");
+  const onClose = () => {
+    const code = session.lastErrorCode || QR_SCANNER_ERRORS.CANCELLED;
+    const message = session.lastErrorMessage || "Fechado pelo usuário.";
+    closeWith(code, message);
+  };
   const closeBtn = modalEl.querySelector("#qr-scanner-close");
   const cancelBtn = modalEl.querySelector("#qr-scanner-cancel");
   closeBtn.addEventListener("click", onClose);
@@ -233,6 +249,8 @@ function attachCloseListeners(session) {
 
   const retryBtn = modalEl.querySelector("#qr-scanner-retry");
   const onRetry = () => {
+    session.lastErrorCode = null;
+    session.lastErrorMessage = null;
     showState("prompting");
     retryBtn.classList.add("hidden");
     void startStream(session);
@@ -258,6 +276,7 @@ async function startStream(session) {
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
     if (!active || active !== session) {
       stream.getTracks().forEach((t) => t.stop());
+      try { if (videoEl) videoEl.srcObject = null; } catch { /* ignore */ }
       return;
     }
     session.stream = stream;
@@ -351,7 +370,7 @@ function tryDecodeFrame() {
 }
 
 function handleDecode(session, result) {
-  const text = typeof result === "string" ? result : result && result.data;
+  const text = result && result.data;
   if (typeof text !== "string" || !text) return false;
 
   if (session.opts.validate) {
@@ -392,7 +411,10 @@ function showValidationError(session, message) {
 }
 
 function showStreamError(session, err) {
+  if (session.finished) return;
   const code = mapErrorToCode(err);
+  session.lastErrorCode = code;
+  session.lastErrorMessage = err && err.message ? err.message : "Erro ao iniciar câmera.";
   if (code === QR_SCANNER_ERRORS.PERMISSION_DENIED) {
     renderError("Permissão de câmera negada. Cole o endereço manualmente ou ative a câmera nas configurações do navegador.", false);
   } else if (code === QR_SCANNER_ERRORS.NO_CAMERA) {
@@ -402,7 +424,7 @@ function showStreamError(session, err) {
   } else {
     renderError("Não foi possível iniciar a câmera.", true);
   }
-  closeWith(code, err && err.message ? err.message : "Erro ao iniciar câmera.");
+  stopStream(session);
 }
 
 function renderError(msg, showRetry) {
@@ -436,7 +458,7 @@ function showState(which) {
   for (const id of ids) {
     const el = modalEl.querySelector("#" + id);
     if (!el) continue;
-    if (id === "qr-scanner-" + which || id === which) el.classList.remove("hidden");
+    if (id === "qr-scanner-" + which) el.classList.remove("hidden");
     else el.classList.add("hidden");
   }
 }
@@ -477,6 +499,9 @@ function teardown(session) {
     }
   }
   if (modalEl) modalEl.classList.add("hidden");
+  if (session.previousFocus && typeof session.previousFocus.focus === "function") {
+    try { session.previousFocus.focus(); } catch { /* ignore */ }
+  }
   active = null;
 }
 

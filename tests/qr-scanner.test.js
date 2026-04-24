@@ -187,59 +187,93 @@ describe("scanQRCode — permission and setup", () => {
     });
   });
 
-  it("rejects with PERMISSION_DENIED on NotAllowedError", async () => {
+  it("shows error state and rejects PERMISSION_DENIED after close on NotAllowedError", async () => {
     const err = Object.assign(new Error("denied"), { name: "NotAllowedError" });
     installMediaDevices({ getUserMedia: vi.fn(() => Promise.reject(err)) });
     const promise = scanQRCode();
     promise.catch(() => {});
     await vi.advanceTimersByTimeAsync(10);
+    const errorState = document.getElementById("qr-scanner-error-state");
+    const modal = document.getElementById("qr-scanner-modal");
+    expect(errorState.classList.contains("hidden")).toBe(false);
+    expect(modal.classList.contains("hidden")).toBe(false);
+    expect(document.getElementById("qr-scanner-retry").classList.contains("hidden")).toBe(true);
+    document.getElementById("qr-scanner-cancel").click();
     await expect(promise).rejects.toMatchObject({
       code: QR_SCANNER_ERRORS.PERMISSION_DENIED,
     });
   });
 
-  it("rejects with NO_CAMERA on NotFoundError", async () => {
+  it("shows error state and rejects NO_CAMERA after close on NotFoundError", async () => {
     const err = Object.assign(new Error("no cam"), { name: "NotFoundError" });
     installMediaDevices({ getUserMedia: vi.fn(() => Promise.reject(err)) });
     const promise = scanQRCode();
     promise.catch(() => {});
     await vi.advanceTimersByTimeAsync(10);
+    expect(document.getElementById("qr-scanner-error-state").classList.contains("hidden")).toBe(false);
+    document.getElementById("qr-scanner-cancel").click();
     await expect(promise).rejects.toMatchObject({
       code: QR_SCANNER_ERRORS.NO_CAMERA,
     });
   });
 
-  it("rejects with NO_CAMERA on OverconstrainedError", async () => {
+  it("shows error state and rejects NO_CAMERA after close on OverconstrainedError", async () => {
     const err = Object.assign(new Error("ovc"), { name: "OverconstrainedError" });
     installMediaDevices({ getUserMedia: vi.fn(() => Promise.reject(err)) });
     const promise = scanQRCode();
     promise.catch(() => {});
     await vi.advanceTimersByTimeAsync(10);
+    document.getElementById("qr-scanner-cancel").click();
     await expect(promise).rejects.toMatchObject({
       code: QR_SCANNER_ERRORS.NO_CAMERA,
     });
   });
 
-  it("rejects with CAMERA_IN_USE on NotReadableError", async () => {
+  it("shows error state with retry visible and rejects CAMERA_IN_USE after close on NotReadableError", async () => {
     const err = Object.assign(new Error("busy"), { name: "NotReadableError" });
     installMediaDevices({ getUserMedia: vi.fn(() => Promise.reject(err)) });
     const promise = scanQRCode();
     promise.catch(() => {});
     await vi.advanceTimersByTimeAsync(10);
+    expect(document.getElementById("qr-scanner-retry").classList.contains("hidden")).toBe(false);
+    document.getElementById("qr-scanner-cancel").click();
     await expect(promise).rejects.toMatchObject({
       code: QR_SCANNER_ERRORS.CAMERA_IN_USE,
     });
   });
 
-  it("rejects with CAMERA_ERROR for unknown DOMException names", async () => {
+  it("shows error state and rejects CAMERA_ERROR after close for unknown DOMException names", async () => {
     const err = Object.assign(new Error("weird"), { name: "MysteryError" });
     installMediaDevices({ getUserMedia: vi.fn(() => Promise.reject(err)) });
     const promise = scanQRCode();
     promise.catch(() => {});
     await vi.advanceTimersByTimeAsync(10);
+    document.getElementById("qr-scanner-cancel").click();
     await expect(promise).rejects.toMatchObject({
       code: QR_SCANNER_ERRORS.CAMERA_ERROR,
     });
+  });
+
+  it("retry button re-requests the stream and clears the error state", async () => {
+    const err = Object.assign(new Error("busy"), { name: "NotReadableError" });
+    let call = 0;
+    const getUserMedia = vi.fn(() => {
+      call += 1;
+      if (call === 1) return Promise.reject(err);
+      return Promise.resolve(makeMockStream());
+    });
+    installMediaDevices({ getUserMedia });
+    const promise = scanQRCode();
+    promise.catch(() => {});
+    await vi.advanceTimersByTimeAsync(10);
+    expect(document.getElementById("qr-scanner-error-state").classList.contains("hidden")).toBe(false);
+    document.getElementById("qr-scanner-retry").click();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(getUserMedia).toHaveBeenCalledTimes(2);
+    expect(document.getElementById("qr-scanner-error-state").classList.contains("hidden")).toBe(true);
+    expect(document.getElementById("qr-scanner-streaming").classList.contains("hidden")).toBe(false);
+    document.getElementById("qr-scanner-cancel").click();
+    await expect(promise).rejects.toMatchObject({ code: QR_SCANNER_ERRORS.CANCELLED });
   });
 
   it("creates modal DOM lazily on first call and reuses it afterwards", async () => {

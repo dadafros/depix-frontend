@@ -186,6 +186,25 @@ export async function computeFingerprint(descriptor) {
   return `${hex.slice(0, 4)}-${hex.slice(4)}`;
 }
 
+/**
+ * Pure helper for the QR scan click handler: parse a scanned raw text as a
+ * Liquid address or BIP21 URI, and return the fields the UI should apply to
+ * the send form. `null` means "not a valid Liquid destination, caller should
+ * bail out silently". `switchToAssetKey` is only set when the URI's asset id
+ * maps to a known wallet asset AND differs from `currentAssetKey`.
+ */
+export function interpretScannedQr(rawText, currentAssetKey) {
+  const parsed = parseLiquidUri(rawText);
+  if (!parsed.valid) return null;
+  const { address, amount, assetId } = parsed.data;
+  let switchToAssetKey = null;
+  if (assetId) {
+    const key = getAssetKeyById(assetId);
+    if (key && key !== currentAssetKey) switchToAssetKey = key;
+  }
+  return { address, amount: amount || null, switchToAssetKey };
+}
+
 // --------------------------------------------------------------------------
 // DOM registration.
 // --------------------------------------------------------------------------
@@ -2464,9 +2483,9 @@ export function registerWalletRoutes({
           return { ok: true };
         },
       });
-      const parsed = parseLiquidUri(result.rawText);
-      if (!parsed.valid) return;
-      const { address, amount, assetId } = parsed.data;
+      const interpretation = interpretScannedQr(result.rawText, sendState.assetKey);
+      if (!interpretation) return;
+      const { address, amount, switchToAssetKey } = interpretation;
 
       const destInput = q("wallet-send-dest");
       if (destInput) {
@@ -2474,10 +2493,7 @@ export function registerWalletRoutes({
         destInput.dispatchEvent(new Event("input", { bubbles: true }));
       }
 
-      if (assetId) {
-        const key = getAssetKeyById(assetId);
-        if (key && key !== sendState.assetKey) selectSendAsset(key);
-      }
+      if (switchToAssetKey) selectSendAsset(switchToAssetKey);
 
       if (amount) {
         const amountInput = q("wallet-send-amount");
