@@ -282,14 +282,15 @@ document.getElementById("closeModal")?.addEventListener("click", () => {
   document.getElementById("installModal")?.classList.add("hidden");
 });
 
-// Wallet guide modal
-document.getElementById("wallet-guide-link")?.addEventListener("click", (e) => {
-  e.preventDefault();
+// Wallet guide modal — opened from the "Como cadastrar carteira externa
+// com o app SideSwap" link inside the Carteira Externa modal. The guide
+// lays on top of the external-wallet-modal, which stays open behind it,
+// so closing the guide returns the user to the input in its previous state.
+document.getElementById("external-wallet-guide-link")?.addEventListener("click", () => {
   document.getElementById("wallet-guide-modal")?.classList.remove("hidden");
 });
 document.getElementById("btn-wallet-guide-register")?.addEventListener("click", () => {
   document.getElementById("wallet-guide-modal")?.classList.add("hidden");
-  openExternalWalletModal();
   const input = document.getElementById("new-addr-input");
   if (input) setTimeout(() => input.focus(), 50);
 });
@@ -1956,14 +1957,6 @@ document.getElementById("btn-onboarding-continue")?.addEventListener("click", ()
     void openIntegratedWalletModal();
   }
 });
-// Legacy alias — `btn-add-first-address` was the single onboarding CTA. It
-// was removed from the no-address view, but the wallet-guide-modal still
-// contains a "Cadastre seu endereço" button that reuses the same id; keep
-// the listener so that flow continues to work.
-document.getElementById("btn-add-first-address")?.addEventListener("click", () => {
-  document.getElementById("wallet-guide-modal")?.classList.remove("hidden");
-});
-
 // Save button inside Carteira Externa modal. On success we re-render the
 // in-modal list so the new entry shows up immediately — we do NOT close
 // the modal, unlike the legacy single-input flow.
