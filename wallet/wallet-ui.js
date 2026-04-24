@@ -2094,6 +2094,8 @@ export function registerWalletRoutes({
     } catch (err) {
       if (isWalletError(err, ERROR_CODES.INSUFFICIENT_FUNDS)) {
         showMsg("wallet-send-msg", "Saldo insuficiente para este envio.", "error");
+      } else if (isWalletError(err, ERROR_CODES.INSUFFICIENT_LBTC_FOR_FEE)) {
+        showMsg("wallet-send-msg", "Sem L-BTC para pagar a taxa de rede. Deposite um pouco de L-BTC na carteira e tente novamente.", "error");
       } else if (isWalletError(err, ERROR_CODES.INVALID_ADDRESS)) {
         showMsg("wallet-send-msg", "Endereço Liquid inválido para esta rede.", "error");
       } else if (isWalletError(err, ERROR_CODES.INVALID_AMOUNT)) {
@@ -2103,6 +2105,9 @@ export function registerWalletRoutes({
       } else if (isWalletError(err, ERROR_CODES.ESPLORA_UNAVAILABLE)) {
         showMsg("wallet-send-msg", "Sem resposta do Esplora. Tente novamente.", "error");
       } else {
+        // Log the full error so DevTools shows the underlying LWK cause
+        // when the UI falls back to renderError's generic path.
+        console.error("[wallet-send] prepareSend failed:", err, err?.cause);
         renderError("wallet-send-msg", err);
       }
     } finally {
