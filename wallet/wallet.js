@@ -1066,6 +1066,28 @@ export function createWalletModule({
       );
     }
     const w = await ensureViewWollet();
+    // Diagnostic snapshot — written to console the first time finish() fails
+    // so we can see what LWK was looking at when it rejected the build.
+    const debugState = () => {
+      try {
+        const balance = w.balance();
+        const balanceEntries = typeof balance?.entries === "function" ? balance.entries() : [];
+        const utxos = typeof w.utxos === "function" ? w.utxos() : [];
+        return {
+          network,
+          asset: resolved.symbol,
+          assetId: resolved.id,
+          amountSats: amount?.toString?.() ?? null,
+          sendAll,
+          destAddrLen: destAddr.trim().length,
+          destAddrPrefix: destAddr.trim().slice(0, 8),
+          balanceEntries: Array.from(balanceEntries).map(([k, v]) => [k?.toString?.(), v?.toString?.()]),
+          utxoCount: Array.isArray(utxos) ? utxos.length : null
+        };
+      } catch (e) {
+        return { debugStateError: String(e?.message ?? e) };
+      }
+    };
     const builder = new l.TxBuilder(net);
     if (typeof feeRate === "number" && Number.isFinite(feeRate) && feeRate > 0) {
       builder.feeRate(feeRate);
@@ -1083,6 +1105,7 @@ export function createWalletModule({
     try {
       pset = builder.finish(w);
     } catch (err) {
+      try { console.error("[wallet.prepareSend] finish() threw", err, "debugState:", debugState()); } catch { /* no-op */ }
       const rawMsg = String(err?.message ?? err ?? "");
       const msg = rawMsg.toLowerCase();
       // LWK surfaces fee-starvation as the generic "InsufficientFunds" error,
