@@ -749,14 +749,109 @@ document.getElementById("btn-resend-reset")?.addEventListener("click", async (e)
 // HOME — Mode switch (Depósito / Saque)
 // =========================================
 
-function updateAddrDisplay() {
-  const addr = getSelectedAddress();
-  const display = document.getElementById("addr-display");
-  if (display) {
-    display.innerText = addr ? abbreviateAddress(addr) : "Nenhum endereço";
-    display.title = addr || "";
+// ===================================================================
+// Home destination selector — Sub-fase 6 plan: users with an in-app
+// wallet choose between receiving/sending via the wallet (default) or
+// an external address (legacy flow). Users WITHOUT a wallet see the
+// legacy UX unchanged — selector hidden, chip shows external address.
+// One shared choice persists across deposit and withdraw so the user's
+// mental model is "where does my money live" rather than per-form.
+// ===================================================================
+const HOME_DESTINATION_KEY = "depix-home-destination";
+
+function readHomeDestinationChoice() {
+  try {
+    return localStorage.getItem(HOME_DESTINATION_KEY) === "external" ? "external" : "wallet";
+  } catch {
+    return "wallet";
   }
 }
+
+function writeHomeDestinationChoice(choice) {
+  try { localStorage.setItem(HOME_DESTINATION_KEY, choice); }
+  catch { /* private mode */ }
+}
+
+// Resolves the effective destination at submit time.
+//   { source: "wallet" | "external", addr: string | null }
+// `addr` is null when the effective choice lacks a usable address (user has
+// no wallet receive address yet, or no external address selected) — the
+// submit handler surfaces the usual "selecione um endereço" message.
+async function resolveHomeDestination() {
+  const hasWallet = await hasWalletInIdbRaw();
+  const choice = hasWallet ? readHomeDestinationChoice() : "external";
+  if (choice === "wallet") {
+    const walletAddr = await resolveWalletReceiveAddress();
+    if (walletAddr) return { source: "wallet", addr: walletAddr };
+    // Wallet declared present but the bundle / receive address is not
+    // ready yet — fall back to external rather than stranding the user.
+    return { source: "external", addr: getSelectedAddress() };
+  }
+  return { source: "external", addr: getSelectedAddress() };
+}
+
+async function refreshHomeDestination() {
+  const hasWallet = await hasWalletInIdbRaw();
+  if (!hasWallet && readHomeDestinationChoice() === "wallet") {
+    // Force external when the wallet is gone (wipe flow) so the chip and
+    // submit handlers don't keep pointing at a vanished wallet.
+    writeHomeDestinationChoice("external");
+  }
+  const choice = hasWallet ? readHomeDestinationChoice() : "external";
+  const externalAddr = getSelectedAddress();
+  const externalAbbrev = externalAddr ? abbreviateAddress(externalAddr) : null;
+
+  // In-form selectors (one copy per form; share data-home-destination attr).
+  const selectors = document.querySelectorAll("[data-home-destination]");
+  selectors.forEach(sel => {
+    if (!hasWallet) { sel.classList.add("hidden"); return; }
+    sel.classList.remove("hidden");
+    const titleEl = sel.querySelector('[data-role="title"]');
+    const subEl = sel.querySelector('[data-role="sub"]');
+    const toggleEl = sel.querySelector('[data-role="toggle"]');
+    const isWithdrawForm = sel.closest("#formSaque") !== null;
+    if (choice === "wallet") {
+      titleEl && (titleEl.textContent = isWithdrawForm ? "Minha Carteira" : "Receber na Minha Carteira");
+      subEl && (subEl.textContent = isWithdrawForm ? "Assinatura direto no app" : "R$ 0 de taxa adicional");
+      toggleEl && (toggleEl.textContent = "Usar endereço externo");
+    } else {
+      titleEl && (titleEl.textContent = "Endereço externo");
+      subEl && (subEl.textContent = externalAbbrev || "Selecione um endereço no menu");
+      subEl && (subEl.title = externalAddr || "");
+      toggleEl && (toggleEl.textContent = isWithdrawForm ? "Usar Minha Carteira" : "Receber na Minha Carteira");
+    }
+  });
+
+  // Header chip — wallet identity when in wallet mode, legacy address otherwise.
+  const display = document.getElementById("addr-display");
+  if (display) {
+    if (hasWallet && choice === "wallet") {
+      display.innerText = "Minha Carteira";
+      display.title = "Receber / enviar pela carteira do app";
+      display.classList.add("addr-chip-wallet");
+    } else {
+      display.innerText = externalAddr ? externalAbbrev : "Nenhum endereço";
+      display.title = externalAddr || "";
+      display.classList.remove("addr-chip-wallet");
+    }
+  }
+}
+
+// Back-compat shim — existing call sites pass through to the new async
+// refresher. Fire-and-forget is fine; the render only touches DOM.
+function updateAddrDisplay() {
+  void refreshHomeDestination();
+}
+
+// Delegated click handler for the "Usar endereço externo" / "Receber na
+// Minha Carteira" link. Both forms share the same attribute hook.
+document.addEventListener("click", evt => {
+  const btn = evt.target?.closest?.('[data-home-destination] [data-role="toggle"]');
+  if (!btn) return;
+  const next = readHomeDestinationChoice() === "wallet" ? "external" : "wallet";
+  writeHomeDestinationChoice(next);
+  void refreshHomeDestination();
+});
 
 function switchMode(mode) {
   const modes = ["deposit", "withdraw", "convert", "wallet"];
@@ -815,6 +910,12 @@ function switchMode(mode) {
   // Lazy-load the wallet bundle and kick off a sync when entering wallet mode.
   if (mode === "wallet") activateWalletHome();
   else if (walletHomeActive) deactivateWalletHome();
+
+  // Re-render the destination selector so deposit/withdraw tiles reflect the
+  // current wallet availability and external-address selection.
+  if (mode === "deposit" || mode === "withdraw") {
+    void refreshHomeDestination();
+  }
 }
 
 async function activateWalletHome() {
@@ -951,7 +1052,7 @@ async function fetchBrswapConfig() {
 }
 
 document.getElementById("modeDeposit")?.addEventListener("click", () => {
-  if (!modoSaque && !modoConvert) return;
+  if (!modoSaque && !modoConvert && !modoWallet) return;
   switchMode("deposit");
 });
 
@@ -1017,11 +1118,11 @@ document.getElementById("btnGerar")?.addEventListener("click", async () => {
   setMsg("mensagem", "");
 
   const valorInput = document.getElementById("valor");
-  // Prefer the wallet's receive address when a wallet exists on this device.
-  // Falls back to the selected external address, preserving the legacy flow
-  // byte-identically for users without a wallet.
-  const walletAddr = await resolveWalletReceiveAddress();
-  const addr = walletAddr || getSelectedAddress();
+  // Destination is either the user's in-app wallet (default when one
+  // exists) or an external address the user has explicitly selected via
+  // the home tile's "Usar endereço externo" toggle. For users without a
+  // wallet this always resolves to the external path — zero regression.
+  const { addr } = await resolveHomeDestination();
 
   if (!valorInput.value) {
     setMsg("mensagem", "Informe o valor");
@@ -1268,13 +1369,13 @@ document.getElementById("btnSacar")?.addEventListener("click", async () => {
 
   const valorSaqueInput = document.getElementById("valorSaque");
   const pixKeyInput = document.getElementById("pixKey");
-  // Prefer the wallet's receive address for the `depixAddress` payload so the
-  // Eulen-side ingest address can be correlated with the in-app broadcast via
-  // the new /api/withdraw/txid archive endpoint. Legacy external-picker flow
-  // stays intact when no wallet exists.
-  const walletAddr = await resolveWalletReceiveAddress();
-  const addr = walletAddr || getSelectedAddress();
-  const hasWallet = !!walletAddr;
+  // Destination follows the shared home-destination choice. When the user
+  // picked "Minha Carteira" we broadcast from the app (post /api/withdraw,
+  // hand off to #wallet-send + archive liquid_txid). When they picked
+  // external, `depixAddress` is their external Liquid address and the
+  // legacy send-address card renders — same flow as users without a wallet.
+  const { source, addr } = await resolveHomeDestination();
+  const hasWallet = source === "wallet" && !!addr;
 
   if (!valorSaqueInput.value || !pixKeyInput.value.trim()) {
     setMsg("mensagemSaque", "Preencha todos os campos");
@@ -2761,6 +2862,9 @@ async function refreshWalletModeAvailability() {
   const banner = document.getElementById("wallet-maintenance-banner");
   walletBtn.classList.toggle("hidden", !plan.showWalletBtn);
   banner?.classList.toggle("hidden", !plan.showBanner);
+  // Wallet availability gates the destination selector — refresh after the
+  // toggle visibility updates so the tile + chip reflect the new state.
+  void refreshHomeDestination();
   if (plan.forceDeposit && modoWallet) {
     switchMode("deposit");
     return;
