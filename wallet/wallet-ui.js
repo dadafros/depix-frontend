@@ -47,6 +47,7 @@ import {
   normalizeWalletTxSearch,
   walletTxDatesFromPeriod
 } from "./wallet-tx-filter.js";
+import { buildWalletTxCsv, formatCsvFilenameDate } from "./wallet-tx-csv.js";
 
 // --------------------------------------------------------------------------
 // Pure helpers — exported for tests.
@@ -1858,6 +1859,41 @@ export function registerWalletRoutes({
     applyWalletTxFilters();
     updateWalletTxFilterBadge();
     collapseWalletTxFilterPanel();
+  });
+
+  // Client-side CSV download of the currently filtered transactions.
+  // No backend round-trip: the wallet is non-custodial and history lives
+  // entirely on-device, so the browser can render the file directly.
+  // CSV/escape/row logic lives in ./wallet-tx-csv.js (unit-tested in
+  // tests/wallet-tx-csv.test.js); this handler only wires DOM events,
+  // triggers the download, and surfaces empty-list feedback.
+  function triggerCsvDownload(filename, csv) {
+    if (typeof Blob === "undefined" || typeof URL === "undefined" || !d?.body) return false;
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = d.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.rel = "noopener";
+    d.body.appendChild(a);
+    a.click();
+    d.body.removeChild(a);
+    // Defer revoke so Safari has time to kick off the download.
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+    return true;
+  }
+
+  q("wallet-tx-download")?.addEventListener("click", () => {
+    const btn = q("wallet-tx-download");
+    if (!btn || btn.disabled) return;
+    if (filteredWalletTxs.length === 0) {
+      showMsg("wallet-tx-msg", "Nada para baixar — a lista filtrada está vazia.", "error");
+      return;
+    }
+    showMsg("wallet-tx-msg", "", null);
+    const filename = `movimentacoes-carteira_${formatCsvFilenameDate()}.csv`;
+    const csv = buildWalletTxCsv(filteredWalletTxs);
+    triggerCsvDownload(filename, csv);
   });
 
   // ====================================================================
