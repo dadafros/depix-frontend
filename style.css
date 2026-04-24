@@ -5148,10 +5148,12 @@ textarea:focus {
   background: transparent;
   border: 0;
   color: var(--text-primary);
-  font-size: 1.05rem;
+  font-size: 1.25rem;
   font-variant-numeric: tabular-nums;
   outline: none;
   padding: 0;
+  text-align: center;
+  margin-bottom: 0;
 }
 .wallet-send-amount-suffix {
   flex-shrink: 0;
@@ -5168,13 +5170,20 @@ textarea:focus {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
+  white-space: nowrap;
   font-size: 0.8rem;
   color: var(--text-secondary);
   cursor: pointer;
   user-select: none;
 }
+/* Cancels the global `input { width: 100%; margin-bottom: 12px }` so the
+ * checkbox sizes to its intrinsic ~14px box instead of stretching to fill
+ * the label (which previously forced "Enviar tudo" to wrap to two lines). */
 .wallet-send-sendall input {
   margin: 0;
+  width: auto;
+  flex-shrink: 0;
 }
 #wallet-send-dest {
   width: 100%;
