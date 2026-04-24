@@ -1066,46 +1066,29 @@ export function createWalletModule({
       );
     }
     const w = await ensureViewWollet();
-    // Diagnostic snapshot — written to console the first time finish() fails
-    // so we can see what LWK was looking at when it rejected the build.
-    const debugState = () => {
-      try {
-        const balance = w.balance();
-        const balanceEntries = typeof balance?.entries === "function" ? balance.entries() : [];
-        const utxos = typeof w.utxos === "function" ? w.utxos() : [];
-        return {
-          network,
-          asset: resolved.symbol,
-          assetId: resolved.id,
-          amountSats: amount?.toString?.() ?? null,
-          sendAll,
-          destAddrLen: destAddr.trim().length,
-          destAddrPrefix: destAddr.trim().slice(0, 8),
-          balanceEntries: Array.from(balanceEntries).map(([k, v]) => [k?.toString?.(), v?.toString?.()]),
-          utxoCount: Array.isArray(utxos) ? utxos.length : null
-        };
-      } catch (e) {
-        return { debugStateError: String(e?.message ?? e) };
-      }
-    };
-    const builder = new l.TxBuilder(net);
+    // LWK's TxBuilder is a CONSUMING builder — every method (feeRate,
+    // drainLbtcWallet, drainLbtcTo, addLbtcRecipient, addRecipient) calls
+    // `this.__destroy_into_raw()` in the wasm-bindgen layer and returns a
+    // fresh TxBuilder instance. Ignoring the return value leaves the JS
+    // wrapper with __wbg_ptr=0, and the next call throws "null pointer
+    // passed to rust". Reassign from every chained call.
+    let builder = new l.TxBuilder(net);
     if (typeof feeRate === "number" && Number.isFinite(feeRate) && feeRate > 0) {
-      builder.feeRate(feeRate);
+      builder = builder.feeRate(feeRate);
     }
     if (sendAll) {
-      builder.drainLbtcWallet();
-      builder.drainLbtcTo(addr);
+      builder = builder.drainLbtcWallet();
+      builder = builder.drainLbtcTo(addr);
     } else if (resolved === ASSETS.LBTC) {
-      builder.addLbtcRecipient(addr, amount);
+      builder = builder.addLbtcRecipient(addr, amount);
     } else {
       const assetId = new l.AssetId(resolved.id);
-      builder.addRecipient(addr, amount, assetId);
+      builder = builder.addRecipient(addr, amount, assetId);
     }
     let pset;
     try {
       pset = builder.finish(w);
     } catch (err) {
-      try { console.error("[wallet.prepareSend] finish() threw", err, "debugState:", debugState()); } catch { /* no-op */ }
       const rawMsg = String(err?.message ?? err ?? "");
       const msg = rawMsg.toLowerCase();
       // LWK surfaces fee-starvation as the generic "InsufficientFunds" error,

@@ -94,18 +94,41 @@ function makeFakeLwkWithSend({
       this._drain = false;
       this._feeRate = null;
     }
+    // LWK's real TxBuilder is a CONSUMING builder — every method destroys
+    // the JS wrapper via `__destroy_into_raw()` and returns a fresh instance.
+    // Mirror that here so callers that forget to reassign (bug seen in
+    // production: "null pointer passed to rust") fail loudly in tests.
+    _consume() {
+      if (this._consumed) {
+        throw new Error("null pointer passed to rust (TxBuilder already consumed)");
+      }
+      this._consumed = true;
+      const next = Object.create(TxBuilder.prototype);
+      next._recipients = this._recipients;
+      next._drain = this._drain;
+      next._drainAddr = this._drainAddr;
+      next._feeRate = this._feeRate;
+      next._consumed = false;
+      return next;
+    }
     addLbtcRecipient(addr, sats) {
-      this._recipients.push({ addr, sats, kind: "LBTC" });
-      return this;
+      const next = this._consume();
+      next._recipients.push({ addr, sats, kind: "LBTC" });
+      return next;
     }
     addRecipient(addr, sats, asset) {
-      this._recipients.push({ addr, sats, asset: asset.toString(), kind: "ASSET" });
-      return this;
+      const next = this._consume();
+      next._recipients.push({ addr, sats, asset: asset.toString(), kind: "ASSET" });
+      return next;
     }
-    drainLbtcWallet() { this._drain = true; return this; }
-    drainLbtcTo(addr) { this._drainAddr = addr; return this; }
-    feeRate(r) { this._feeRate = r; return this; }
+    drainLbtcWallet() { const n = this._consume(); n._drain = true; return n; }
+    drainLbtcTo(addr) { const n = this._consume(); n._drainAddr = addr; return n; }
+    feeRate(r) { const n = this._consume(); n._feeRate = r; return n; }
     finish(_wollet) {
+      if (this._consumed) {
+        throw new Error("null pointer passed to rust (TxBuilder already consumed)");
+      }
+      this._consumed = true;
       if (throwOnFinish === "insufficient") {
         const err = new Error("Insufficient funds for transaction");
         err.message = "insufficient_funds: not enough UTXOs";
