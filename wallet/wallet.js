@@ -1231,13 +1231,13 @@ export function createWalletModule({
       );
     }
     touch();
-    // Kick off a resync so the new outgoing tx shows up. Failures here are
-    // non-fatal — the broadcast already succeeded.
-    try {
-      await syncWallet();
-    } catch {
-      // swallow
-    }
+    // Fire-and-forget the resync so the new outgoing tx eventually appears
+    // in the history view. Awaiting here blocks the success screen for
+    // ~20-30s (full gap-limit re-scan), which looks indistinguishable from
+    // a hang to the user even though the tx is already in the mempool.
+    // The broadcast already succeeded — return the txid immediately and
+    // let the background sync finish whenever it finishes.
+    void syncWallet().catch(() => { /* best effort; the 30s timer will retry */ });
     return { txid: txidStr };
   }
 
