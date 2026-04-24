@@ -1083,7 +1083,23 @@ export function createWalletModule({
     try {
       pset = builder.finish(w);
     } catch (err) {
-      const msg = String(err?.message ?? err ?? "").toLowerCase();
+      const rawMsg = String(err?.message ?? err ?? "");
+      const msg = rawMsg.toLowerCase();
+      // LWK surfaces fee-starvation as the generic "InsufficientFunds" error,
+      // but the distinguishing detail is that the wallet has the asset being
+      // sent yet no L-BTC for the fee. Callers see a clearer message.
+      if (
+        msg.includes("fee") ||
+        msg.includes("policy asset") ||
+        msg.includes("lbtc") ||
+        msg.includes("l-btc")
+      ) {
+        throw new WalletError(
+          ERROR_CODES.INSUFFICIENT_LBTC_FOR_FEE,
+          "Not enough L-BTC to pay the network fee",
+          err
+        );
+      }
       if (msg.includes("insufficient") || msg.includes("not enough")) {
         throw new WalletError(
           ERROR_CODES.INSUFFICIENT_FUNDS,
@@ -1091,9 +1107,12 @@ export function createWalletModule({
           err
         );
       }
+      // Surface the raw LWK message so the UNKNOWN branch stops rendering a
+      // generic "Failed to build the transaction" when the real cause would
+      // have told us something actionable.
       throw new WalletError(
         ERROR_CODES.UNKNOWN,
-        "Failed to build the transaction",
+        rawMsg ? `Failed to build the transaction: ${rawMsg}` : "Failed to build the transaction",
         err
       );
     }
