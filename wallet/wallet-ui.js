@@ -28,7 +28,8 @@ import {
   DISPLAY_ORDER,
   getAssetByIdentifier,
   convertSatsToBrl,
-  formatAssetAmount
+  formatAssetAmount,
+  satsToAmount
 } from "./asset-registry.js";
 import { validateLiquidAddress } from "../validation.js";
 
@@ -2078,6 +2079,11 @@ export function registerWalletRoutes({
     const bal = getSendAssetBalanceSats(asset);
     if (bal <= 0n) return;
     const amountInput = q("wallet-send-amount");
+    // Use satsToAmount (not formatAssetAmount) so the input value is a
+    // round-trip-exact decimal string: parseAmountToSats(satsToAmount(n)) === n.
+    // formatAssetAmount is a thin alias today but staying explicit here means
+    // a future display-layer change can't silently reintroduce the dust bug.
+    const balStr = satsToAmount(bal, asset.decimals);
     if (asset === ASSETS.LBTC) {
       // L-BTC send-all uses LWK's drainLbtcWallet so the fee is auto-deducted
       // from the wallet's L-BTC total. Display the balance in the input as a
@@ -2085,7 +2091,7 @@ export function registerWalletRoutes({
       sendState.sendAll = true;
       sendState.amountSats = null;
       if (amountInput) {
-        amountInput.value = formatAssetAmount(bal, asset);
+        amountInput.value = balStr;
         amountInput.disabled = true;
       }
     } else {
@@ -2095,7 +2101,7 @@ export function registerWalletRoutes({
       sendState.amountSats = bal;
       if (amountInput) {
         amountInput.disabled = false;
-        amountInput.value = formatAssetAmount(bal, asset);
+        amountInput.value = balStr;
       }
     }
     clearSendPreview();

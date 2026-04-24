@@ -123,9 +123,23 @@ describe("formatAssetAmount", () => {
     expect(formatAssetAmount(100_000_000n, ASSETS.LBTC)).toBe("1");
   });
 
-  it("DePix and USDt clamp to 2 decimals for display", () => {
-    expect(formatAssetAmount(150_000_000n, ASSETS.DEPIX)).toBe("1.50");
-    expect(formatAssetAmount(12_345_678n, ASSETS.USDT)).toBe("0.12");
+  it("DePix preserves full 8-decimal precision", () => {
+    // 1.5 DePix — trailing zeros trimmed.
+    expect(formatAssetAmount(150_000_000n, ASSETS.DEPIX)).toBe("1.5");
+    // 37.231 DePix — precision past 2 decimals survives. Earlier behavior
+    // clamped this to "37.23" via toFixed(2), which caused the Max button to
+    // undersend by 0.001 DePix (dust) and the preview to lie about the real
+    // amount being broadcast.
+    expect(formatAssetAmount(3_723_100_000n, ASSETS.DEPIX)).toBe("37.231");
+  });
+
+  it("USDt preserves full 8-decimal precision", () => {
+    // 0.12345678 USDt — previous behavior rounded to "0.12".
+    expect(formatAssetAmount(12_345_678n, ASSETS.USDT)).toBe("0.12345678");
+  });
+
+  it("whole amounts render without a decimal point", () => {
+    expect(formatAssetAmount(184_500_000_000n, ASSETS.USDT)).toBe("1845");
   });
 
   it("returns '0' for null asset", () => {
