@@ -16,6 +16,33 @@ import { renderBrandedQr } from "./qr.js";
 import { renderPrintableQr } from "./qr-print.js";
 import { resizeImage } from "./image-resize.js";
 import { loadWalletBundle } from "./wallet-bundle-loader.js";
+import { getDefaultConfigClient } from "./wallet/config.js";
+import { planHomeToggle } from "./wallet-home-gate.js";
+import { planIntegratedWallet } from "./wallet-integrated-gate.js";
+
+// Resolve the current user's preferred deposit address. If a wallet exists on
+// this device we deposit straight into it — no more copy-paste. Otherwise we
+// fall back to the legacy selected-address picker (`addresses.js`). Failing
+// silently here is intentional: the caller already handles a null return by
+// surfacing "selecione um endereço".
+//
+// The raw IDB probe (`hasWalletInIdbRaw`, hoisted — defined later in this
+// file) answers "is there a wallet?" without paying the ~200kb wallet bundle
+// download. Users without a wallet must never trigger `loadWalletBundle()`
+// just to get their deposit address (plan Sub-fase 1: "Usuários sem wallet
+// não carregam o bundle").
+async function resolveWalletReceiveAddress() {
+  if (!(await hasWalletFast())) return null;
+  try {
+    const bundle = await loadWalletBundle();
+    const w = bundle.getDefaultWallet();
+    if (!(await w.hasWallet())) return null;
+    const addr = await w.getReceiveAddress();
+    return typeof addr === "string" && addr.length > 0 ? addr : null;
+  } catch {
+    return null;
+  }
+}
 
 // ===== Constants =====
 const MIN_VALOR_CENTS = 500;
@@ -260,11 +287,14 @@ document.getElementById("wallet-guide-link")?.addEventListener("click", (e) => {
   e.preventDefault();
   document.getElementById("wallet-guide-modal")?.classList.remove("hidden");
 });
+document.getElementById("wallet-maintenance-help")?.addEventListener("click", () => {
+  document.getElementById("wallet-guide-modal")?.classList.remove("hidden");
+});
 document.getElementById("btn-wallet-guide-register")?.addEventListener("click", () => {
   document.getElementById("wallet-guide-modal")?.classList.add("hidden");
-  document.getElementById("new-addr-input").value = "";
-  setMsg("add-addr-msg", "");
-  document.getElementById("add-addr-modal")?.classList.remove("hidden");
+  openExternalWalletModal();
+  const input = document.getElementById("new-addr-input");
+  if (input) setTimeout(() => input.focus(), 50);
 });
 
 // SideSwap link — opens correct store based on device
@@ -720,14 +750,115 @@ document.getElementById("btn-resend-reset")?.addEventListener("click", async (e)
 // HOME — Mode switch (Depósito / Saque)
 // =========================================
 
-function updateAddrDisplay() {
-  const addr = getSelectedAddress();
-  const display = document.getElementById("addr-display");
-  if (display) {
-    display.innerText = addr ? abbreviateAddress(addr) : "Nenhum endereço";
-    display.title = addr || "";
+// ===================================================================
+// Home destination selector — Sub-fase 6 plan: users with an in-app
+// wallet choose between receiving/sending via the wallet (default) or
+// an external address (legacy flow). Users WITHOUT a wallet see the
+// legacy UX unchanged — selector hidden, chip shows external address.
+// One shared choice persists across deposit and withdraw so the user's
+// mental model is "where does my money live" rather than per-form.
+// ===================================================================
+const HOME_DESTINATION_KEY = "depix-home-destination";
+
+function readHomeDestinationChoice() {
+  try {
+    return localStorage.getItem(HOME_DESTINATION_KEY) === "external" ? "external" : "wallet";
+  } catch {
+    return "wallet";
   }
 }
+
+function writeHomeDestinationChoice(choice) {
+  try { localStorage.setItem(HOME_DESTINATION_KEY, choice); }
+  catch { /* private mode */ }
+}
+
+// Resolves the effective destination at submit time.
+//   { source: "wallet" | "external", addr: string | null }
+// `addr` is null when the effective choice lacks a usable address (user has
+// no wallet receive address yet, or no external address selected) — the
+// submit handler surfaces the usual "selecione um endereço" message.
+async function resolveHomeDestination() {
+  const hasWallet = await hasWalletFast();
+  const choice = hasWallet ? readHomeDestinationChoice() : "external";
+  if (choice === "wallet") {
+    const walletAddr = await resolveWalletReceiveAddress();
+    if (walletAddr) return { source: "wallet", addr: walletAddr };
+    // Wallet declared present but the bundle / receive address is not
+    // ready yet — fall back to external rather than stranding the user.
+    return { source: "external", addr: getSelectedAddress() };
+  }
+  return { source: "external", addr: getSelectedAddress() };
+}
+
+// Flag-first check — reads the localStorage `depix-wallet-exists` cache
+// set on wallet create/restore and cleared on wipe. Falls back to a raw
+// IDB probe only when the flag is missing (covers legacy installs that
+// predate the flag). Centralised so deposit/withdraw/modal handlers all
+// see the same answer without each re-probing IDB.
+async function hasWalletFast() {
+  let flag = false;
+  try { flag = localStorage.getItem("depix-wallet-exists") === "1"; }
+  catch { /* private mode */ }
+  if (flag) return true;
+  return await hasWalletInIdbRaw();
+}
+
+async function refreshHomeDestination() {
+  const hasWallet = await hasWalletFast();
+  if (!hasWallet && readHomeDestinationChoice() === "wallet") {
+    // Force external when the wallet is gone (wipe flow) so the chip and
+    // submit handlers don't keep pointing at a vanished wallet.
+    writeHomeDestinationChoice("external");
+  }
+  const choice = hasWallet ? readHomeDestinationChoice() : "external";
+  const externalAddr = getSelectedAddress();
+  const externalAbbrev = externalAddr ? abbreviateAddress(externalAddr) : null;
+
+  // Header chip — identity when the effective destination is the integrated
+  // wallet, abbreviated external address otherwise. The integrated-wallet
+  // fingerprint is cached in localStorage under `depix-wallet-identity`
+  // (populated by wallet-ui.js on create / restore / export) so we never
+  // pay the bundle-load tax just to render the chip. Missing cache → show
+  // the bare label; the fingerprint backfills on next wallet interaction.
+  const display = document.getElementById("addr-display");
+  if (display) {
+    if (hasWallet && choice === "wallet") {
+      let identity = "";
+      try { identity = localStorage.getItem("depix-wallet-identity") || ""; }
+      catch { /* private mode */ }
+      display.innerText = identity
+        ? `Carteira Integrada: ${identity}`
+        : "Carteira Integrada";
+      display.title = identity
+        ? `Carteira Integrada do DePix App · identidade ${identity}`
+        : "Carteira Integrada do DePix App";
+      display.classList.add("addr-chip-wallet");
+    } else if (externalAddr) {
+      display.innerText = `Carteira Externa: ${externalAbbrev}`;
+      display.title = `Carteira Externa · ${externalAddr}`;
+      display.classList.remove("addr-chip-wallet");
+    } else {
+      display.innerText = "Nenhum endereço";
+      display.title = "";
+      display.classList.remove("addr-chip-wallet");
+    }
+  }
+}
+
+// Back-compat shim — existing call sites pass through to the new async
+// refresher. Fire-and-forget is fine; the render only touches DOM.
+function updateAddrDisplay() {
+  void refreshHomeDestination();
+}
+
+// Wallet-ui fires this once it has cached the integrated-wallet fingerprint
+// (backfill on first wallet-home mount for pre-existing wallets). We simply
+// re-render the chip so "Carteira Integrada" picks up the "XXXX-XXXX" suffix
+// without waiting for another refresh trigger.
+window.addEventListener("wallet-identity:changed", () => {
+  void refreshHomeDestination();
+});
 
 function switchMode(mode) {
   const modes = ["deposit", "withdraw", "convert", "wallet"];
@@ -786,10 +917,25 @@ function switchMode(mode) {
   // Lazy-load the wallet bundle and kick off a sync when entering wallet mode.
   if (mode === "wallet") activateWalletHome();
   else if (walletHomeActive) deactivateWalletHome();
+
+  // Re-render the destination selector so deposit/withdraw tiles reflect the
+  // current wallet availability and external-address selection.
+  if (mode === "deposit" || mode === "withdraw") {
+    void refreshHomeDestination();
+  }
 }
 
 async function activateWalletHome() {
   walletHomeActive = true;
+  // When the kill-switch is ON and the user has a wallet, we replace the
+  // whole wallet-home body with a maintenance message + CTA. Showing the
+  // balances + Send/Receive actions during a backend-declared outage is
+  // risky — the user might try to move money on paths that were just
+  // declared unsafe. The maintenance view funnels them to a SideSwap
+  // restore guide where they can move funds via their 12 words.
+  const enabled = await isWalletFeatureEnabled();
+  applyWalletHomeMaintenance(!enabled);
+  if (!enabled) return;
   try {
     await ensureWalletBootstrapped();
     // registerWalletRoutes exposes a `mountWalletHome` handler that the
@@ -803,6 +949,13 @@ async function activateWalletHome() {
       msg.classList.add("error");
     }
   }
+}
+
+function applyWalletHomeMaintenance(on) {
+  const active = document.getElementById("wallet-home-active");
+  const maint = document.getElementById("wallet-home-maintenance-view");
+  active?.classList.toggle("hidden", on);
+  maint?.classList.toggle("hidden", !on);
 }
 
 function deactivateWalletHome() {
@@ -922,7 +1075,7 @@ async function fetchBrswapConfig() {
 }
 
 document.getElementById("modeDeposit")?.addEventListener("click", () => {
-  if (!modoSaque && !modoConvert) return;
+  if (!modoSaque && !modoConvert && !modoWallet) return;
   switchMode("deposit");
 });
 
@@ -988,7 +1141,11 @@ document.getElementById("btnGerar")?.addEventListener("click", async () => {
   setMsg("mensagem", "");
 
   const valorInput = document.getElementById("valor");
-  const addr = getSelectedAddress();
+  // Destination is either the user's in-app wallet (default when one
+  // exists) or an external address the user has explicitly selected via
+  // the home tile's "Usar endereço externo" toggle. For users without a
+  // wallet this always resolves to the external path — zero regression.
+  const { addr } = await resolveHomeDestination();
 
   if (!valorInput.value) {
     setMsg("mensagem", "Informe o valor");
@@ -1235,7 +1392,13 @@ document.getElementById("btnSacar")?.addEventListener("click", async () => {
 
   const valorSaqueInput = document.getElementById("valorSaque");
   const pixKeyInput = document.getElementById("pixKey");
-  const addr = getSelectedAddress();
+  // Destination follows the shared home-destination choice. When the user
+  // picked "Minha Carteira" we broadcast from the app (post /api/withdraw,
+  // hand off to #wallet-send + archive liquid_txid). When they picked
+  // external, `depixAddress` is their external Liquid address and the
+  // legacy send-address card renders — same flow as users without a wallet.
+  const { source, addr } = await resolveHomeDestination();
+  const hasWallet = source === "wallet" && !!addr;
 
   if (!valorSaqueInput.value || !pixKeyInput.value.trim()) {
     setMsg("mensagemSaque", "Preencha todos os campos");
@@ -1307,6 +1470,40 @@ document.getElementById("btnSacar")?.addEventListener("click", async () => {
 
     const r = data.response;
     lastWithdrawalId = r.id;
+
+    if (hasWallet) {
+      // Bootstrap the wallet UI BEFORE dispatching the prefill event.
+      // `registerWalletRoutes()` — invoked inside `ensureWalletBootstrapped()`
+      // — is what registers the `wallet-send:prefill` listener. Dispatching
+      // before that runs fires the event into the void (CustomEvent delivery
+      // is synchronous) and the user lands on an empty #wallet-send form with
+      // no way to recover the live Eulen deposit address. If the bundle fails
+      // to load we fall through to the legacy saque UI so the user can still
+      // broadcast manually from any Liquid wallet.
+      let walletReady = false;
+      try {
+        await ensureWalletBootstrapped();
+        walletReady = true;
+      } catch (err) {
+        console.error("wallet bundle load failed on withdraw handoff", err);
+        showToast("Não foi possível carregar a carteira. Use o endereço abaixo para enviar manualmente.");
+      }
+      if (walletReady) {
+        window.dispatchEvent(new CustomEvent("wallet-send:prefill", {
+          detail: {
+            assetKey: "DEPIX",
+            amountBrl: r.depositAmountInCents / 100,
+            dest: r.depositAddress,
+            withdrawalId: r.id
+          }
+        }));
+        try { localStorage.setItem("depix-home-mode", "wallet"); } catch { /* ignore */ }
+        document.getElementById("formSaque").classList.add("hidden");
+        navigate("#wallet-send");
+        return;
+      }
+      // else: fall through to the legacy depositAddress/QR card below.
+    }
 
     document.getElementById("saqueDepositAmount").innerText = formatDePix(r.depositAmountInCents);
     document.getElementById("saquePayoutAmount").innerText = formatBRL(r.payoutAmountInCents);
@@ -1538,14 +1735,91 @@ document.querySelector(".faq-list")?.addEventListener("click", (e) => {
 // ADDRESS MANAGEMENT
 // =========================================
 
-document.getElementById("menu-select-addr")?.addEventListener("click", () => {
-  closeMenu();
+// ===================================================================
+// Carteira Externa modal — unified add/switch/delete flow. Replaces the
+// legacy #select-addr-modal + #add-addr-modal pair. The password-modal
+// still gates switch + delete; address CRUD still lives in addresses.js.
+// ===================================================================
+// Renders the actual add/switch/delete modal. Callers that want the "are
+// you sure you want to use external?" gate should use `openExternalWalletFlow`
+// instead — that branches on wallet existence first.
+function openExternalWalletModal() {
+  const modal = document.getElementById("external-wallet-modal");
+  if (!modal) return;
+  const input = document.getElementById("new-addr-input");
+  if (input) input.value = "";
+  setMsg("add-addr-msg", "");
   renderAddressList();
-  document.getElementById("select-addr-modal").classList.remove("hidden");
+  modal.classList.remove("hidden");
+}
+
+function closeExternalWalletModal() {
+  document.getElementById("external-wallet-modal")?.classList.add("hidden");
+}
+
+function openExternalWalletIntroModal() {
+  document.getElementById("external-wallet-intro-modal")?.classList.remove("hidden");
+}
+
+function closeExternalWalletIntroModal() {
+  document.getElementById("external-wallet-intro-modal")?.classList.add("hidden");
+}
+
+// When the user has an integrated wallet, clicking "Carteira Externa" first
+// lands on the intro modal that explains the trade-off and pushes them back
+// to the integrated flow by default. The advanced path still reaches the
+// full address-management modal. Users without a wallet skip the intro —
+// external is the only option they have, no need to warn them against it.
+async function openExternalWalletFlow() {
+  closeMenu();
+  const hasWallet = await hasWalletFast();
+  if (hasWallet) {
+    openExternalWalletIntroModal();
+    return;
+  }
+  openExternalWalletModal();
+}
+
+document.getElementById("menu-carteira-externa")?.addEventListener("click", () => { void openExternalWalletFlow(); });
+document.getElementById("external-wallet-cancel")?.addEventListener("click", closeExternalWalletModal);
+
+// Commit CTA — user explicitly adopts external as the active destination.
+// Different from the per-form home tile toggle (which is lightweight and
+// reversible per navigation): this flips the global destination AND forces
+// a refresh that hides the wallet toggle while keeping the wallet data in
+// IDB untouched. The user can come back through Menu → Minha Carteira →
+// Carteira Integrada → "Acessar minha carteira".
+document.getElementById("external-wallet-commit")?.addEventListener("click", () => {
+  writeHomeDestinationChoice("external");
+  closeExternalWalletModal();
+  // If we're currently on the wallet tab, refreshWalletModeAvailability will
+  // force a switch back to deposit since the toggle is about to disappear.
+  void refreshWalletModeAvailability();
+  showToast("Agora você está usando a Carteira Externa.");
 });
 
-document.getElementById("close-select-addr")?.addEventListener("click", () => {
-  document.getElementById("select-addr-modal").classList.add("hidden");
+// Primary CTA on the intro modal — user confirms they want to stay with the
+// integrated wallet. Persist the wallet preference + navigate to home in
+// wallet mode so the change is immediately visible.
+document.getElementById("external-wallet-intro-continue")?.addEventListener("click", () => {
+  writeHomeDestinationChoice("wallet");
+  closeExternalWalletIntroModal();
+  try { localStorage.setItem("depix-home-mode", "wallet"); } catch { /* private mode */ }
+  // Same navigate-no-op-when-on-home dance as the integrated-wallet-access
+  // handler: call switchMode() directly when the hash already points at home.
+  if (window.location.hash === "#home" || window.location.hash === "") {
+    switchMode("wallet");
+  } else {
+    navigate("#home");
+  }
+  void refreshHomeDestination();
+});
+
+// Secondary CTA — user acknowledges the warning and drops into the full
+// add/switch/delete modal.
+document.getElementById("external-wallet-intro-proceed")?.addEventListener("click", () => {
+  closeExternalWalletIntroModal();
+  openExternalWalletModal();
 });
 
 function renderAddressList() {
@@ -1554,7 +1828,7 @@ function renderAddressList() {
   const selected = getSelectedAddress();
 
   if (addresses.length === 0) {
-    container.innerHTML = '<p class="info-text">Nenhum endereço cadastrado.</p>';
+    container.innerHTML = '<p class="info-text">Nenhum endereço adicionado ainda. Use o campo acima para cadastrar o primeiro.</p>';
     return;
   }
 
@@ -1578,7 +1852,9 @@ function renderAddressList() {
 
       if (addr !== current) {
         pendingAddressChange = addr;
-        document.getElementById("select-addr-modal").classList.add("hidden");
+        // Leave the external modal open — the password modal stacks on top
+        // (later in the DOM + higher z-index). On confirm/cancel the user
+        // lands back on an already-visible, freshly-rendered address list.
         document.getElementById("password-confirm-input").value = "";
         setMsg("password-modal-msg", "");
         document.querySelector("#password-modal h2").textContent = "Confirmar alteração";
@@ -1592,7 +1868,7 @@ function renderAddressList() {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       pendingAddressDelete = btn.dataset.delete;
-      document.getElementById("select-addr-modal").classList.add("hidden");
+      // Keep external modal open; password modal stacks above.
       document.getElementById("password-confirm-input").value = "";
       setMsg("password-modal-msg", "");
       document.querySelector("#password-modal h2").textContent = "Confirmar exclusão";
@@ -1640,6 +1916,9 @@ document.getElementById("btn-confirm-password")?.addEventListener("click", async
       setSelectedAddress(pendingAddressChange);
       pendingAddressChange = "";
       document.getElementById("password-modal").classList.add("hidden");
+      // Re-render so the radio state reflects the new selection — the user
+      // is still looking at the external-wallet modal (it was never closed).
+      renderAddressList();
       updateAddrDisplay();
       showToast("Endereço alterado com sucesso");
     }
@@ -1657,24 +1936,43 @@ document.getElementById("close-password-modal")?.addEventListener("click", () =>
   document.getElementById("password-modal").classList.add("hidden");
 });
 
-// Add address
-document.getElementById("menu-add-addr")?.addEventListener("click", () => {
-  closeMenu();
-  document.getElementById("new-addr-input").value = "";
-  setMsg("add-addr-msg", "");
-  document.getElementById("add-addr-modal").classList.remove("hidden");
+// Onboarding (empty state) — a dropdown + dynamic hint + single Continue
+// button. Selecting "integrada" sends the user through the educational
+// modal; "externa" drops straight into the unified address-management modal.
+const ONBOARDING_HINTS = Object.freeze({
+  integrada: "Criada direto no app em menos de 1 minuto. Protegida por PIN e biometria. Recomendada para a maioria dos usuários.",
+  externa: "Para quem já tem carteira em outro app (SideSwap, Jade, Ledger, Green) ou prefere usar hardware wallet."
 });
-
+function updateOnboardingHint() {
+  const select = document.getElementById("onboarding-choice");
+  const hint = document.getElementById("onboarding-choice-hint");
+  if (!select || !hint) return;
+  hint.textContent = ONBOARDING_HINTS[select.value] || "";
+}
+document.getElementById("onboarding-choice")?.addEventListener("change", updateOnboardingHint);
+document.getElementById("btn-onboarding-continue")?.addEventListener("click", () => {
+  const select = document.getElementById("onboarding-choice");
+  const choice = select?.value || "integrada";
+  if (choice === "externa") {
+    openExternalWalletModal();
+  } else {
+    void openIntegratedWalletModal();
+  }
+});
+// Legacy alias — `btn-add-first-address` was the single onboarding CTA. It
+// was removed from the no-address view, but the wallet-guide-modal still
+// contains a "Cadastre seu endereço" button that reuses the same id; keep
+// the listener so that flow continues to work.
 document.getElementById("btn-add-first-address")?.addEventListener("click", () => {
   document.getElementById("wallet-guide-modal")?.classList.remove("hidden");
 });
 
-document.getElementById("close-add-addr")?.addEventListener("click", () => {
-  document.getElementById("add-addr-modal").classList.add("hidden");
-});
-
+// Save button inside Carteira Externa modal. On success we re-render the
+// in-modal list so the new entry shows up immediately — we do NOT close
+// the modal, unlike the legacy single-input flow.
 document.getElementById("btn-save-addr")?.addEventListener("click", () => {
-  const addr = document.getElementById("new-addr-input").value.trim();
+  const input = document.getElementById("new-addr-input");
+  const addr = input?.value.trim() || "";
   setMsg("add-addr-msg", "");
 
   const addrResult = validateLiquidAddress(addr);
@@ -1689,10 +1987,14 @@ document.getElementById("btn-save-addr")?.addEventListener("click", () => {
     return;
   }
 
-  document.getElementById("add-addr-modal").classList.add("hidden");
+  if (input) input.value = "";
+  renderAddressList();
   updateAddrDisplay();
   showToast("Endereço cadastrado com sucesso");
 
+  // If the user came from the onboarding empty-state, we silently promote
+  // the hash to #home in the background so Cancel/Commit don't drop them
+  // back there. Modal stays open — user decides when to close.
   if (window.location.hash === "#no-address") {
     navigate("#home");
   }
@@ -2403,18 +2705,104 @@ for (const hash of WALLET_ROUTE_HASHES) {
   route(hash, makeWalletRouteStub());
 }
 
-document.getElementById("menu-wallet")?.addEventListener("click", async () => {
+// ===================================================================
+// Carteira Integrada modal — educational copy + state-aware CTAs.
+//   * no wallet + kill-switch OFF   → Criar + Restaurar
+//   * no wallet + kill-switch ON    → both disabled + maintenance note
+//   * wallet exists                  → Acessar minha carteira
+// Uses hasWalletInIdbRaw() so the wallet bundle is NOT loaded just to
+// show the modal — matches the Sub-fase 1 lazy-load contract.
+// ===================================================================
+async function openIntegratedWalletModal() {
   closeMenu();
-  try {
-    const bundle = await loadWalletBundle();
-    const exists = await bundle.getDefaultWallet().hasWallet();
-    if (exists) {
-      try { localStorage.setItem("depix-home-mode", "wallet"); } catch { /* ignore */ }
-      navigate("#home");
-      return;
-    }
-  } catch { /* bundle unreachable — fall through to gate */ }
-  navigate("#wallet-gate");
+  const modal = document.getElementById("integrated-wallet-modal");
+  if (!modal) return;
+
+  const accessBtn = document.getElementById("integrated-wallet-access");
+  const createBtn = document.getElementById("integrated-wallet-create");
+  const restoreBtn = document.getElementById("integrated-wallet-restore");
+  const maint = document.getElementById("integrated-wallet-maintenance");
+
+  // Hidden by default; we reveal selectively.
+  accessBtn?.classList.add("hidden");
+  createBtn?.classList.add("hidden");
+  restoreBtn?.classList.add("hidden");
+  maint?.classList.add("hidden");
+  if (createBtn) createBtn.disabled = false;
+  if (restoreBtn) restoreBtn.disabled = false;
+
+  const walletExists = await hasWalletFast();
+  const walletEnabled = walletExists ? true : await isWalletFeatureEnabled();
+  const plan = planIntegratedWallet({ walletExists, walletEnabled });
+
+  if (accessBtn) accessBtn.classList.toggle("hidden", !plan.showAccess);
+  if (createBtn) {
+    createBtn.classList.toggle("hidden", !plan.showCreate);
+    createBtn.disabled = plan.disableCreate;
+  }
+  if (restoreBtn) {
+    restoreBtn.classList.toggle("hidden", !plan.showRestore);
+    restoreBtn.disabled = plan.disableRestore;
+  }
+  if (maint) maint.classList.toggle("hidden", !plan.showMaintenance);
+
+  modal.classList.remove("hidden");
+}
+
+function closeIntegratedWalletModal() {
+  document.getElementById("integrated-wallet-modal")?.classList.add("hidden");
+}
+
+document.getElementById("menu-carteira-integrada")?.addEventListener("click", openIntegratedWalletModal);
+document.getElementById("close-integrated-wallet")?.addEventListener("click", closeIntegratedWalletModal);
+
+document.getElementById("integrated-wallet-access")?.addEventListener("click", () => {
+  // Flip the destination back to wallet in case the user previously committed
+  // to external — otherwise the wallet toggle would still be hidden and
+  // switchMode("wallet") would try to activate a hidden tab.
+  writeHomeDestinationChoice("wallet");
+  try { localStorage.setItem("depix-home-mode", "wallet"); } catch { /* private mode */ }
+  closeIntegratedWalletModal();
+  // navigate("#home") is a no-op when we're already on #home, so rely on
+  // switchMode() to actually flip the tab. When we're on another route
+  // (e.g. #faq, #affiliates) the navigate below takes us home and the
+  // route handler's `refreshWalletModeAvailability()` picks up the mode.
+  void refreshWalletModeAvailability();
+  if (window.location.hash === "#home" || window.location.hash === "") {
+    switchMode("wallet");
+  } else {
+    navigate("#home");
+  }
+});
+document.getElementById("integrated-wallet-create")?.addEventListener("click", () => {
+  closeIntegratedWalletModal();
+  navigate("#wallet-create-intro");
+});
+document.getElementById("integrated-wallet-restore")?.addEventListener("click", () => {
+  closeIntegratedWalletModal();
+  navigate("#wallet-restore-input");
+});
+
+// Restore-guide modal — shown from the wallet-home maintenance CTA when
+// the kill-switch is ON. Mirrors #wallet-guide-modal's shape but teaches
+// the RESTORE flow on SideSwap (user re-types the 12 words into SideSwap
+// to regain control of funds while the integrated wallet is paused).
+function openWalletRestoreGuide() {
+  document.getElementById("wallet-restore-guide-modal")?.classList.remove("hidden");
+}
+function closeWalletRestoreGuide() {
+  document.getElementById("wallet-restore-guide-modal")?.classList.add("hidden");
+}
+document.getElementById("wallet-home-maintenance-cta")?.addEventListener("click", openWalletRestoreGuide);
+document.getElementById("close-wallet-restore-guide")?.addEventListener("click", closeWalletRestoreGuide);
+// "Mostrar minhas 12 palavras" → close modal, navigate to wallet-settings,
+// and flag the mount to auto-open the export (PIN) flow so the user lands
+// two clicks away from their seed instead of three.
+document.getElementById("btn-wallet-restore-guide-show-seed")?.addEventListener("click", () => {
+  closeWalletRestoreGuide();
+  try { localStorage.setItem("depix-pending-seed-export", "1"); }
+  catch { /* private mode */ }
+  navigate("#wallet-settings");
 });
 
 // Shared: collapse a filter panel after selection
@@ -2676,19 +3064,33 @@ async function refreshWalletModeAvailability() {
     try { localStorage.setItem("depix-wallet-exists", "1"); }
     catch { /* private mode */ }
   }
-  let walletExists = false;
-  try {
-    const bundle = await loadWalletBundle();
-    walletExists = await bundle.getDefaultWallet().hasWallet();
-  } catch {
-    walletExists = false;
-  }
-  if (!walletExists) {
-    walletBtn.classList.add("hidden");
-    if (modoWallet) switchMode("deposit");
+  // Trust the flag from here on — loading the whole bundle just to re-verify
+  // what the flag already tells us would double the IO on every home mount.
+  // If the flag turns out to be stale (flag=true but IDB was wiped behind
+  // our back), activateWalletHome surfaces the error in #wallet-home-msg
+  // when the user actually enters the tab.
+  const walletExists = true;
+  const walletEnabled = await isWalletFeatureEnabled();
+  const plan = planHomeToggle({ walletExists, walletEnabled });
+  const banner = document.getElementById("wallet-maintenance-banner");
+  // Override: when the user has explicitly committed to an external wallet
+  // (destination=external), we hide the Minha Carteira tab even though the
+  // wallet still lives in IDB. Getting it back is a two-click journey via
+  // the menu — which matches the expectation that "Usar Carteira Externa"
+  // is a deliberate opt-out.
+  const destination = readHomeDestinationChoice();
+  const showWalletBtn = plan.showWalletBtn && !(walletExists && destination === "external");
+  const shouldForceDeposit = plan.forceDeposit || (!showWalletBtn && modoWallet);
+  walletBtn.classList.toggle("hidden", !showWalletBtn);
+  banner?.classList.toggle("hidden", !plan.showBanner);
+  // Wallet availability gates the destination selector — refresh after the
+  // toggle visibility updates so the tile + chip reflect the new state.
+  void refreshHomeDestination();
+  if (shouldForceDeposit && modoWallet) {
+    switchMode("deposit");
     return;
   }
-  walletBtn.classList.remove("hidden");
+  if (!plan.allowRestorePreferred) return;
   let preferred = null;
   try {
     preferred = localStorage.getItem("depix-home-mode");
@@ -2738,6 +3140,14 @@ function hasWalletInIdbRaw() {
       getReq.onerror = () => { db.close(); resolve(false); };
     };
   });
+}
+
+async function isWalletFeatureEnabled() {
+  try {
+    return await getDefaultConfigClient().isWalletEnabled();
+  } catch {
+    return true; // fail-open
+  }
 }
 
 route("#login", () => {

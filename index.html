@@ -142,16 +142,16 @@
   }
   </script>
 
-  <link rel="manifest" href="manifest.json?v=134" />
-  <link rel="icon" href="icon-192.png?v=134" />
-  <link rel="apple-touch-icon" href="icon-192.png?v=134" />
+  <link rel="manifest" href="manifest.json?v=137" />
+  <link rel="icon" href="icon-192.png?v=137" />
+  <link rel="apple-touch-icon" href="icon-192.png?v=137" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
   <!-- Asset version must match APP_VERSION in service-worker.js -->
-  <link rel="stylesheet" href="style.css?v=134" />
+  <link rel="stylesheet" href="style.css?v=137" />
 </head>
 <body>
 
@@ -160,7 +160,7 @@
 
   <nav class="landing-nav">
     <div class="landing-nav-inner">
-      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=134" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
+      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=137" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
       <div class="landing-nav-right">
         <a href="https://blog.depixapp.com/" class="landing-nav-link">Blog</a>
         <a href="#login" class="landing-nav-cta">Entrar</a>
@@ -761,8 +761,16 @@
     <div class="empty-state">
       <div class="empty-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg></div>
       <h2>Bem-vindo ao Depix App!</h2>
-      <p class="info-text">Para começar a receber pagamentos, você precisa informar o endereço da sua carteira digital. É como um "número de conta" que você copia do app da sua carteira.</p>
-      <button id="btn-add-first-address">Cadastre o endereço da sua carteira</button>
+      <p class="info-text">Para receber e enviar pagamentos você precisa de uma carteira digital. Escolha a melhor opção para você:</p>
+
+      <label for="onboarding-choice" class="empty-state-select-label">Tipo de carteira</label>
+      <select id="onboarding-choice" class="empty-state-select">
+        <option value="integrada" selected>Usar Carteira Integrada</option>
+        <option value="externa">Usar Carteira Externa (avançado)</option>
+      </select>
+      <p id="onboarding-choice-hint" class="empty-state-hint">Criada direto no app em menos de 1 minuto. Protegida por PIN e biometria. Recomendada para a maioria dos usuários.</p>
+
+      <button id="btn-onboarding-continue">Continuar</button>
     </div>
   </div>
 </section>
@@ -772,7 +780,6 @@
   <div class="card">
     <div class="header-bar">
       <button id="menu-btn" class="icon-btn" aria-label="Menu">☰</button>
-      <span id="addr-display" class="addr-chip" title="Endereço selecionado"></span>
     </div>
 
     <!-- Banner WhatsApp -->
@@ -791,6 +798,14 @@
       <a href="#verify-account" class="home-verify-banner-link">Saiba mais →</a>
     </div>
 
+    <div id="wallet-maintenance-banner" class="wallet-maintenance-banner hidden">
+      <div class="wallet-maintenance-banner-text">
+        <strong>Carteira temporariamente em manutenção</strong>
+        <p>Para mover seu dinheiro agora, use suas 12 palavras no SideSwap.</p>
+      </div>
+      <button type="button" id="wallet-maintenance-help" class="wallet-maintenance-banner-link">Como faço?</button>
+    </div>
+
     <!-- ===== SWITCH MODO ===== -->
     <div class="mode-switch">
       <div class="mode-toggle" role="radiogroup" aria-label="Modo">
@@ -800,6 +815,8 @@
         <button class="mode-toggle-option hidden" id="modeWallet" role="radio" aria-checked="false">Minha Carteira<br><small>(Liquid)</small></button>
       </div>
     </div>
+
+    <span id="addr-display" class="addr-chip addr-chip-under-toggle" title="Carteira ativa"></span>
 
     <!-- ===== TELA: DEPÓSITO (QR PIX) ===== -->
     <div id="telaDeposito">
@@ -910,6 +927,22 @@
 
     <!-- ===== TELA: MINHA CARTEIRA (view-only, Liquid) ===== -->
     <div id="telaCarteira" class="hidden">
+      <div id="wallet-home-maintenance-view" class="wallet-home-maintenance-view hidden">
+        <div class="wallet-home-maintenance-icon" aria-hidden="true">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+        </div>
+        <h3 class="wallet-home-maintenance-title">Carteira Integrada em manutenção</h3>
+        <p class="wallet-home-maintenance-copy">
+          Estamos trabalhando para reativar o mais rápido possível.
+        </p>
+        <p class="wallet-home-maintenance-copy">
+          <strong>Mas não se preocupe!</strong> Você ainda consegue movimentar seu dinheiro
+          usando uma carteira externa.
+        </p>
+        <button id="wallet-home-maintenance-cta" type="button">Acessar meu dinheiro em carteira externa</button>
+      </div>
+
+      <div id="wallet-home-active">
       <div class="wallet-home-total">
         <div class="wallet-home-total-main">
           <span class="wallet-home-total-label">Saldo total</span>
@@ -948,13 +981,10 @@
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><polyline points="5 12 12 5 19 12"/></svg>
           <span>Pagar</span>
         </button>
-        <button id="wallet-home-qr" class="wallet-home-action" type="button">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3"/><path d="M20 14v.01"/><path d="M14 20h.01"/><path d="M17 17h4v4h-4z"/></svg>
-          <span>QR</span>
-        </button>
       </div>
 
       <div id="wallet-home-msg" class="mensagem"></div>
+      </div>
     </div>
 
   </div>
@@ -969,15 +999,11 @@
     </div>
 
     <div class="menu-section">
-      <h3 class="menu-section-toggle"><svg class="menu-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 6v2m0 8v2"/></svg>Endereços</h3>
+      <h3 class="menu-section-toggle"><svg class="menu-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h16v4"/><path d="M21 12H3v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z"/><circle cx="17" cy="16" r="1"/></svg>Minha Carteira</h3>
       <div class="menu-section-items hidden">
-        <button id="menu-select-addr" class="menu-item">Trocar endereço</button>
-        <button id="menu-add-addr" class="menu-item">Adicionar endereço</button>
+        <button id="menu-carteira-integrada" class="menu-item">Carteira Integrada</button>
+        <button id="menu-carteira-externa" class="menu-item">Carteira Externa</button>
       </div>
-    </div>
-
-    <div class="menu-section">
-      <h3 class="menu-section-link" id="menu-wallet"><svg class="menu-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h16v4"/><path d="M21 12H3v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z"/><circle cx="17" cy="16" r="1"/></svg>Carteira Liquid</h3>
     </div>
 
     <div id="menu-merchant-section" class="menu-section">
@@ -1019,24 +1045,93 @@
 </div>
 
 <!-- ===== SELECIONAR ENDEREÇO (modal) ===== -->
-<div id="select-addr-modal" class="modal hidden">
+<!-- ===== CARTEIRA EXTERNA — INTRO (shown only when user has integrated wallet) ===== -->
+<div id="external-wallet-intro-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="external-wallet-intro-title">
   <div class="modal-box">
-    <h2>Trocar endereço</h2>
-    <div id="addr-list"></div>
-    <div id="select-addr-msg" class="mensagem"></div>
-    <button id="close-select-addr" class="secondary">Fechar</button>
+    <h2 id="external-wallet-intro-title">Carteira Externa</h2>
+    <div class="wallet-info-block">
+      <p class="info-text">
+        Carteira externa é qualquer outro app (hot wallet) ou hardware wallet onde você guarda seus DePix, USDt ou L-BTC
+        (ex: <strong>SideSwap</strong>, <strong>Jade</strong>, <strong>Ledger</strong>, <strong>Green</strong>).
+      </p>
+      <p class="info-text">
+        Use quando preferir receber nelas em vez da Carteira Integrada do DePix App. Você pode cadastrar vários endereços
+        e trocar entre eles a qualquer momento.
+      </p>
+    </div>
+    <p class="info-text wallet-warning">
+      Você já tem a <strong>Carteira Integrada</strong> configurada neste aparelho — ela é a opção recomendada para a maioria dos usuários. A Carteira Externa é uma opção avançada para quem já guarda fundos em outro app ou hardware wallet.
+    </p>
+    <button id="external-wallet-intro-continue">Continuar usando Carteira Integrada</button>
+    <button id="external-wallet-intro-proceed" class="secondary">Usar Carteira Externa <span class="empty-state-advanced">(avançado)</span></button>
   </div>
 </div>
 
-<!-- ===== ADICIONAR ENDEREÇO (modal) ===== -->
-<div id="add-addr-modal" class="modal hidden">
+<!-- ===== CARTEIRA EXTERNA (modal unificado: adicionar + trocar + remover) ===== -->
+<div id="external-wallet-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="external-wallet-modal-title">
   <div class="modal-box">
-    <h2>Adicionar endereço</h2>
-    <p class="info-text">Cole abaixo o endereço da sua carteira digital. Você encontra esse endereço no app da sua carteira (ex: SideSwap), na opção "Receber".</p>
-    <div id="add-addr-msg" class="mensagem"></div>
-    <input id="new-addr-input" placeholder="Cole o endereço aqui" />
-    <button id="btn-save-addr">Salvar</button>
-    <button id="close-add-addr" class="secondary">Cancelar</button>
+    <h2 id="external-wallet-modal-title">Carteira Externa</h2>
+
+    <div class="wallet-section">
+      <h3 class="wallet-section-title">Adicionar novo endereço</h3>
+      <p class="info-text">Cole um endereço Liquid (começa com <code>lq1…</code>, <code>tlq1…</code>, <code>VJL…</code> ou <code>ex1…</code>). Você encontra na aba "Receber" do seu app externo.</p>
+      <div id="add-addr-msg" class="mensagem"></div>
+      <input id="new-addr-input" placeholder="Cole o endereço aqui" />
+      <button id="btn-save-addr">Salvar endereço</button>
+    </div>
+
+    <div class="wallet-section">
+      <h3 class="wallet-section-title">Seus endereços</h3>
+      <div id="addr-list"></div>
+    </div>
+
+    <button id="external-wallet-commit">Usar Carteira Externa</button>
+    <button id="external-wallet-cancel" class="secondary">Cancelar</button>
+  </div>
+</div>
+
+<!-- ===== CARTEIRA INTEGRADA (modal informativo + CTAs) ===== -->
+<div id="integrated-wallet-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="integrated-wallet-modal-title">
+  <div class="modal-box">
+    <h2 id="integrated-wallet-modal-title">Carteira Integrada</h2>
+
+    <div class="wallet-info-block">
+      <h3 class="wallet-info-heading">Sua carteira, só sua.</h3>
+      <p class="info-text">
+        A Carteira Integrada é <strong>não-custodial</strong>: as chaves ficam só no seu celular.
+        O DePix App <strong>não</strong> tem acesso ao seu dinheiro.
+      </p>
+    </div>
+
+    <div class="wallet-info-block">
+      <h3 class="wallet-info-heading">Como funciona</h3>
+      <ul class="wallet-info-list">
+        <li>12 palavras de recuperação — você anota em papel e guarda em local seguro.</li>
+        <li>Protegida por PIN de 6 dígitos e biometria (Face ID / Touch ID / digital).</li>
+        <li>Suporta DePix, USDt e L-BTC na Liquid Network.</li>
+      </ul>
+    </div>
+
+    <div class="wallet-info-block">
+      <h3 class="wallet-info-heading">O que o DePix App não faz</h3>
+      <ul class="wallet-info-list">
+        <li>Não armazena suas 12 palavras.</li>
+        <li>Não consegue recuperar seu dinheiro se você perdê-las.</li>
+        <li>Não transaciona sem sua assinatura local (PIN ou biometria).</li>
+      </ul>
+    </div>
+
+    <div id="integrated-wallet-maintenance" class="info-text wallet-warning hidden">
+      A Carteira Integrada está temporariamente em manutenção. Volte em breve.
+    </div>
+
+    <div id="integrated-wallet-ctas">
+      <button id="integrated-wallet-access" class="hidden">Acessar minha carteira</button>
+      <button id="integrated-wallet-create" class="hidden">Criar carteira</button>
+      <button id="integrated-wallet-restore" class="secondary hidden">Restaurar com 12 palavras</button>
+    </div>
+
+    <button id="close-integrated-wallet" class="secondary">Fechar</button>
   </div>
 </div>
 
@@ -2891,6 +2986,95 @@
   </div>
 </div>
 
+<!-- ===== GUIA: RESTAURAR NO SIDESWAP (usado durante kill-switch) ===== -->
+<div id="wallet-restore-guide-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="wallet-restore-guide-title">
+  <div class="modal-box wallet-guide-modal">
+    <h2 id="wallet-restore-guide-title">Acesse seu dinheiro no SideSwap</h2>
+    <p class="info-text">Enquanto a Carteira Integrada está em manutenção, você pode acessar o seu dinheiro restaurando sua carteira no app SideSwap com as suas 12 palavras. Elas são a mesma chave — o seu saldo aparece igualzinho lá.</p>
+
+    <div class="guide-steps">
+      <div class="guide-step">
+        <div class="guide-step-number">1</div>
+        <div class="guide-step-content">
+          <h3>Baixe o app SideSwap</h3>
+          <p>Disponível gratuitamente para Android e iOS.</p>
+          <div class="store-badges">
+            <a href="https://apps.apple.com/br/app/sideswap/id1556476417" target="_blank" rel="noopener noreferrer" class="store-badge" aria-label="Baixar na App Store">
+              <svg viewBox="0 0 120 40" width="120" height="40" xmlns="http://www.w3.org/2000/svg">
+                <path d="M24.77 20.3a4.95 4.95 0 0 1 2.36-4.15 5.07 5.07 0 0 0-3.99-2.16c-1.68-.18-3.31 1.01-4.17 1.01-.87 0-2.19-.99-3.61-.96a5.31 5.31 0 0 0-4.47 2.73c-1.93 3.34-.49 8.27 1.36 10.97.93 1.33 2.01 2.82 3.44 2.76 1.39-.06 1.91-.89 3.59-.89 1.66 0 2.14.89 3.59.86 1.49-.02 2.43-1.33 3.33-2.67a10.96 10.96 0 0 0 1.52-3.11 4.78 4.78 0 0 1-2.95-4.39zM22.04 12.21a4.87 4.87 0 0 0 1.12-3.49 4.96 4.96 0 0 0-3.21 1.66 4.64 4.64 0 0 0-1.14 3.37 4.11 4.11 0 0 0 3.23-1.54z" fill="#fff"/>
+                <text x="38" y="14" fill="#ccc" font-family="system-ui,sans-serif" font-size="7" font-weight="400" letter-spacing=".02em">Disponível na</text>
+                <text x="38" y="28" fill="#fff" font-family="system-ui,sans-serif" font-size="14" font-weight="600" letter-spacing=".01em">App Store</text>
+              </svg>
+            </a>
+            <a href="https://play.google.com/store/apps/details?id=io.sideswap" target="_blank" rel="noopener noreferrer" class="store-badge" aria-label="Baixar no Google Play">
+              <svg viewBox="0 0 135 40" width="135" height="40" xmlns="http://www.w3.org/2000/svg">
+                <path d="M15.2 9.3l8.6 8.6-8.6 8.6c-.35-.28-.6-.7-.6-1.2V10.5c0-.5.25-.92.6-1.2z" fill="#4285f4"/>
+                <path d="M27 16.7l-3.2 1.8-2.8-2.8 2.8-2.8L27 14.7c.9.5.9 1.5 0 2z" fill="#ea4335"/>
+                <path d="M23.8 18.5l-2.8 2.8-5.8-5.8h.1l8.5-4.7z" fill="#34a853"/>
+                <path d="M15.2 26.5l8.6-4.8.1-.1-2.8-2.8-5.9 5.9z" fill="#fbbc04"/>
+                <text x="38" y="14" fill="#ccc" font-family="system-ui,sans-serif" font-size="7" font-weight="400" letter-spacing=".02em">Disponível no</text>
+                <text x="38" y="28" fill="#fff" font-family="system-ui,sans-serif" font-size="14" font-weight="600" letter-spacing=".01em">Google Play</text>
+              </svg>
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div class="guide-step">
+        <div class="guide-step-number">2</div>
+        <div class="guide-step-content">
+          <h3>Escolha "Restaurar carteira"</h3>
+          <ul class="guide-list">
+            <li>Abra o SideSwap e, na tela inicial, toque em <strong>"Restaurar carteira"</strong> (não em "Criar nova").</li>
+            <li>O app vai pedir as <strong>12 palavras</strong> que você anotou quando criou sua Carteira Integrada.</li>
+          </ul>
+          <div class="guide-mockup-trio">
+            <div class="guide-mini-mockup">
+              <div class="guide-mini-screen">
+                <div class="guide-screen-subtitle">Bem-vindo ao SideSwap</div>
+                <div class="guide-screen-option">
+                  <div class="guide-screen-option-title">Criar nova carteira</div>
+                  <div class="guide-screen-option-desc">Começar do zero</div>
+                </div>
+                <div class="guide-screen-option guide-screen-option-selected">
+                  <div class="guide-screen-option-title">Restaurar carteira</div>
+                  <div class="guide-screen-option-desc">Usar 12 palavras</div>
+                </div>
+              </div>
+              <div class="guide-mini-label">Toque em "Restaurar carteira"</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="guide-step">
+        <div class="guide-step-number">3</div>
+        <div class="guide-step-content">
+          <h3>Digite as 12 palavras da sua Carteira Integrada</h3>
+          <ul class="guide-list">
+            <li>Digite as 12 palavras <strong>na ordem exata</strong> em que aparecem aqui no DePix App.</li>
+            <li>Confirme e deixe o SideSwap sincronizar — pode levar alguns segundos.</li>
+          </ul>
+          <div class="guide-warning">
+            <strong>ATENÇÃO:</strong> Digite as palavras só no app SideSwap oficial. Nunca informe as 12 palavras para ninguém, nem mesmo para suporte do DePix App.
+          </div>
+        </div>
+      </div>
+
+      <div class="guide-step">
+        <div class="guide-step-number">4</div>
+        <div class="guide-step-content">
+          <h3>Seu saldo aparece na SideSwap</h3>
+          <p>DePix, USDt e L-BTC ficam disponíveis para enviar como você faria normalmente. Toque em <strong>"Pagar"</strong> no SideSwap e cole o endereço de destino.</p>
+        </div>
+      </div>
+    </div>
+
+    <button id="btn-wallet-restore-guide-show-seed">Mostrar minhas 12 palavras</button>
+    <button id="close-wallet-restore-guide" class="secondary">Fechar</button>
+  </div>
+</div>
+
 <!-- Toast -->
 <div id="toast" class="toast hidden">
   Código copiado. Cole no app do seu banco.
@@ -3046,7 +3230,7 @@
 </template>
 
 <template id="tpl-faq-change-address">
-  <p>Acesse o menu (☰) e vá em "Adicionar endereço" para cadastrar um novo, ou "Trocar endereço" para selecionar outro já cadastrado.</p>
+  <p>Acesse o menu (☰) → <strong>Minha Carteira</strong> → <strong>Carteira Externa</strong>. Lá você pode cadastrar um novo endereço ou selecionar outro já cadastrado.</p>
 </template>
 
 <template id="tpl-faq-processing-time">
@@ -3081,6 +3265,6 @@
 
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 <!-- Asset version must match APP_VERSION in service-worker.js -->
-<script type="module" src="script.js?v=134"></script>
+<script type="module" src="script.js?v=137"></script>
 </body>
 </html>

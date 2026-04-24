@@ -34,6 +34,9 @@ import {
 } from "./asset-registry.js";
 import { validateLiquidAddress, parseLiquidUri } from "../validation.js";
 import { scanQRCode, isQrScannerSupported, QR_SCANNER_ERRORS } from "../qr-scanner.js";
+import { getDefaultTelemetryClient, TELEMETRY_EVENTS } from "./telemetry.js";
+import { archiveWithdrawTxid } from "./withdraw-archive.js";
+import { getDefaultConfigClient } from "./config.js";
 
 // --------------------------------------------------------------------------
 // Pure helpers — exported for tests.
@@ -205,6 +208,23 @@ export function interpretScannedQr(rawText, currentAssetKey) {
   return { address, amount: amount || null, switchToAssetKey };
 }
 
+// Wallet identity cache — the home header chip reads this key to display
+// "Carteira Integrada: XXXX-XXXX" without paying a bundle-load tax on the
+// legacy path. Populated whenever we compute the fingerprint (create /
+// restore / export screens). Cleared on wipe (see wallet.js wipe path).
+const IDENTITY_CACHE_KEY = "depix-wallet-identity";
+
+export function cacheWalletIdentity(fingerprint) {
+  if (typeof fingerprint !== "string" || !fingerprint) return;
+  try { localStorage.setItem(IDENTITY_CACHE_KEY, fingerprint); }
+  catch { /* private mode — chip falls back to the bare label */ }
+}
+
+export function clearWalletIdentityCache() {
+  try { localStorage.removeItem(IDENTITY_CACHE_KEY); }
+  catch { /* private mode */ }
+}
+
 // --------------------------------------------------------------------------
 // DOM registration.
 // --------------------------------------------------------------------------
@@ -289,11 +309,29 @@ export function registerWalletRoutes({
     state.error = "";
   }
 
+  async function killSwitchBlocksCreate() {
+    // Kill switch off → new wallet creation is blocked. Existing wallets are
+    // allowed to continue (view-only + restore flows) so users can still reach
+    // their funds.
+    try {
+      const enabled = await getDefaultConfigClient().isWalletEnabled();
+      if (enabled) return false;
+      const exists = await wallet.hasWallet();
+      return !exists;
+    } catch {
+      return false; // fail-open
+    }
+  }
+
   // ====================================================================
   // #wallet-gate — root of the flow. Branches into create/restore/existing.
   // ====================================================================
   route("#wallet-gate", async () => {
     clearMsg("wallet-gate-msg");
+    if (await killSwitchBlocksCreate()) {
+      navigate("#home");
+      return;
+    }
     const gateExisting = q("wallet-gate-existing");
     const gateNew = q("wallet-gate-new");
     try {
@@ -325,7 +363,11 @@ export function registerWalletRoutes({
   // ====================================================================
   // #wallet-create-intro — consent checkboxes. Both must be ticked.
   // ====================================================================
-  route("#wallet-create-intro", () => {
+  route("#wallet-create-intro", async () => {
+    if (await killSwitchBlocksCreate()) {
+      navigate("#home");
+      return;
+    }
     const cb1 = q("wallet-create-consent-1");
     const cb2 = q("wallet-create-consent-2");
     const btn = q("wallet-create-intro-continue");
@@ -397,7 +439,9 @@ export function registerWalletRoutes({
       identityEl.textContent = "…";
       try {
         const descriptor = await wallet.deriveDescriptor(state.pendingMnemonic);
-        identityEl.textContent = await computeFingerprint(descriptor);
+        const fp = await computeFingerprint(descriptor);
+        identityEl.textContent = fp;
+        cacheWalletIdentity(fp);
       } catch {
         // The 12 words are the primary artifact — never let an identity
         // failure block the seed display. Fall back to a discreet placeholder.
@@ -523,6 +567,7 @@ export function registerWalletRoutes({
         mnemonic: state.pendingMnemonic,
         enrollBiometric: false
       });
+      try { getDefaultTelemetryClient().track(TELEMETRY_EVENTS.WALLET_CREATED); } catch { /* best-effort */ }
       // Seed is persisted (encrypted) and LWK holds the live Signer. No need
       // to keep the plaintext mnemonic in closure memory beyond this point.
       state.pendingMnemonic = null;
@@ -582,8 +627,14 @@ export function registerWalletRoutes({
     let enrolled = false;
     try {
       await wallet.addBiometric(pin);
+      try { getDefaultTelemetryClient().track(TELEMETRY_EVENTS.BIOMETRIC_ENROLL_SUCCESS); } catch { /* best-effort */ }
       enrolled = true;
     } catch (err) {
+      try {
+        getDefaultTelemetryClient().track(TELEMETRY_EVENTS.BIOMETRIC_ENROLL_FAILED, {
+          errorCode: String(err?.code ?? err?.name ?? "unknown")
+        });
+      } catch { /* best-effort */ }
       if (isWalletError(err, ERROR_CODES.BIOMETRIC_REJECTED)) {
         showMsg("wallet-create-biometric-msg", "Autenticação cancelada. Você pode ativar mais tarde.", "warning");
       } else {
@@ -832,7 +883,9 @@ export function registerWalletRoutes({
     if (el) {
       el.textContent = "…";
       try {
-        el.textContent = await computeFingerprint(state.pendingDescriptor);
+        const fp = await computeFingerprint(state.pendingDescriptor);
+        el.textContent = fp || "—";
+        if (fp) cacheWalletIdentity(fp);
       } catch {
         el.textContent = "—";
       }
@@ -888,6 +941,7 @@ export function registerWalletRoutes({
         pin,
         enrollBiometric: false
       });
+      try { getDefaultTelemetryClient().track(TELEMETRY_EVENTS.WALLET_CREATED); } catch { /* best-effort */ }
       state.pendingPin = pin;
       navigate("#wallet-restore-biometric");
     } catch (err) {
@@ -957,8 +1011,14 @@ export function registerWalletRoutes({
     let enrolled = false;
     try {
       await wallet.addBiometric(pin);
+      try { getDefaultTelemetryClient().track(TELEMETRY_EVENTS.BIOMETRIC_ENROLL_SUCCESS); } catch { /* best-effort */ }
       enrolled = true;
     } catch (err) {
+      try {
+        getDefaultTelemetryClient().track(TELEMETRY_EVENTS.BIOMETRIC_ENROLL_FAILED, {
+          errorCode: String(err?.code ?? err?.name ?? "unknown")
+        });
+      } catch { /* best-effort */ }
       if (isWalletError(err, ERROR_CODES.BIOMETRIC_REJECTED)) {
         showMsg("wallet-restore-biometric-msg", "Autenticação cancelada. Você pode ativar mais tarde.", "warning");
       } else {
@@ -1265,6 +1325,27 @@ export function registerWalletRoutes({
     // never shows an address derived from the previous seed. Module-scoped
     // cache from the old wallet would otherwise persist until a full reload.
     cachedReceiveAddress = null;
+    // Backfill the wallet-identity cache used by the home chip when the
+    // current wallet predates that feature. One-shot per session; bundle is
+    // already loaded at this point so it's essentially free.
+    let cachedIdentity = "";
+    try { cachedIdentity = localStorage.getItem("depix-wallet-identity") || ""; }
+    catch { /* private mode */ }
+    if (!cachedIdentity) {
+      try {
+        const descriptor = await wallet.getDescriptor();
+        if (descriptor) {
+          const fp = await computeFingerprint(descriptor);
+          if (fp) {
+            cacheWalletIdentity(fp);
+            // Nudge the home chip to pick up the freshly-cached fingerprint.
+            if (w && typeof w.dispatchEvent === "function") {
+              w.dispatchEvent(new CustomEvent("wallet-identity:changed"));
+            }
+          }
+        }
+      } catch { /* best effort */ }
+    }
     showMsg("wallet-home-msg", "", null);
     // First paint from the cached Update blob (instant, offline-safe).
     try {
@@ -1310,9 +1391,6 @@ export function registerWalletRoutes({
   // Home panel action buttons.
   q("wallet-home-receive")?.addEventListener("click", () => {
     navigate("#wallet-receive");
-  });
-  q("wallet-home-qr")?.addEventListener("click", () => {
-    void openFullscreenQr();
   });
   q("wallet-home-transactions")?.addEventListener("click", () => {
     navigate("#wallet-transactions");
@@ -1655,6 +1733,19 @@ export function registerWalletRoutes({
   route("#wallet-settings", () => {
     showMsg("wallet-settings-msg", "", null);
     void refreshBiometricRow();
+    // Honor the "auto-open export" flag set by the wallet-restore-guide
+    // modal's "Mostrar minhas 12 palavras" CTA. One-shot — we clear the
+    // flag on read so a later manual visit to wallet-settings does not
+    // reopen the export modal.
+    let autoExport = false;
+    try {
+      autoExport = localStorage.getItem("depix-pending-seed-export") === "1";
+      if (autoExport) localStorage.removeItem("depix-pending-seed-export");
+    } catch { /* private mode */ }
+    if (autoExport) {
+      const btn = q("wallet-settings-export");
+      if (btn) setTimeout(() => btn.click(), 0);
+    }
   });
 
   q("wallet-settings-back")?.addEventListener("click", () => {
@@ -1818,9 +1909,9 @@ export function registerWalletRoutes({
         identityValue.textContent = "…";
         try {
           const descriptor = await wallet.getDescriptor();
-          identityValue.textContent = descriptor
-            ? await computeFingerprint(descriptor)
-            : "—";
+          const fp = descriptor ? await computeFingerprint(descriptor) : "";
+          identityValue.textContent = fp || "—";
+          if (fp) cacheWalletIdentity(fp);
         } catch {
           // Fingerprint is a convenience, never block the word reveal.
           identityValue.textContent = "—";
@@ -1833,12 +1924,16 @@ export function registerWalletRoutes({
       }
     } catch (err) {
       if (isWalletError(err, ERROR_CODES.WALLET_WIPED)) {
+        try {
+          getDefaultTelemetryClient().track(TELEMETRY_EVENTS.WALLET_WIPED, { errorCode: "pin-exhausted" });
+        } catch { /* best-effort */ }
         showMsg("wallet-export-msg", "Muitas tentativas erradas. Carteira apagada deste aparelho.", "error");
         setTimeout(() => {
           q("wallet-export-modal")?.classList.add("hidden");
           navigate("#wallet-gate");
         }, 2000);
       } else if (isWalletError(err, ERROR_CODES.WRONG_PIN)) {
+        try { getDefaultTelemetryClient().track(TELEMETRY_EVENTS.UNLOCK_PIN_WRONG); } catch { /* best-effort */ }
         showMsg("wallet-export-msg", err.message || "PIN incorreto.", "error");
       } else {
         renderError("wallet-export-msg", err);
@@ -1877,6 +1972,9 @@ export function registerWalletRoutes({
     if (btn) btn.disabled = true;
     try {
       await wallet.wipeWallet(pin);
+      try {
+        getDefaultTelemetryClient().track(TELEMETRY_EVENTS.WALLET_WIPED, { errorCode: "user-initiated" });
+      } catch { /* best-effort */ }
       q("wallet-wipe-modal")?.classList.add("hidden");
       resetWipeModal();
       persistHomeMode("deposit");
@@ -1884,12 +1982,20 @@ export function registerWalletRoutes({
       navigate("#wallet-gate");
     } catch (err) {
       if (isWalletError(err, ERROR_CODES.WALLET_WIPED)) {
+        try {
+          getDefaultTelemetryClient().track(TELEMETRY_EVENTS.WALLET_WIPED, { errorCode: "pin-exhausted" });
+        } catch { /* best-effort */ }
         showMsg("wallet-wipe-msg", "Muitas tentativas erradas. Carteira apagada.", "warning");
         setTimeout(() => {
           q("wallet-wipe-modal")?.classList.add("hidden");
           persistHomeMode("deposit");
           navigate("#wallet-gate");
         }, 1500);
+      } else if (isWalletError(err, ERROR_CODES.WRONG_PIN)) {
+        try {
+          getDefaultTelemetryClient().track(TELEMETRY_EVENTS.UNLOCK_PIN_WRONG);
+        } catch { /* best-effort */ }
+        renderError("wallet-wipe-msg", err);
       } else {
         renderError("wallet-wipe-msg", err);
       }
@@ -2260,12 +2366,27 @@ export function registerWalletRoutes({
     setSendingState(true);
     try {
       const { txid } = await wallet.confirmSend(sendState.preview.psetBase64);
+      if (pendingWithdrawalId) {
+        const id = pendingWithdrawalId;
+        pendingWithdrawalId = null;
+        void archiveWithdrawTxid({ withdrawalId: id, liquidTxid: txid });
+      }
       closeUnlockModal();
       showSendSuccess(txid);
     } catch (err) {
       if (isWalletError(err, ERROR_CODES.BROADCAST_FAILED)) {
+        try {
+          getDefaultTelemetryClient().track(TELEMETRY_EVENTS.SEND_BROADCAST_FAILED, {
+            errorCode: "broadcast"
+          });
+        } catch { /* best-effort */ }
         showMsg("wallet-unlock-msg", "A rede recusou a transação. Verifique conexão e tente novamente.", "error");
       } else if (isWalletError(err, ERROR_CODES.ESPLORA_UNAVAILABLE)) {
+        try {
+          getDefaultTelemetryClient().track(TELEMETRY_EVENTS.SEND_BROADCAST_FAILED, {
+            errorCode: "esplora"
+          });
+        } catch { /* best-effort */ }
         showMsg("wallet-unlock-msg", "Não foi possível alcançar o Esplora. Tente novamente.", "error");
       } else {
         renderError("wallet-unlock-msg", err);
@@ -2351,10 +2472,14 @@ export function registerWalletRoutes({
       await wallet.unlockWithPin(pin);
     } catch (err) {
       if (isWalletError(err, ERROR_CODES.WRONG_PIN)) {
+        try { getDefaultTelemetryClient().track(TELEMETRY_EVENTS.UNLOCK_PIN_WRONG); } catch { /* best-effort */ }
         showMsg("wallet-unlock-msg", err.message || "PIN incorreto.", "error");
         return;
       }
       if (isWalletError(err, ERROR_CODES.WALLET_WIPED)) {
+        try {
+          getDefaultTelemetryClient().track(TELEMETRY_EVENTS.WALLET_WIPED, { errorCode: "pin-exhausted" });
+        } catch { /* best-effort */ }
         showMsg("wallet-unlock-msg", "Muitas tentativas. Carteira apagada deste aparelho.", "error");
         setTimeout(() => {
           closeUnlockModal();
@@ -2392,6 +2517,24 @@ export function registerWalletRoutes({
     resetSendState();
   }
 
+  // Pending prefill captured from an external dispatcher (e.g. the withdraw
+  // handler in script.js). The actual form population happens when the route
+  // mounts; until then the params sit here. Nulled after consumption so a
+  // manual "#wallet-send" visit afterwards uses the fresh reset.
+  let pendingSendPrefill = null;
+  let pendingWithdrawalId = null;
+
+  window.addEventListener("wallet-send:prefill", evt => {
+    const detail = evt?.detail || {};
+    const { assetKey, amountBrl, dest, withdrawalId } = detail;
+    pendingSendPrefill = {
+      assetKey: assetKey || "DEPIX",
+      amountBrl: typeof amountBrl === "number" ? amountBrl : null,
+      dest: typeof dest === "string" ? dest : ""
+    };
+    pendingWithdrawalId = typeof withdrawalId === "string" ? withdrawalId : null;
+  });
+
   route("#wallet-send", async () => {
     clearMsg("wallet-send-msg");
     const amountInput = q("wallet-send-amount");
@@ -2411,6 +2554,29 @@ export function registerWalletRoutes({
     await loadSendBalances();
     renderSendAssetDropdown();
     refreshSendFieldsForAsset();
+
+    if (pendingSendPrefill) {
+      const prefill = pendingSendPrefill;
+      pendingSendPrefill = null;
+      if (prefill.assetKey && ASSETS[prefill.assetKey]) {
+        selectSendAsset(prefill.assetKey);
+      }
+      if (prefill.dest && destInput) {
+        destInput.value = prefill.dest;
+        destInput.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      if (amountInput && typeof prefill.amountBrl === "number") {
+        amountInput.value = prefill.amountBrl.toFixed(2);
+        amountInput.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    } else {
+      // No fresh prefill event for THIS mount. Any pendingWithdrawalId left
+      // over from a prior withdraw flow (user backed out of unlock, navigated
+      // away before broadcasting, then re-entered #wallet-send manually) is
+      // stale — attaching it to the next unrelated send would POST the wrong
+      // liquid_txid to /api/withdraw/txid and corrupt support reconciliation.
+      pendingWithdrawalId = null;
+    }
   });
 
   route("#wallet-send-success", () => {
