@@ -2204,13 +2204,33 @@ export function registerWalletRoutes({
     }
   }
 
+  // Show "Enviando…" with a spinner on whichever button the user just tapped
+  // (Confirmar envio on the preview, or Confirmar on the unlock modal) so
+  // sign + broadcast doesn't look like the app hung. Restored in the finally
+  // block so a broadcast error returns the button to its resting state.
+  function applySendingButtonState(btn, on) {
+    if (!btn) return;
+    btn.disabled = on;
+    if (on) {
+      if (btn.dataset.restText === undefined) btn.dataset.restText = btn.textContent || "";
+      btn.innerHTML = '<span class="spinner"></span> Enviando…';
+    } else if (btn.dataset.restText !== undefined) {
+      btn.textContent = btn.dataset.restText;
+    }
+  }
+
+  function setSendingState(on) {
+    applySendingButtonState(q("wallet-send-confirm"), on);
+    applySendingButtonState(q("wallet-unlock-confirm"), on);
+    if (on) clearMsg("wallet-send-msg");
+  }
+
   async function doBroadcastAfterUnlock() {
     if (!sendState.preview) {
       showMsg("wallet-unlock-msg", "Sessão expirada. Reveja o envio.", "error");
       return;
     }
-    const confirmBtn = q("wallet-unlock-confirm");
-    if (confirmBtn) confirmBtn.disabled = true;
+    setSendingState(true);
     try {
       const { txid } = await wallet.confirmSend(sendState.preview.psetBase64);
       closeUnlockModal();
@@ -2224,7 +2244,7 @@ export function registerWalletRoutes({
         renderError("wallet-unlock-msg", err);
       }
     } finally {
-      if (confirmBtn) confirmBtn.disabled = false;
+      setSendingState(false);
     }
   }
 
@@ -2459,6 +2479,14 @@ export function registerWalletRoutes({
   q("wallet-send-success-done")?.addEventListener("click", () => {
     persistHomeMode("wallet");
     navigate("#home");
+    // Force a fresh sync + re-render so the home balances and history show
+    // the tx we just broadcast. Without this, the wallet-home mount is a
+    // no-op when modoWallet is still true (see script.js
+    // refreshWalletModeAvailability), leaving stale numbers on screen.
+    if (w && typeof w.dispatchEvent === "function") {
+      try { w.dispatchEvent(new CustomEvent("wallet-home:mount")); }
+      catch { /* not a browser env (test harness) */ }
+    }
   });
 
   // Expose a small handle for tests + potential future callers. Read-only.

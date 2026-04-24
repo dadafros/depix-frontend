@@ -490,6 +490,11 @@ describe("wallet.confirmSend", () => {
       destAddr: DEST
     });
     await wallet.confirmSend(preview.psetBase64);
+    // confirmSend now fires the resync in background (see wallet.js — the
+    // await was causing a 20-30s gap between broadcast success and the
+    // success screen, which users reported as "it hung"). Wait for the
+    // background promise to settle before asserting.
+    await wallet.syncWallet().catch(() => {});
     const totalScans = esploraClients.reduce((a, c) => a + c.scanCount, 0);
     expect(totalScans).toBeGreaterThanOrEqual(1);
   }, 60_000);
