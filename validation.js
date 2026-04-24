@@ -117,6 +117,102 @@ export function validateLiquidAddress(addr) {
 }
 
 /**
+ * @typedef {Object} LiquidUri
+ * @property {string} address
+ * @property {string|null} amount   Decimal string (NOT converted to sats). null if absent or malformed.
+ * @property {string|null} assetId  Lowercase 64-hex asset id, or null.
+ * @property {string|null} label
+ * @property {string|null} message
+ * @property {Record<string,string>} params  All raw decoded params (forward-compat for unknown BIP21 keys).
+ * @property {boolean} hasUri  true when input started with "liquid:" scheme.
+ */
+
+/**
+ * Parse a Liquid address or BIP21 URI (`liquid:<addr>?amount=X&assetid=Y&...`).
+ * Accepts plain addresses and returns them with hasUri:false. Full BIP21 URIs are
+ * validated, with assetid required to be 64-hex when present. Malformed `amount`
+ * is tolerated (kept as null) because the address is still usable; malformed
+ * `assetid` rejects the whole URI since it indicates corruption.
+ *
+ * @param {string} input
+ * @returns {{ valid: true, data: LiquidUri } | { valid: false, error: string }}
+ */
+export function parseLiquidUri(input) {
+  if (typeof input !== "string") {
+    return { valid: false, error: "Entrada inválida." };
+  }
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return { valid: false, error: "Informe um endereço ou URI." };
+  }
+
+  const schemeMatch = /^liquid:/i.exec(trimmed);
+  if (!schemeMatch) {
+    const addrCheck = validateLiquidAddress(trimmed);
+    if (!addrCheck.valid) return { valid: false, error: addrCheck.error };
+    return {
+      valid: true,
+      data: {
+        address: trimmed,
+        amount: null,
+        assetId: null,
+        label: null,
+        message: null,
+        params: {},
+        hasUri: false,
+      },
+    };
+  }
+
+  const body = trimmed.slice(schemeMatch[0].length);
+  const qIdx = body.indexOf("?");
+  const rawAddress = qIdx >= 0 ? body.slice(0, qIdx) : body;
+  const rawQuery = qIdx >= 0 ? body.slice(qIdx + 1) : "";
+
+  let address;
+  try {
+    address = decodeURIComponent(rawAddress);
+  } catch {
+    return { valid: false, error: "URI Liquid malformada." };
+  }
+
+  const addrCheck = validateLiquidAddress(address);
+  if (!addrCheck.valid) return { valid: false, error: addrCheck.error };
+
+  const search = new URLSearchParams(rawQuery);
+  const params = {};
+  for (const [k, v] of search.entries()) params[k] = v;
+
+  let assetId = null;
+  if (search.has("assetid")) {
+    const raw = (search.get("assetid") || "").toLowerCase();
+    if (!/^[0-9a-f]{64}$/.test(raw)) {
+      return { valid: false, error: "Asset ID inválido na URI." };
+    }
+    assetId = raw;
+  }
+
+  let amount = null;
+  if (search.has("amount")) {
+    const raw = search.get("amount") || "";
+    if (/^\d+(\.\d+)?$/.test(raw)) amount = raw;
+  }
+
+  return {
+    valid: true,
+    data: {
+      address,
+      amount,
+      assetId,
+      label: search.get("label"),
+      message: search.get("message"),
+      params,
+      hasUri: true,
+    },
+  };
+}
+
+/**
  * Validate an international phone number format.
  * Requires country code (e.g. +55 for Brazil).
  * Mobile numbers must have at least 10 digits total (country + local).

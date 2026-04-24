@@ -27,11 +27,13 @@ import {
   ASSETS,
   DISPLAY_ORDER,
   getAssetByIdentifier,
+  getAssetKeyById,
   convertSatsToBrl,
   formatAssetAmount,
   satsToAmount
 } from "./asset-registry.js";
-import { validateLiquidAddress } from "../validation.js";
+import { validateLiquidAddress, parseLiquidUri } from "../validation.js";
+import { scanQRCode, isQrScannerSupported, QR_SCANNER_ERRORS } from "../qr-scanner.js";
 
 // --------------------------------------------------------------------------
 // Pure helpers — exported for tests.
@@ -2447,6 +2449,54 @@ export function registerWalletRoutes({
     }
     clearSendPreview();
   });
+
+  if (!isQrScannerSupported()) {
+    q("wallet-send-dest-scan")?.classList.add("hidden");
+  }
+  q("wallet-send-dest-scan")?.addEventListener("click", async () => {
+    try {
+      const result = await scanQRCode({
+        title: "Escanear endereço Liquid",
+        hint: "Aponte para o QR do endereço de destino.",
+        validate: (text) => {
+          const parsed = parseLiquidUri(text);
+          if (!parsed.valid) return { ok: false, error: parsed.error };
+          return { ok: true };
+        },
+      });
+      const parsed = parseLiquidUri(result.rawText);
+      if (!parsed.valid) return;
+      const { address, amount, assetId } = parsed.data;
+
+      const destInput = q("wallet-send-dest");
+      if (destInput) {
+        destInput.value = address;
+        destInput.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+
+      if (assetId) {
+        const key = getAssetKeyById(assetId);
+        if (key && key !== sendState.assetKey) selectSendAsset(key);
+      }
+
+      if (amount) {
+        const amountInput = q("wallet-send-amount");
+        if (amountInput) {
+          amountInput.value = amount;
+          amountInput.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+      }
+
+      clearSendPreview();
+      if (showToast) showToast("QR code lido.");
+    } catch (err) {
+      if (err && (err.code === QR_SCANNER_ERRORS.CANCELLED || err.code === QR_SCANNER_ERRORS.ABORTED)) {
+        return;
+      }
+      // Permission / camera errors already surface their own in-modal state.
+    }
+  });
+
   q("wallet-send-preview-btn")?.addEventListener("click", () => { void onSendPreviewClick(); });
   q("wallet-send-confirm")?.addEventListener("click", () => {
     // Plan (Sub-fase 5 → "Cache de sessão pós-unlock"): the signer is held in
