@@ -38,6 +38,17 @@ import { toTrustedHTML } from "../trusted-types.js";
 import { getDefaultTelemetryClient, TELEMETRY_EVENTS } from "./telemetry.js";
 import { archiveWithdrawTxid } from "./withdraw-archive.js";
 import { getDefaultConfigClient } from "./config.js";
+import {
+  normalizeBalances as pureNormalizeBalances,
+  safeCall,
+  extractTxAssets,
+  txDirection,
+  formatTxTimestamp,
+  matchesWalletTxFilter,
+  normalizeWalletTxSearch,
+  walletTxDatesFromPeriod
+} from "./wallet-tx-filter.js";
+import { buildWalletTxCsv, formatCsvFilenameDate } from "./wallet-tx-csv.js";
 
 // --------------------------------------------------------------------------
 // Pure helpers — exported for tests.
@@ -1082,7 +1093,6 @@ export function registerWalletRoutes({
   const RATE_LIMIT_BACKOFF_MAX_MS = 600_000;
   let homeSyncTimer = null;
   let homeMounted = false;
-  let homeFilter = "all";
   let consecutiveRateLimits = 0;
   let nextSyncAllowedAt = 0;
 
@@ -1104,29 +1114,9 @@ export function registerWalletRoutes({
     });
   }
 
-  // LWK wasm returns balances as a Map<AssetId, bigint|number>. Normalize
-  // to a plain object keyed by asset id hex string so the rest of the UI
-  // can iterate predictably in both the real bundle and the test mocks.
-  function normalizeBalances(raw) {
-    const out = Object.create(null);
-    if (!raw) return out;
-    const entries = typeof raw.entries === "function"
-      ? raw.entries()
-      : Array.isArray(raw) ? raw : null;
-    if (entries) {
-      for (const [k, v] of entries) {
-        const keyStr = (k && typeof k.toString === "function") ? k.toString() : String(k);
-        out[keyStr] = (typeof v === "bigint") ? v : BigInt(v ?? 0);
-      }
-      return out;
-    }
-    if (typeof raw === "object") {
-      for (const [k, v] of Object.entries(raw)) {
-        out[k] = (typeof v === "bigint") ? v : BigInt(v ?? 0);
-      }
-    }
-    return out;
-  }
+  // Local alias so this closure's callers keep the short name while the
+  // implementation lives in ./wallet-tx-filter.js (unit-tested there).
+  const normalizeBalances = pureNormalizeBalances;
 
   async function renderWalletHomeBalances({ background = false } = {}) {
     const assetsHost = q("wallet-home-assets");
@@ -1410,7 +1400,15 @@ export function registerWalletRoutes({
 
   async function ensureReceiveAddress() {
     if (cachedReceiveAddress) return cachedReceiveAddress;
-    cachedReceiveAddress = await wallet.getReceiveAddress();
+    const addr = await wallet.getReceiveAddress();
+    // Defense in depth: validate the LWK output before showing it / encoding
+    // a QR. If WASM ever returns a malformed string we want a clear error,
+    // not a corrupt QR that funds a bad descriptor.
+    const v = validateLiquidAddress(addr);
+    if (!v.valid) {
+      throw new Error(`Endereço gerado pela carteira é inválido: ${v.error}`);
+    }
+    cachedReceiveAddress = addr;
     return cachedReceiveAddress;
   }
 
@@ -1539,143 +1537,167 @@ export function registerWalletRoutes({
   });
 
   // ====================================================================
-  // #wallet-transactions — on-chain history with asset filter.
+  // #wallet-transactions — on-chain history with asset / direction / date
+  // / search filters + 50-row infinite scroll. Mirrors the Extrato view
+  // (script.js: loadTransactions / applyFilters / renderNextPage /
+  // setupTransactionsObserver) so the two lists share a single mental
+  // model. Diverges only where the data source forces it: wallet txs
+  // come from LWK (local, signed-by-client) and have no status column.
   // ====================================================================
-  function extractTxAssets(tx) {
-    // Defensive: LWK `WalletTx.balance()` returns a Map<AssetId, number|bigint>.
-    // If either the wasm changes or a test stubs it differently we fall
-    // back to empty rather than crashing the history list.
-    try {
-      const raw = typeof tx?.balance === "function" ? tx.balance() : null;
-      return normalizeBalances(raw);
-    } catch {
-      return {};
-    }
-  }
+  const WALLET_TX_PAGE_SIZE = 50;
+  const walletTxFilter = {
+    asset: "all",         // all | DEPIX | USDT | LBTC
+    direction: "all",     // all | in | out
+    period: "all",        // all | today | 7d | 30d | 90d | custom
+    startDate: "",        // yyyy-mm-dd, only applied when period=custom or via inputs
+    endDate: "",          // yyyy-mm-dd
+    search: ""            // lowercase; matched against txid + amount string
+  };
+  let allWalletTxs = [];
+  let filteredWalletTxs = [];
+  let displayedWalletTxCount = 0;
+  let walletTxObserver = null;
+  let walletTxSearchTimer = null;
+  // Monotonic counter that invalidates in-flight loads. A user who opens
+  // #wallet-transactions, navigates away mid-fetch, and re-enters before
+  // the first listTransactions() resolves would otherwise have the stale
+  // result land on top of the fresh one.
+  let walletTxLoadSeq = 0;
 
-  function rowMatchesFilter(tx, filter) {
-    if (filter === "all") return true;
+  // All tx field extraction + filter logic lives in ./wallet-tx-filter.js
+  // (imported at top of file and unit-tested in tests/wallet-tx-filter.test.js).
+  // Keep the closure-level adapter below so applyWalletTxFilters() can pass
+  // the current filter state without threading it through every call site.
+  const matchesCurrentWalletTxFilter = tx => matchesWalletTxFilter(tx, walletTxFilter);
+
+
+  function buildWalletTxRow(tx) {
+    const row = d.createElement("div");
+    row.className = "wallet-tx-row";
+    const body = d.createElement("div");
+    body.className = "wallet-tx-row-body";
+    const label = d.createElement("div");
+    label.className = "wallet-tx-row-title";
+    // Route the in/out label through the same txDirection() the filter +
+    // CSV export use, so a tx whose LWK wasm omits type() still gets a
+    // clean "Recebido"/"Enviado" instead of the raw "tx" fallback string.
+    const dir = txDirection(tx);
+    label.textContent = dir === "in" ? "Recebido" : dir === "out" ? "Enviado" : "—";
+    const meta = d.createElement("div");
+    meta.className = "wallet-tx-row-sub";
+    const ts = safeCall(tx, "timestamp");
+    const txid = safeCall(tx, "txid");
+    const txidStr = (txid && typeof txid.toString === "function") ? txid.toString() : String(txid ?? "");
+    const short = txidStr ? `${txidStr.slice(0, 10)}…${txidStr.slice(-6)}` : "";
+    meta.textContent = `${formatTxTimestamp(ts)}${short ? " · " + short : ""}`;
+    body.appendChild(label);
+    body.appendChild(meta);
+
+    const amountCol = d.createElement("div");
+    amountCol.className = "wallet-tx-row-amount";
     const assets = extractTxAssets(tx);
+    const lines = [];
     for (const assetId of Object.keys(assets)) {
       const asset = getAssetByIdentifier(assetId);
       if (!asset) continue;
-      if (filter === "DEPIX" && asset.symbol === "DePix") return true;
-      if (filter === "USDT" && asset.symbol === "USDt") return true;
-      if (filter === "LBTC" && asset.symbol === "L-BTC") return true;
+      const sats = assets[assetId];
+      const display = formatAssetAmount(sats < 0n ? -sats : sats, asset);
+      const sign = sats < 0n ? "-" : "+";
+      lines.push(`${sign}${display} ${asset.symbol}`);
     }
-    return false;
+    amountCol.textContent = lines.length > 0 ? lines.join(" · ") : "—";
+    // Colour cue: if any positive → in; if all negative → out.
+    const anyPositive = Object.values(assets).some(v => v > 0n);
+    const anyNegative = Object.values(assets).some(v => v < 0n);
+    if (anyPositive && !anyNegative) amountCol.classList.add("in");
+    else if (anyNegative && !anyPositive) amountCol.classList.add("out");
+
+    row.appendChild(body);
+    row.appendChild(amountCol);
+    return row;
   }
 
-  function formatTxTimestamp(ts) {
-    if (typeof ts !== "number" || !Number.isFinite(ts) || ts <= 0) return "—";
-    const millis = ts < 1e12 ? ts * 1000 : ts;
-    try {
-      return new Date(millis).toLocaleString("pt-BR", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit"
-      });
-    } catch {
-      return "—";
-    }
-  }
-
-  function safeCall(obj, name) {
-    try {
-      const fn = obj?.[name];
-      if (typeof fn === "function") return fn.call(obj);
-    } catch (err) {
-      // Log only when the handle actually threw — absent/non-function reads
-      // stay silent (that path is structurally fine). Grep-able prefix so
-      // LWK upgrades that rename balance()/type()/timestamp()/txid() surface
-      // in devtools instead of silently rendering "—"/"tx" (OBS-01 follow-up
-      // will wire a telemetry counter through this signal in Sub-fase 6).
-      console.warn("[wallet-tx] safeCall", name, err);
-    }
-    return undefined;
-  }
-
-  async function renderTransactions() {
+  function resetWalletTxList() {
     const listEl = q("wallet-tx-list");
+    if (!listEl) return;
+    listEl.textContent = "";
+    const sentinel = d.createElement("div");
+    sentinel.id = "wallet-tx-sentinel";
+    sentinel.setAttribute("aria-hidden", "true");
+    sentinel.style.height = "1px";
+    listEl.appendChild(sentinel);
+  }
+
+  function renderNextWalletTxPage() {
+    const listEl = q("wallet-tx-list");
+    const emptyEl = q("wallet-tx-empty");
+    const sentinel = q("wallet-tx-sentinel");
+    if (!listEl || !emptyEl) return;
+    const nextBatch = filteredWalletTxs.slice(
+      displayedWalletTxCount,
+      displayedWalletTxCount + WALLET_TX_PAGE_SIZE
+    );
+    if (displayedWalletTxCount === 0 && nextBatch.length === 0) {
+      emptyEl.classList.remove("hidden");
+      return;
+    }
+    emptyEl.classList.add("hidden");
+    for (const tx of nextBatch) {
+      const row = buildWalletTxRow(tx);
+      if (sentinel) listEl.insertBefore(row, sentinel);
+      else listEl.appendChild(row);
+    }
+    displayedWalletTxCount += nextBatch.length;
+  }
+
+  function setupWalletTxObserver() {
+    if (walletTxObserver) walletTxObserver.disconnect();
+    const listEl = q("wallet-tx-list");
+    const sentinel = q("wallet-tx-sentinel");
+    if (!listEl || !sentinel || typeof IntersectionObserver === "undefined") return;
+    walletTxObserver = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && displayedWalletTxCount < filteredWalletTxs.length) {
+        renderNextWalletTxPage();
+      }
+    }, { root: listEl, rootMargin: "0px 0px 200px 0px" });
+    walletTxObserver.observe(sentinel);
+  }
+
+  function applyWalletTxFilters() {
+    filteredWalletTxs = allWalletTxs.filter(matchesCurrentWalletTxFilter);
+    displayedWalletTxCount = 0;
+    resetWalletTxList();
+    renderNextWalletTxPage();
+    setupWalletTxObserver();
+  }
+
+  async function loadWalletTransactions() {
     const loadingEl = q("wallet-tx-loading");
     const emptyEl = q("wallet-tx-empty");
-    if (!listEl || !loadingEl || !emptyEl) return;
+    if (!loadingEl || !emptyEl) return;
+    const seq = ++walletTxLoadSeq;
     showMsg("wallet-tx-msg", "", null);
-    listEl.textContent = "";
     loadingEl.classList.remove("hidden");
     emptyEl.classList.add("hidden");
-    let txs;
+    resetWalletTxList();
     try {
-      txs = await wallet.listTransactions();
+      const txs = await wallet.listTransactions();
+      if (seq !== walletTxLoadSeq) return; // a newer load started — drop stale result
+      allWalletTxs = txs || [];
     } catch (err) {
+      if (seq !== walletTxLoadSeq) return;
       loadingEl.classList.add("hidden");
+      allWalletTxs = [];
+      filteredWalletTxs = [];
       renderError("wallet-tx-msg", err);
       return;
     }
     loadingEl.classList.add("hidden");
-    const filtered = (txs || []).filter(t => rowMatchesFilter(t, homeFilter));
-    if (filtered.length === 0) {
-      emptyEl.classList.remove("hidden");
-      return;
-    }
-    for (const tx of filtered) {
-      const row = d.createElement("div");
-      row.className = "wallet-tx-row";
-      const body = d.createElement("div");
-      body.className = "wallet-tx-row-body";
-      const type = safeCall(tx, "type") ?? "tx";
-      const label = d.createElement("div");
-      label.className = "wallet-tx-row-title";
-      label.textContent = type === "incoming"
-        ? "Recebido"
-        : type === "outgoing"
-          ? "Enviado"
-          : String(type);
-      const meta = d.createElement("div");
-      meta.className = "wallet-tx-row-sub";
-      const ts = safeCall(tx, "timestamp");
-      const txid = safeCall(tx, "txid");
-      const txidStr = (txid && typeof txid.toString === "function") ? txid.toString() : String(txid ?? "");
-      const short = txidStr ? `${txidStr.slice(0, 10)}…${txidStr.slice(-6)}` : "";
-      meta.textContent = `${formatTxTimestamp(ts)}${short ? " · " + short : ""}`;
-      body.appendChild(label);
-      body.appendChild(meta);
-
-      const amountCol = d.createElement("div");
-      amountCol.className = "wallet-tx-row-amount";
-      const assets = extractTxAssets(tx);
-      const lines = [];
-      for (const assetId of Object.keys(assets)) {
-        const asset = getAssetByIdentifier(assetId);
-        if (!asset) continue;
-        const sats = assets[assetId];
-        const display = formatAssetAmount(sats < 0n ? -sats : sats, asset);
-        const sign = sats < 0n ? "-" : "+";
-        lines.push(`${sign}${display} ${asset.symbol}`);
-      }
-      amountCol.textContent = lines.length > 0 ? lines.join(" · ") : "—";
-      // Colour cue: if any positive → in; if all negative → out.
-      const anyPositive = Object.values(assets).some(v => v > 0n);
-      const anyNegative = Object.values(assets).some(v => v < 0n);
-      if (anyPositive && !anyNegative) amountCol.classList.add("in");
-      else if (anyNegative && !anyPositive) amountCol.classList.add("out");
-
-      row.appendChild(body);
-      row.appendChild(amountCol);
-      listEl.appendChild(row);
-    }
+    applyWalletTxFilters();
   }
 
-  // Plan Sub-fase 4 preferred "Extrato unificado" (toggle inside #reports).
-  // We shipped the dedicated #wallet-transactions view (plano B) because the
-  // #reports refactor would exceed ~150 LOC — date range, pagination,
-  // CSV/PDF export and polling all live there and would need to branch on
-  // mode. Dedicated view keeps this PR's diff reviewable; future maintainer
-  // can promote to unified extrato if desired without new wallet scope.
   route("#wallet-transactions", () => {
-    void renderTransactions();
+    void loadWalletTransactions();
   });
 
   q("wallet-tx-back")?.addEventListener("click", () => {
@@ -1683,20 +1705,205 @@ export function registerWalletRoutes({
     navigate("#home");
   });
 
-  for (const pill of d.querySelectorAll?.("[data-wallet-filter]") ?? []) {
+  function collapseWalletTxFilterPanel() {
+    const panel = q("wallet-tx-filter-panel");
+    const toggle = q("wallet-tx-filter-toggle");
+    if (panel && !panel.classList.contains("hidden")) {
+      panel.classList.add("hidden");
+      toggle?.classList.remove("open");
+    }
+  }
+
+  function updateWalletTxFilterBadge() {
+    const count = (walletTxFilter.asset !== "all" ? 1 : 0)
+                + (walletTxFilter.direction !== "all" ? 1 : 0)
+                + (walletTxFilter.period !== "all" ? 1 : 0)
+                + (walletTxFilter.search ? 1 : 0);
+    const badge = q("wallet-tx-filter-badge");
+    const toggle = q("wallet-tx-filter-toggle");
+    const clearBtn = q("wallet-tx-clear-filters");
+    if (badge) {
+      badge.textContent = String(count);
+      badge.classList.toggle("hidden", count === 0);
+    }
+    if (toggle) toggle.classList.toggle("active", count > 0);
+    if (clearBtn) clearBtn.classList.toggle("hidden", count === 0);
+  }
+
+  q("wallet-tx-filter-toggle")?.addEventListener("click", () => {
+    const panel = q("wallet-tx-filter-panel");
+    const toggle = q("wallet-tx-filter-toggle");
+    if (!panel || !toggle) return;
+    const isOpen = !panel.classList.contains("hidden");
+    panel.classList.toggle("hidden", isOpen);
+    toggle.classList.toggle("open", !isOpen);
+  });
+
+  function selectWalletTxPill(pills, pill, dataKey) {
+    for (const other of pills) {
+      const selected = other === pill;
+      other.classList.toggle("active", selected);
+      other.setAttribute("aria-checked", selected ? "true" : "false");
+    }
+    return pill.getAttribute(dataKey);
+  }
+
+  for (const pill of d.querySelectorAll?.("[data-wallet-asset]") ?? []) {
     pill.addEventListener("click", () => {
-      const filter = pill.getAttribute("data-wallet-filter") || "all";
-      homeFilter = filter;
-      for (const other of d.querySelectorAll("[data-wallet-filter]")) {
-        const selected = other === pill;
-        other.classList.toggle("active", selected);
-        // Flip aria-checked alongside .active so screen readers announce the
-        // selected state — .active alone is not exposed to the a11y tree.
-        other.setAttribute("aria-checked", selected ? "true" : "false");
-      }
-      void renderTransactions();
+      const pills = d.querySelectorAll("[data-wallet-asset]");
+      walletTxFilter.asset = selectWalletTxPill(pills, pill, "data-wallet-asset") || "all";
+      applyWalletTxFilters();
+      updateWalletTxFilterBadge();
+      collapseWalletTxFilterPanel();
     });
   }
+
+  for (const pill of d.querySelectorAll?.("[data-wallet-direction]") ?? []) {
+    pill.addEventListener("click", () => {
+      const pills = d.querySelectorAll("[data-wallet-direction]");
+      walletTxFilter.direction = selectWalletTxPill(pills, pill, "data-wallet-direction") || "all";
+      applyWalletTxFilters();
+      updateWalletTxFilterBadge();
+      collapseWalletTxFilterPanel();
+    });
+  }
+
+  // walletTxDatesFromPeriod lives in ./wallet-tx-filter.js (imported above).
+
+  for (const btn of d.querySelectorAll?.("[data-wallet-period]") ?? []) {
+    btn.addEventListener("click", () => {
+      const pills = d.querySelectorAll("[data-wallet-period]");
+      const period = selectWalletTxPill(pills, btn, "data-wallet-period") || "all";
+      walletTxFilter.period = period;
+      const customRange = q("wallet-tx-custom-range");
+      const startInput = q("wallet-tx-start-date");
+      const endInput = q("wallet-tx-end-date");
+      if (period === "custom") {
+        customRange?.classList.remove("hidden");
+        // Keep whatever the user last typed in the inputs — don't auto-fill.
+        walletTxFilter.startDate = startInput?.value || "";
+        walletTxFilter.endDate = endInput?.value || "";
+      } else {
+        customRange?.classList.add("hidden");
+        const { start, end } = walletTxDatesFromPeriod(period);
+        walletTxFilter.startDate = start;
+        walletTxFilter.endDate = end;
+        if (startInput) startInput.value = start;
+        if (endInput) endInput.value = end;
+        collapseWalletTxFilterPanel();
+      }
+      applyWalletTxFilters();
+      updateWalletTxFilterBadge();
+    });
+  }
+
+  q("wallet-tx-start-date")?.addEventListener("change", (e) => {
+    walletTxFilter.startDate = e.target?.value || "";
+    applyWalletTxFilters();
+    updateWalletTxFilterBadge();
+  });
+  q("wallet-tx-end-date")?.addEventListener("change", (e) => {
+    walletTxFilter.endDate = e.target?.value || "";
+    applyWalletTxFilters();
+    updateWalletTxFilterBadge();
+  });
+
+  function updateWalletTxSearchClear() {
+    const input = q("wallet-tx-filter-search");
+    const clear = q("wallet-tx-filter-search-clear");
+    if (!input || !clear) return;
+    clear.classList.toggle("hidden", !input.value.trim());
+  }
+
+  q("wallet-tx-filter-search")?.addEventListener("input", (e) => {
+    clearTimeout(walletTxSearchTimer);
+    updateWalletTxSearchClear();
+    const raw = String(e.target?.value ?? "");
+    walletTxSearchTimer = setTimeout(() => {
+      walletTxFilter.search = normalizeWalletTxSearch(raw);
+      applyWalletTxFilters();
+      updateWalletTxFilterBadge();
+    }, 200);
+  });
+
+  q("wallet-tx-filter-search-clear")?.addEventListener("click", () => {
+    const input = q("wallet-tx-filter-search");
+    if (input) { input.value = ""; input.focus(); }
+    walletTxFilter.search = "";
+    updateWalletTxSearchClear();
+    applyWalletTxFilters();
+    updateWalletTxFilterBadge();
+  });
+
+  q("wallet-tx-clear-filters")?.addEventListener("click", () => {
+    walletTxFilter.asset = "all";
+    walletTxFilter.direction = "all";
+    walletTxFilter.period = "all";
+    walletTxFilter.startDate = "";
+    walletTxFilter.endDate = "";
+    walletTxFilter.search = "";
+    for (const pill of d.querySelectorAll("[data-wallet-asset]")) {
+      const active = pill.getAttribute("data-wallet-asset") === "all";
+      pill.classList.toggle("active", active);
+      pill.setAttribute("aria-checked", active ? "true" : "false");
+    }
+    for (const pill of d.querySelectorAll("[data-wallet-direction]")) {
+      const active = pill.getAttribute("data-wallet-direction") === "all";
+      pill.classList.toggle("active", active);
+      pill.setAttribute("aria-checked", active ? "true" : "false");
+    }
+    for (const pill of d.querySelectorAll("[data-wallet-period]")) {
+      const active = pill.getAttribute("data-wallet-period") === "all";
+      pill.classList.toggle("active", active);
+      pill.setAttribute("aria-checked", active ? "true" : "false");
+    }
+    q("wallet-tx-custom-range")?.classList.add("hidden");
+    const startInput = q("wallet-tx-start-date");
+    const endInput = q("wallet-tx-end-date");
+    if (startInput) startInput.value = "";
+    if (endInput) endInput.value = "";
+    const searchInput = q("wallet-tx-filter-search");
+    if (searchInput) searchInput.value = "";
+    updateWalletTxSearchClear();
+    applyWalletTxFilters();
+    updateWalletTxFilterBadge();
+    collapseWalletTxFilterPanel();
+  });
+
+  // Client-side CSV download of the currently filtered transactions.
+  // No backend round-trip: the wallet is non-custodial and history lives
+  // entirely on-device, so the browser can render the file directly.
+  // CSV/escape/row logic lives in ./wallet-tx-csv.js (unit-tested in
+  // tests/wallet-tx-csv.test.js); this handler only wires DOM events,
+  // triggers the download, and surfaces empty-list feedback.
+  function triggerCsvDownload(filename, csv) {
+    if (typeof Blob === "undefined" || typeof URL === "undefined" || !d?.body) return false;
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = d.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.rel = "noopener";
+    d.body.appendChild(a);
+    a.click();
+    d.body.removeChild(a);
+    // Defer revoke so Safari has time to kick off the download.
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+    return true;
+  }
+
+  q("wallet-tx-download")?.addEventListener("click", () => {
+    const btn = q("wallet-tx-download");
+    if (!btn || btn.disabled) return;
+    if (filteredWalletTxs.length === 0) {
+      showMsg("wallet-tx-msg", "Nada para baixar — a lista filtrada está vazia.", "error");
+      return;
+    }
+    showMsg("wallet-tx-msg", "", null);
+    const filename = `movimentacoes-carteira_${formatCsvFilenameDate()}.csv`;
+    const csv = buildWalletTxCsv(filteredWalletTxs);
+    triggerCsvDownload(filename, csv);
+  });
 
   // ====================================================================
   // #wallet-settings — biometric toggle + export + wipe.
@@ -1704,7 +1911,10 @@ export function registerWalletRoutes({
   async function refreshBiometricRow() {
     const status = q("wallet-settings-biometric-status");
     const toggle = q("wallet-settings-biometric-toggle");
+    const reset = q("wallet-settings-biometric-reset");
     if (!status || !toggle) return;
+    // Default the reset link to hidden; only enrolled biometric reveals it.
+    reset?.classList.add("hidden");
     try {
       const supported = await wallet.biometricSupported();
       if (!supported) {
@@ -1719,6 +1929,10 @@ export function registerWalletRoutes({
         toggle.disabled = false;
         toggle.textContent = "Remover";
         toggle.dataset.action = "remove";
+        // Visible only when biometric is enrolled — that's the only state
+        // where a reset is meaningful (the iOS-deleted-passkey loop only
+        // triggers when identifiers are present).
+        reset?.classList.remove("hidden");
       } else {
         status.textContent = "Biometria não configurada.";
         toggle.disabled = false;
@@ -1809,6 +2023,70 @@ export function registerWalletRoutes({
         showMsg("wallet-biometric-pin-msg", "Autenticação cancelada.", "warning");
       } else {
         renderError("wallet-biometric-pin-msg", err);
+      }
+      if (btn) btn.disabled = false;
+    } finally {
+      await refreshBiometricRow();
+    }
+  });
+
+  // --- Biometric reset modal (escape hatch for iOS-deleted-passkey loop) ---
+  function resetBiometricResetModal() {
+    const pin = q("wallet-biometric-reset-pin");
+    if (pin) pin.value = "";
+    clearMsg("wallet-biometric-reset-msg");
+    const btn = q("wallet-biometric-reset-confirm");
+    if (btn) btn.disabled = false;
+  }
+
+  q("wallet-settings-biometric-reset")?.addEventListener("click", () => {
+    resetBiometricResetModal();
+    q("wallet-biometric-reset-modal")?.classList.remove("hidden");
+    q("wallet-biometric-reset-pin")?.focus();
+  });
+
+  q("wallet-biometric-reset-hint-ok")?.addEventListener("click", () => {
+    q("wallet-biometric-reset-hint-modal")?.classList.add("hidden");
+  });
+
+  q("wallet-biometric-reset-cancel")?.addEventListener("click", () => {
+    q("wallet-biometric-reset-modal")?.classList.add("hidden");
+    resetBiometricResetModal();
+  });
+
+  q("wallet-biometric-reset-confirm")?.addEventListener("click", async () => {
+    const pin = q("wallet-biometric-reset-pin")?.value ?? "";
+    const btn = q("wallet-biometric-reset-confirm");
+    clearMsg("wallet-biometric-reset-msg");
+    if (!isPinInputValid(pin)) {
+      showMsg("wallet-biometric-reset-msg", "Informe um PIN de 6 dígitos.", "error");
+      return;
+    }
+    if (btn) btn.disabled = true;
+    try {
+      const result = await wallet.resetBiometric(pin);
+      q("wallet-biometric-reset-modal")?.classList.add("hidden");
+      resetBiometricResetModal();
+      // The OS-level passkey we cannot delete from JS becomes orphan. Show
+      // the dedicated reset-hint modal (mirrors the wipe-passkey-hint copy
+      // but framed for reset — wallet not wiped, user stays on settings).
+      if (result?.hadBiometric) {
+        const hint = q("wallet-biometric-reset-hint-modal");
+        hint?.classList.remove("hidden");
+        q("wallet-biometric-reset-hint-ok")?.focus();
+      } else {
+        if (showToast) showToast("Biometria resetada.");
+      }
+    } catch (err) {
+      if (isWalletError(err, ERROR_CODES.WALLET_WIPED)) {
+        showMsg("wallet-biometric-reset-msg", "Muitas tentativas erradas. Carteira apagada.", "warning");
+        setTimeout(() => {
+          q("wallet-biometric-reset-modal")?.classList.add("hidden");
+          persistHomeMode("deposit");
+          navigate("#wallet-gate");
+        }, 1500);
+      } else {
+        renderError("wallet-biometric-reset-msg", err);
       }
       if (btn) btn.disabled = false;
     } finally {
@@ -1952,6 +2230,30 @@ export function registerWalletRoutes({
     if (btn) btn.disabled = false;
   }
 
+  // Shown after a successful wipe when the wallet had a biometric
+  // credential enrolled. The OS-level passkey survives the IDB destroy
+  // (we cannot delete it from JS), so we tell the user it's still in
+  // their device's passkey list. Only one button — acknowledgement
+  // closes the hint and navigates to the wallet gate.
+  function showWipePasskeyHint() {
+    const hint = q("wallet-wipe-passkey-hint-modal");
+    if (!hint) {
+      // Fallback if markup was not rendered yet — preserve the previous
+      // navigate-immediately behavior so the user is never stranded.
+      if (showToast) showToast("Carteira apagada deste aparelho.");
+      navigate("#wallet-gate");
+      return;
+    }
+    hint.classList.remove("hidden");
+    q("wallet-wipe-passkey-hint-ok")?.focus();
+  }
+
+  q("wallet-wipe-passkey-hint-ok")?.addEventListener("click", () => {
+    q("wallet-wipe-passkey-hint-modal")?.classList.add("hidden");
+    if (showToast) showToast("Carteira apagada deste aparelho.");
+    navigate("#wallet-gate");
+  });
+
   q("wallet-settings-wipe")?.addEventListener("click", () => {
     resetWipeModal();
     q("wallet-wipe-modal")?.classList.remove("hidden");
@@ -1972,15 +2274,22 @@ export function registerWalletRoutes({
     }
     if (btn) btn.disabled = true;
     try {
-      await wallet.wipeWallet(pin);
+      const wipeResult = await wallet.wipeWallet(pin);
       try {
         getDefaultTelemetryClient().track(TELEMETRY_EVENTS.WALLET_WIPED, { errorCode: "user-initiated" });
       } catch { /* best-effort */ }
       q("wallet-wipe-modal")?.classList.add("hidden");
       resetWipeModal();
       persistHomeMode("deposit");
-      if (showToast) showToast("Carteira apagada deste aparelho.");
-      navigate("#wallet-gate");
+      if (wipeResult?.hadBiometric) {
+        // OS-level passkey cannot be deleted from JS; surface a one-time
+        // hint so the user can clean it up manually if desired. Wallet is
+        // already wiped — navigation happens after acknowledgement.
+        showWipePasskeyHint();
+      } else {
+        if (showToast) showToast("Carteira apagada deste aparelho.");
+        navigate("#wallet-gate");
+      }
     } catch (err) {
       if (isWalletError(err, ERROR_CODES.WALLET_WIPED)) {
         try {
@@ -2021,10 +2330,23 @@ export function registerWalletRoutes({
         wipeModal.classList.add("hidden");
         resetWipeModal();
       }
+      const wipeHintModal = q("wallet-wipe-passkey-hint-modal");
+      if (wipeHintModal && !wipeHintModal.classList.contains("hidden")) {
+        wipeHintModal.classList.add("hidden");
+      }
       const biometricModal = q("wallet-biometric-pin-modal");
       if (biometricModal && !biometricModal.classList.contains("hidden")) {
         biometricModal.classList.add("hidden");
         resetBiometricPinModal();
+      }
+      const bioResetModal = q("wallet-biometric-reset-modal");
+      if (bioResetModal && !bioResetModal.classList.contains("hidden")) {
+        bioResetModal.classList.add("hidden");
+        resetBiometricResetModal();
+      }
+      const bioResetHintModal = q("wallet-biometric-reset-hint-modal");
+      if (bioResetHintModal && !bioResetHintModal.classList.contains("hidden")) {
+        bioResetHintModal.classList.add("hidden");
       }
       const unlockModal = q("wallet-unlock-modal");
       if (unlockModal && !unlockModal.classList.contains("hidden")) {
@@ -2397,6 +2719,12 @@ export function registerWalletRoutes({
     }
   }
 
+  // Tracks whether the current unlock modal session has biometric enrolled
+  // and supported by the device. Set by openUnlockModal; consumed by the
+  // silent-fallback swap to decide whether to expose the "Usar biometria"
+  // retry link in the PIN section.
+  let biometricAvailableForCurrentUnlock = false;
+
   async function openUnlockModal() {
     const modal = q("wallet-unlock-modal");
     if (!modal) return;
@@ -2405,9 +2733,12 @@ export function registerWalletRoutes({
     if (pinEl) pinEl.value = "";
     const bioSection = q("wallet-unlock-biometric");
     const pinSection = q("wallet-unlock-pin-section");
+    const useBioLink = q("wallet-unlock-use-biometric");
     bioSection?.classList.add("hidden");
     pinSection?.classList.remove("hidden");
+    useBioLink?.classList.add("hidden");
     modal.classList.remove("hidden");
+    biometricAvailableForCurrentUnlock = false;
     let autoBiometric = false;
     try {
       const [has, supported] = await Promise.all([
@@ -2415,8 +2746,10 @@ export function registerWalletRoutes({
         wallet.biometricSupported()
       ]);
       if (has && supported) {
+        biometricAvailableForCurrentUnlock = true;
         bioSection?.classList.remove("hidden");
         pinSection?.classList.add("hidden");
+        useBioLink?.classList.remove("hidden");
         q("wallet-unlock-biometric-btn")?.focus();
         autoBiometric = true;
       } else {
@@ -2428,7 +2761,9 @@ export function registerWalletRoutes({
     // Plan (Sub-fase 5 → "biometria auto"): once the modal knows biometric is
     // enrolled + supported, fire the platform prompt immediately so the user
     // doesn't have to tap an extra button before Face ID / Touch ID shows up.
-    // The `Usar biometria` button stays as a manual retry after cancellation.
+    // If it fails, swapUnlockToPinSection silently shows the PIN — no toast,
+    // no "cancelled" warning. The "Usar biometria" link in the PIN section
+    // is the explicit retry path.
     if (autoBiometric) {
       void unlockWithBiometricAndBroadcast();
     }
@@ -2441,6 +2776,27 @@ export function registerWalletRoutes({
     clearMsg("wallet-unlock-msg");
   }
 
+  // Silently switch the unlock modal from biometric to PIN. Used both as
+  // the manual "Usar PIN" link target and as the auto-fallback when any
+  // biometric error occurs (cancel, decrypt-fail, device unavailable).
+  // Idempotent — exits early if the PIN section is already visible.
+  function swapUnlockToPinSection() {
+    const pinSection = q("wallet-unlock-pin-section");
+    if (pinSection && !pinSection.classList.contains("hidden")) return;
+    q("wallet-unlock-biometric")?.classList.add("hidden");
+    pinSection?.classList.remove("hidden");
+    clearMsg("wallet-unlock-msg");
+    q("wallet-unlock-pin")?.focus();
+  }
+
+  function swapUnlockToBiometricSection() {
+    if (!biometricAvailableForCurrentUnlock) return;
+    q("wallet-unlock-pin-section")?.classList.add("hidden");
+    q("wallet-unlock-biometric")?.classList.remove("hidden");
+    clearMsg("wallet-unlock-msg");
+    q("wallet-unlock-biometric-btn")?.focus();
+  }
+
   async function unlockWithBiometricAndBroadcast() {
     clearMsg("wallet-unlock-msg");
     const btn = q("wallet-unlock-biometric-btn");
@@ -2448,13 +2804,20 @@ export function registerWalletRoutes({
     try {
       await wallet.unlockWithBiometric();
     } catch (err) {
-      if (isWalletError(err, ERROR_CODES.BIOMETRIC_REJECTED)) {
-        showMsg("wallet-unlock-msg", "Autenticação cancelada.", "warning");
-      } else if (isWalletError(err, ERROR_CODES.BIOMETRIC_UNAVAILABLE)) {
-        showMsg("wallet-unlock-msg", "Biometria indisponível. Use o PIN.", "warning");
-      } else {
-        renderError("wallet-unlock-msg", err);
+      // Silent fallback for any biometric failure (user cancel, PRF unwrap
+      // failure, device temporarily unavailable). The PIN section absorbs
+      // the user's next input without an explicit error toast — they can
+      // still retry biometric via the "Usar biometria" link in that section.
+      if (
+        isWalletError(err, ERROR_CODES.BIOMETRIC_REJECTED) ||
+        isWalletError(err, ERROR_CODES.BIOMETRIC_UNAVAILABLE) ||
+        isWalletError(err, ERROR_CODES.BIOMETRIC_DECRYPT_FAILED)
+      ) {
+        if (btn) btn.disabled = false;
+        swapUnlockToPinSection();
+        return;
       }
+      renderError("wallet-unlock-msg", err);
       if (btn) btn.disabled = false;
       return;
     }
@@ -2723,10 +3086,11 @@ export function registerWalletRoutes({
   q("wallet-unlock-cancel")?.addEventListener("click", closeUnlockModal);
   q("wallet-unlock-confirm")?.addEventListener("click", () => onUnlockConfirmClick());
   q("wallet-unlock-biometric-btn")?.addEventListener("click", () => { void unlockWithBiometricAndBroadcast(); });
-  q("wallet-unlock-use-pin")?.addEventListener("click", () => {
-    q("wallet-unlock-biometric")?.classList.add("hidden");
-    q("wallet-unlock-pin-section")?.classList.remove("hidden");
-    q("wallet-unlock-pin")?.focus();
+  q("wallet-unlock-use-pin")?.addEventListener("click", () => { swapUnlockToPinSection(); });
+  q("wallet-unlock-use-biometric")?.addEventListener("click", () => {
+    if (!biometricAvailableForCurrentUnlock) return;
+    swapUnlockToBiometricSection();
+    void unlockWithBiometricAndBroadcast();
   });
   q("wallet-unlock-pin")?.addEventListener("keydown", evt => {
     if (evt.key === "Enter") {
@@ -2764,7 +3128,15 @@ export function registerWalletRoutes({
     _mountWalletHome: onWalletHomeMount,
     _unmountWalletHome: onWalletHomeUnmount,
     _renderReceiveQr: renderReceiveQr,
-    _renderTransactions: renderTransactions,
+    _loadWalletTransactions: loadWalletTransactions,
+    _applyWalletTxFilters: applyWalletTxFilters,
+    _renderNextWalletTxPage: renderNextWalletTxPage,
+    _walletTxState: () => ({
+      filter: { ...walletTxFilter },
+      allCount: allWalletTxs.length,
+      filteredCount: filteredWalletTxs.length,
+      displayedCount: displayedWalletTxCount
+    }),
     _refreshBiometricRow: refreshBiometricRow,
     _openUnlockModal: openUnlockModal,
     _closeUnlockModal: closeUnlockModal,

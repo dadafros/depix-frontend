@@ -15,7 +15,7 @@
 // do not require unlock — they work off the plaintext descriptor saved in
 // `credentials.descriptor`.
 
-import { WalletError, ERROR_CODES } from "./wallet-errors.js";
+import { WalletError, ERROR_CODES, isWalletError } from "./wallet-errors.js";
 import {
   MAX_PIN_ATTEMPTS,
   PIN_RATE_LIMIT_AFTER_ATTEMPT,
@@ -500,8 +500,13 @@ export function createWalletModule({
     try {
       mnemonicStr = await decryptSeed(ciphertext, prfKey, iv, cryptoImpl);
     } catch (err) {
+      // Distinguishes from BIOMETRIC_REJECTED (user-cancel of the OS prompt).
+      // Decrypt failure means the assertion succeeded and the PRF secret was
+      // derived, but the wrapped key no longer unwraps the seed (stale wrap
+      // after a credential reset, or in-flight corruption). The UI silently
+      // falls back to PIN when this happens — see wallet-ui.js.
       throw new WalletError(
-        ERROR_CODES.BIOMETRIC_REJECTED,
+        ERROR_CODES.BIOMETRIC_DECRYPT_FAILED,
         "Biometric unlock failed to decrypt seed",
         err
       );
@@ -858,6 +863,12 @@ export function createWalletModule({
     // Require PIN as a confirmation gate — prevents accidental button presses.
     await exportMnemonic(pin);
     const database = await db();
+    // Snapshot whether a biometric credential was enrolled BEFORE the IDB is
+    // destroyed. The UI uses this to surface a one-time hint about the
+    // OS-level passkey that we cannot delete from JS; users who never
+    // enrolled never see the hint.
+    const record = await readCredentials(database);
+    const hadBiometric = record?.credentialId != null;
     zeroInMemory();
     // Close the handle and invalidate the cached promise BEFORE destroying;
     // deleteDatabase blocks as long as any connection is open.
@@ -865,14 +876,55 @@ export function createWalletModule({
     database.close();
     await destroyDatabase(indexedDbImpl);
     clearWalletExistsFlag();
+    return { hadBiometric };
   }
 
   // Updates the biometric enrollment after the wallet was created (e.g. user
-  // skipped it and later enables it from settings).
+  // skipped it and later enables it from settings, or toggled it off and
+  // back on). When a soft-disabled passkey is still on the device (left in
+  // place by removeBiometric so we can reuse it), this re-derives the PRF
+  // secret against the existing credential and wraps the seed under it
+  // again — no new OS-level passkey is created. Falls through to a fresh
+  // enrollment only when the existing passkey has been deleted from OS
+  // settings; user-cancellation of the reuse prompt is rethrown so the
+  // identifiers are not destroyed.
   async function addBiometric(pin) {
     const mnemonicStr = await exportMnemonic(pin);
-    const biometric = await enrollBiometricForSeed(mnemonicStr);
     const database = await db();
+    const record = await readCredentials(database);
+
+    // Reuse path: passkey + salt are still present, only the wrapped seed
+    // was cleared by removeBiometric. Re-authenticate, re-wrap.
+    if (record?.credentialId && record?.prfSalt && record.wrappedSeedKey == null) {
+      try {
+        const prfSecret = await derivePrfSecret({
+          credentialId: record.credentialId,
+          prfSalt: record.prfSalt,
+          credentialsImpl
+        });
+        const prfKey = await importPrfAsAesKey(prfSecret, cryptoImpl);
+        const wrappedIv = randomIv(cryptoImpl);
+        const wrappedCt = await encryptSeed(mnemonicStr, prfKey, wrappedIv, cryptoImpl);
+        const wrappedSeedKey = new Uint8Array(wrappedIv.length + wrappedCt.length);
+        wrappedSeedKey.set(wrappedIv, 0);
+        wrappedSeedKey.set(wrappedCt, wrappedIv.length);
+        await patchCredentials(database, { wrappedSeedKey });
+        return;
+      } catch (err) {
+        // User cancelled the OS prompt: don't destroy their identifiers.
+        // They can retry; the soft-disabled state stays intact.
+        if (isWalletError(err, ERROR_CODES.BIOMETRIC_REJECTED)) throw err;
+        // Only treat the credential as gone when the platform explicitly
+        // says so (InvalidStateError ⇒ unknown credential). Other failures
+        // (transient biometric hardware hiccup, rpId mismatch, momentary OS
+        // error) are rethrown so the user retries against the existing
+        // passkey instead of creating a duplicate via fresh enroll.
+        if (err?.cause?.name !== "InvalidStateError") throw err;
+        await patchCredentials(database, { credentialId: null, prfSalt: null });
+      }
+    }
+
+    const biometric = await enrollBiometricForSeed(mnemonicStr);
     await patchCredentials(database, {
       credentialId: biometric.credentialId,
       prfSalt: biometric.prfSalt,
@@ -880,13 +932,48 @@ export function createWalletModule({
     });
   }
 
+  // Soft-disable: clears only the wrapped seed key. The credentialId and
+  // prfSalt are intentionally preserved so a subsequent addBiometric() can
+  // re-derive the PRF secret from the existing OS passkey instead of
+  // creating a duplicate. hasBiometric() still returns false (it requires
+  // all three fields via isPrfCredential).
   async function removeBiometric() {
     const database = await db();
+    await patchCredentials(database, {
+      wrappedSeedKey: null
+    });
+  }
+
+  // Hard-clear escape hatch for the iOS-deleted-passkey loop: when a user
+  // removes the DePix passkey from Settings → Senhas (or Android equivalent),
+  // the WebAuthn spec requires the platform to respond with NotAllowedError
+  // after the timeout — indistinguishable from user-cancel — so the reuse
+  // path in addBiometric() preserves identifiers and the user is stuck in a
+  // 60s loop with no in-app recovery.
+  //
+  // resetBiometric is the explicit recovery affordance. PIN-gated to prevent
+  // accidental presses; clears credentialId + prfSalt + wrappedSeedKey so
+  // the next addBiometric() falls through to the fresh-enroll branch and
+  // calls credentials.create(), producing a brand-new OS passkey. The
+  // previous OS passkey, if it still exists, becomes orphan in the device's
+  // passkey list — UI surfaces the same "remove from Settings" hint as wipe.
+  //
+  // Returns `{ hadBiometric }` mirroring wipeWallet, so the UI can branch
+  // identically on whether to show the orphan-passkey hint modal.
+  async function resetBiometric(pin) {
+    // PIN check via exportMnemonic — same gate wipeWallet uses. A wrong PIN
+    // throws WRONG_PIN before we touch IDB; an exhausted-attempt path may
+    // throw WALLET_WIPED, which already destroyed the wallet.
+    await exportMnemonic(pin);
+    const database = await db();
+    const record = await readCredentials(database);
+    const hadBiometric = record?.credentialId != null;
     await patchCredentials(database, {
       credentialId: null,
       prfSalt: null,
       wrappedSeedKey: null
     });
+    return { hadBiometric };
   }
 
   // Generates a fresh BIP39 mnemonic WITHOUT persisting it. Used by the
@@ -1270,6 +1357,7 @@ export function createWalletModule({
     wipeWallet,
     addBiometric,
     removeBiometric,
+    resetBiometric,
     touch,
     _zeroInMemory: zeroInMemory
   });

@@ -142,16 +142,16 @@
   }
   </script>
 
-  <link rel="manifest" href="manifest.json?v=141" />
-  <link rel="icon" href="icon-192.png?v=141" />
-  <link rel="apple-touch-icon" href="icon-192.png?v=141" />
+  <link rel="manifest" href="manifest.json?v=149" />
+  <link rel="icon" href="icon-192.png?v=149" />
+  <link rel="apple-touch-icon" href="icon-192.png?v=149" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
   <!-- Asset version must match APP_VERSION in service-worker.js -->
-  <link rel="stylesheet" href="style.css?v=141" />
+  <link rel="stylesheet" href="style.css?v=149" />
 </head>
 <body>
 
@@ -160,7 +160,7 @@
 
   <nav class="landing-nav">
     <div class="landing-nav-inner">
-      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=141" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
+      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=149" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
       <div class="landing-nav-right">
         <a href="https://blog.depixapp.com/" class="landing-nav-link">Blog</a>
         <a href="#login" class="landing-nav-cta">Entrar</a>
@@ -1038,6 +1038,29 @@
 
 <!-- ===== SELECIONAR ENDEREÇO (modal) ===== -->
 <!-- ===== CARTEIRA EXTERNA — INTRO (shown only when user has integrated wallet) ===== -->
+<!-- ===== WALLET ERROR MODAL ===== -->
+<!-- Shown when resolveHomeDestination/resolveDestinationAddress fails to
+     reach the integrated wallet. The user can retry (close + try the action
+     again) or switch to the external wallet path. We never silently fall
+     back — that would deposit/operate on a destination different from what
+     the chip implies. -->
+<div id="wallet-error-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="wallet-error-title">
+  <div class="modal-box">
+    <h2 id="wallet-error-title">Carteira Integrada indisponível</h2>
+    <p class="info-text">
+      Não foi possível acessar sua Carteira Integrada agora. Isso pode acontecer
+      com conexão instável ou bloqueio de armazenamento local pelo navegador.
+    </p>
+    <p class="info-text">
+      Você pode tentar novamente em alguns segundos, ou trocar para uma
+      Carteira Externa. Se trocar, você precisará escolher um endereço externo
+      cadastrado para continuar.
+    </p>
+    <button id="btn-wallet-error-retry">Tentar mais tarde</button>
+    <button id="btn-wallet-error-external" class="secondary">Trocar para Carteira Externa</button>
+  </div>
+</div>
+
 <div id="external-wallet-intro-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="external-wallet-intro-title">
   <div class="modal-box">
     <h2 id="external-wallet-intro-title">Carteira Externa</h2>
@@ -1069,7 +1092,12 @@
       <p class="info-text">Cole um endereço Liquid (começa com <code>lq1…</code>, <code>tlq1…</code>, <code>VJL…</code> ou <code>ex1…</code>). Você encontra na aba "Receber" do seu app externo.</p>
       <p class="external-wallet-help"><button type="button" id="external-wallet-guide-link" class="link-button">Como cadastrar carteira externa com o app SideSwap</button></p>
       <div id="add-addr-msg" class="mensagem"></div>
-      <input id="new-addr-input" placeholder="Cole o endereço aqui" />
+      <div class="addr-input-wrap">
+        <input id="new-addr-input" placeholder="Cole o endereço aqui" />
+        <button id="new-addr-scan" type="button" class="addr-input-scan" aria-label="Escanear QR code">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="15" y="3" width="6" height="6" rx="1"/><rect x="3" y="15" width="6" height="6" rx="1"/><path d="M15 15h2v2"/><path d="M19 15v6"/><path d="M15 19h6"/></svg>
+        </button>
+      </div>
       <button id="btn-save-addr">Salvar endereço</button>
     </div>
 
@@ -1312,8 +1340,15 @@
 <div id="payment-address-modal" class="modal hidden">
   <div class="modal-box">
     <h2>Endereço para pagamento</h2>
-    <p class="info-text">Informe o endereço Liquid onde deseja receber o pagamento:</p>
-    <input id="payment-address-input" type="text" placeholder="lq1... ou ex1..." />
+    <p class="info-text">Escolha qual carteira receberá o pagamento:</p>
+    <div id="payment-addr-dropdown" class="custom-dropdown hidden">
+      <button type="button" id="payment-addr-toggle" class="custom-dropdown-toggle" aria-label="Selecionar carteira">
+        <span id="payment-addr-toggle-text">Selecionar carteira…</span>
+        <svg class="custom-dropdown-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div id="payment-addr-options" class="custom-dropdown-options hidden"></div>
+    </div>
+    <p id="payment-addr-empty" class="mensagem hidden">Configure sua carteira primeiro. Crie uma <strong>Carteira Integrada</strong> ou cadastre um endereço de <strong>Carteira Externa</strong> no menu antes de continuar.</p>
     <p id="payment-address-msg" class="mensagem"></p>
     <div class="modal-actions">
       <button id="btn-payment-address-cancel" class="secondary">Cancelar</button>
@@ -1576,15 +1611,16 @@
       <p class="info-text">Crie sua conta de lojista para aceitar pagamentos via DePix.</p>
       <label for="merchant-name">Nome do negócio *</label>
       <input id="merchant-name" placeholder="Ex: Camisetas do João" />
-      <label for="merchant-liquid-addr">Endereço Liquid *</label>
+      <label id="merchant-addr-label">Endereço Liquid *</label>
+      <p class="info-text">Escolha qual carteira receberá os pagamentos do seu negócio.</p>
       <div id="merchant-addr-dropdown" class="custom-dropdown hidden">
-        <button type="button" id="merchant-addr-toggle" class="custom-dropdown-toggle">
-          <span id="merchant-addr-toggle-text">Selecionar endereço salvo…</span>
+        <button type="button" id="merchant-addr-toggle" class="custom-dropdown-toggle" aria-labelledby="merchant-addr-label">
+          <span id="merchant-addr-toggle-text">Selecionar carteira…</span>
           <svg class="custom-dropdown-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
         </button>
         <div id="merchant-addr-options" class="custom-dropdown-options hidden"></div>
       </div>
-      <input id="merchant-liquid-addr" placeholder="Ou cole um endereço manualmente" />
+      <p id="merchant-addr-empty" class="mensagem hidden">Configure sua carteira primeiro. Crie uma <strong>Carteira Integrada</strong> ou cadastre um endereço de <strong>Carteira Externa</strong> no menu antes de continuar.</p>
       <label for="merchant-cnpj">CNPJ</label>
       <input id="merchant-cnpj" placeholder="Opcional" maxlength="14" />
       <label for="merchant-website">Website</label>
@@ -2331,11 +2367,66 @@
   <div class="card wallet-transactions-card">
     <h2 class="view-title">Movimentações da carteira</h2>
 
-    <div class="wallet-tx-filters" role="radiogroup" aria-label="Filtrar por ativo">
-      <button class="wallet-tx-pill active" data-wallet-filter="all" type="button" role="radio" aria-checked="true">Todos</button>
-      <button class="wallet-tx-pill" data-wallet-filter="DEPIX" type="button" role="radio" aria-checked="false">DePix</button>
-      <button class="wallet-tx-pill" data-wallet-filter="USDT" type="button" role="radio" aria-checked="false">USDt</button>
-      <button class="wallet-tx-pill" data-wallet-filter="LBTC" type="button" role="radio" aria-checked="false">L-BTC</button>
+    <div class="extrato-filters">
+      <div class="extrato-toolbar">
+        <div class="extrato-search-row">
+          <svg class="extrato-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input id="wallet-tx-filter-search" type="text" placeholder="Buscar…" autocomplete="off" />
+          <button id="wallet-tx-filter-search-clear" class="extrato-search-clear hidden" type="button" aria-label="Limpar busca">&times;</button>
+          <span id="wallet-tx-search-hint" class="extrato-search-hint">TXID ou valor</span>
+        </div>
+        <button id="wallet-tx-download" class="extrato-report-btn" type="button" title="Baixar movimentações em CSV">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Baixar
+        </button>
+        <button id="wallet-tx-filter-toggle" class="extrato-filter-toggle" type="button">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+          Filtros
+          <span id="wallet-tx-filter-badge" class="extrato-filter-badge hidden">0</span>
+          <svg class="extrato-filter-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+      </div>
+      <div id="wallet-tx-filter-panel" class="extrato-filter-panel hidden">
+        <div class="extrato-filter-group">
+          <label class="extrato-filter-label">Ativo</label>
+          <div class="extrato-type-toggle" role="radiogroup" aria-label="Filtrar por ativo">
+            <button class="extrato-pill active" data-wallet-asset="all" type="button" role="radio" aria-checked="true">Todos</button>
+            <button class="extrato-pill" data-wallet-asset="DEPIX" type="button" role="radio" aria-checked="false">DePix</button>
+            <button class="extrato-pill" data-wallet-asset="USDT" type="button" role="radio" aria-checked="false">USDt</button>
+            <button class="extrato-pill" data-wallet-asset="LBTC" type="button" role="radio" aria-checked="false">L-BTC</button>
+          </div>
+        </div>
+        <div class="extrato-filter-group">
+          <label class="extrato-filter-label">Tipo</label>
+          <div class="extrato-type-toggle" role="radiogroup" aria-label="Filtrar por tipo">
+            <button class="extrato-pill active" data-wallet-direction="all" type="button" role="radio" aria-checked="true">Todos</button>
+            <button class="extrato-pill" data-wallet-direction="in" type="button" role="radio" aria-checked="false">Recebidos</button>
+            <button class="extrato-pill" data-wallet-direction="out" type="button" role="radio" aria-checked="false">Enviados</button>
+          </div>
+        </div>
+        <div class="extrato-filter-group">
+          <label class="extrato-filter-label">Período</label>
+          <div class="extrato-period-presets" role="radiogroup" aria-label="Filtrar por período">
+            <button class="extrato-period-btn active" data-wallet-period="all" type="button" role="radio" aria-checked="true">Todos</button>
+            <button class="extrato-period-btn" data-wallet-period="today" type="button" role="radio" aria-checked="false">Hoje</button>
+            <button class="extrato-period-btn" data-wallet-period="7d" type="button" role="radio" aria-checked="false">7 dias</button>
+            <button class="extrato-period-btn" data-wallet-period="30d" type="button" role="radio" aria-checked="false">30 dias</button>
+            <button class="extrato-period-btn" data-wallet-period="90d" type="button" role="radio" aria-checked="false">90 dias</button>
+            <button class="extrato-period-btn" data-wallet-period="custom" type="button" role="radio" aria-checked="false">Intervalo</button>
+          </div>
+          <div id="wallet-tx-custom-range" class="extrato-date-row hidden">
+            <div class="extrato-date-field">
+              <span class="extrato-date-prefix">De</span>
+              <input id="wallet-tx-start-date" type="date" />
+            </div>
+            <div class="extrato-date-field">
+              <span class="extrato-date-prefix">Até</span>
+              <input id="wallet-tx-end-date" type="date" />
+            </div>
+          </div>
+        </div>
+        <button id="wallet-tx-clear-filters" class="extrato-clear-filters hidden" type="button">Limpar filtros</button>
+      </div>
     </div>
 
     <div id="wallet-tx-msg" class="mensagem"></div>
@@ -2343,7 +2434,9 @@
     <div id="wallet-tx-empty" class="hidden">
       <p class="info-text">Nenhuma transação encontrada.</p>
     </div>
-    <div id="wallet-tx-list" class="wallet-tx-list"></div>
+    <div id="wallet-tx-list" class="wallet-tx-list">
+      <div id="wallet-tx-sentinel" aria-hidden="true" style="height:1px"></div>
+    </div>
 
     <div class="wallet-action-row">
       <button id="wallet-tx-back" class="secondary">Voltar</button>
@@ -2360,6 +2453,7 @@
       <div class="wallet-setting-body">
         <strong>Biometria</strong>
         <p class="info-text" id="wallet-settings-biometric-status">Verificando…</p>
+        <button id="wallet-settings-biometric-reset" class="link-btn hidden" type="button">Problemas com biometria? Resetar</button>
       </div>
       <button id="wallet-settings-biometric-toggle" class="secondary" type="button">Ativar</button>
     </div>
@@ -2513,6 +2607,7 @@
     <div id="wallet-unlock-pin-section" class="wallet-unlock-pin-section">
       <label for="wallet-unlock-pin">PIN</label>
       <input id="wallet-unlock-pin" type="password" inputmode="numeric" pattern="\d*" autocomplete="off" maxlength="6" />
+      <button id="wallet-unlock-use-biometric" type="button" class="link-btn hidden">Usar biometria</button>
     </div>
 
     <div id="wallet-unlock-msg" class="mensagem"></div>
@@ -2575,6 +2670,42 @@
   </div>
 </div>
 
+<!-- ===== MODAL: HINT PASSKEY APÓS RESETAR BIOMETRIA ===== -->
+<!-- Reuses the same copy pattern as wallet-wipe-passkey-hint-modal (orphan
+     passkey in OS Settings) but framed for reset (wallet not wiped) and
+     does not navigate away — user stays on wallet-settings. -->
+<div id="wallet-biometric-reset-hint-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="wallet-biometric-reset-hint-title">
+  <div class="modal-box">
+    <h2 id="wallet-biometric-reset-hint-title">Biometria resetada</h2>
+    <p class="info-text">A passkey antiga do DePix pode continuar em <strong>Configurações → Senhas</strong> do seu aparelho. Você pode removê-la manualmente se desejar — sua carteira segue intacta. Para usar biometria de novo, toque em "Ativar".</p>
+    <div class="wallet-action-row">
+      <button id="wallet-biometric-reset-hint-ok" type="button">Entendi</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: RESETAR BIOMETRIA ===== -->
+<!-- Escape hatch for the iOS-deleted-passkey loop. The user gets here via
+     the "Problemas com biometria? Resetar" link in wallet-settings, which
+     is visible only when biometric is currently enrolled. PIN-gated as a
+     confirmation. After confirm, identifiers are hard-cleared and the
+     wipe-passkey-hint modal appears so the user knows the OS-level passkey
+     became orphan. -->
+<div id="wallet-biometric-reset-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="wallet-biometric-reset-title">
+  <div class="modal-box">
+    <h2 id="wallet-biometric-reset-title">Resetar biometria</h2>
+    <p class="info-text">Use isso se a passkey do DePix foi removida do seu aparelho ou se o Face ID parou de funcionar para entrar na carteira.</p>
+    <p class="info-text">Sua carteira e seus fundos <strong>continuam intactos</strong>. Você só precisa ativar a biometria de novo depois.</p>
+    <label for="wallet-biometric-reset-pin">PIN</label>
+    <input id="wallet-biometric-reset-pin" type="password" inputmode="numeric" pattern="\d*" autocomplete="off" maxlength="6" />
+    <div id="wallet-biometric-reset-msg" class="mensagem"></div>
+    <div class="wallet-action-row">
+      <button id="wallet-biometric-reset-cancel" class="secondary">Cancelar</button>
+      <button id="wallet-biometric-reset-confirm">Resetar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== MODAL: APAGAR CARTEIRA ===== -->
 <div id="wallet-wipe-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="wallet-wipe-title">
   <div class="modal-box">
@@ -2586,6 +2717,20 @@
     <div class="wallet-action-row">
       <button id="wallet-wipe-cancel" class="secondary">Cancelar</button>
       <button id="wallet-wipe-confirm" class="wallet-settings-danger">Apagar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: HINT DA PASSKEY APÓS WIPE ===== -->
+<!-- Mostrado quando a carteira apagada tinha biometria. A passkey OS-level
+     não pode ser deletada via JS; este modal informa o usuário que ela
+     continua nas configurações do aparelho e pode ser removida manualmente. -->
+<div id="wallet-wipe-passkey-hint-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="wallet-wipe-passkey-hint-title">
+  <div class="modal-box">
+    <h2 id="wallet-wipe-passkey-hint-title">Carteira apagada</h2>
+    <p class="info-text">Uma chave de acesso (passkey) do DePix permanecerá em <strong>Configurações → Senhas</strong> do seu aparelho. Você pode removê-la manualmente se desejar.</p>
+    <div class="wallet-action-row">
+      <button id="wallet-wipe-passkey-hint-ok" type="button">Entendi</button>
     </div>
   </div>
 </div>
@@ -2785,6 +2930,30 @@
     <div class="modal-actions">
       <button id="close-merchant-edit" class="secondary">Cancelar</button>
       <button id="btn-merchant-edit-save">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Liquid address edit (specialized modal with wallet/external dropdown).
+     Opens after password confirmation in place of the generic merchant-edit
+     modal — a free-text input doesn't fit the "configure your wallet first"
+     gate the user requires for this field. -->
+<div id="merchant-liquid-edit-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="merchant-liquid-edit-title">
+  <div class="modal-box">
+    <h2 id="merchant-liquid-edit-title">Editar Endereço Liquid</h2>
+    <p class="info-text">Escolha qual carteira receberá os pagamentos do seu negócio.</p>
+    <div id="merchant-liquid-edit-dropdown" class="custom-dropdown hidden">
+      <button type="button" id="merchant-liquid-edit-toggle" class="custom-dropdown-toggle" aria-labelledby="merchant-liquid-edit-title">
+        <span id="merchant-liquid-edit-toggle-text">Selecionar carteira…</span>
+        <svg class="custom-dropdown-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div id="merchant-liquid-edit-options" class="custom-dropdown-options hidden"></div>
+    </div>
+    <p id="merchant-liquid-edit-empty" class="mensagem hidden">Configure sua carteira primeiro. Crie uma <strong>Carteira Integrada</strong> ou cadastre um endereço de <strong>Carteira Externa</strong> no menu antes de continuar.</p>
+    <div id="merchant-liquid-edit-msg" class="mensagem"></div>
+    <div class="modal-actions">
+      <button id="btn-merchant-liquid-edit-cancel" class="secondary">Cancelar</button>
+      <button id="btn-merchant-liquid-edit-save">Salvar</button>
     </div>
   </div>
 </div>
@@ -3258,6 +3427,6 @@
 
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 <!-- Asset version must match APP_VERSION in service-worker.js -->
-<script type="module" src="script.js?v=141"></script>
+<script type="module" src="script.js?v=149"></script>
 </body>
 </html>
