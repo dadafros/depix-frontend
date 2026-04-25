@@ -94,6 +94,14 @@ self.addEventListener("install", event => {
 // Activate — delete previous legacy caches (combined `depix-vN` from before
 // the split, and older `depix-legacy-vN` from prior releases). Preserves
 // `depix-wallet` so a CSS-only deploy no longer evicts the 5 MB wallet bundle.
+//
+// One-time migration cost: existing v140 users pay one final wallet re-download
+// here. Their pre-split `depix-v140` cache holds the wallet artifacts, the
+// regex matches it, and `depix-wallet` does not exist yet — so on the next
+// wallet open the loader refetches the bundle from the network. Salvaging the
+// entries cache-to-cache during activate would skip that one-time cost, but
+// adds risk to the activate path; the trade-off is intentional. After v141,
+// future legacy bumps preserve `depix-wallet`.
 self.addEventListener("activate", event => {
   event.waitUntil(
     caches.keys().then(keys =>
@@ -132,7 +140,7 @@ async function gcWalletCache(manifest) {
   await Promise.all(
     reqs.map(req => {
       const p = new URL(req.url).pathname;
-      if (!/^\/dist\/(wallet-bundle-|lwk_wasm_bg-|lwk_wasm-).*\.(js|wasm)$/.test(p)) {
+      if (!/^\/dist\/(wallet-bundle-|lwk_wasm_bg-).*\.(js|wasm)$/.test(p)) {
         return null;
       }
       return keep.has(p) ? null : cache.delete(req);
@@ -183,7 +191,9 @@ self.addEventListener("fetch", event => {
             const cacheClone = response.clone();
             const gcClone = response.clone();
             caches.open(WALLET_CACHE).then(cache => cache.put(req, cacheClone));
-            gcClone.json().then(json => gcWalletCache(json)).catch(() => {});
+            gcClone.json()
+              .then(json => gcWalletCache(json))
+              .catch(err => console.warn("sw: wallet GC failed", err));
           }
           return response;
         })

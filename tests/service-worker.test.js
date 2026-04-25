@@ -112,25 +112,117 @@ describe("service-worker cache policy", () => {
 
     it("deletes legacy caches except the current one and preserves the wallet cache", async () => {
       const { handlers, deletedKeys, cleanup } = buildScope();
-      expect(handlers.activate).toBeTypeOf("function");
+      try {
+        expect(handlers.activate).toBeTypeOf("function");
 
-      let waitPromise;
-      const fakeEvent = {
-        waitUntil: p => { waitPromise = p; }
+        let waitPromise;
+        const fakeEvent = {
+          waitUntil: p => { waitPromise = p; }
+        };
+        handlers.activate(fakeEvent);
+        await waitPromise;
+
+        // depix-legacy-v141 is the current cache (APP_VERSION=141), so it
+        // must NOT be deleted. depix-wallet is preserved unconditionally.
+        expect(deletedKeys.sort()).toEqual(
+          ["depix-legacy-v140", "depix-v138", "depix-v140"].sort()
+        );
+        expect(deletedKeys).not.toContain("depix-wallet");
+        expect(deletedKeys).not.toContain("depix-legacy-v141");
+        expect(deletedKeys).not.toContain("unrelated-cache");
+      } finally {
+        cleanup();
+      }
+    });
+  });
+
+  describe("gcWalletCache", () => {
+    // Pull `async function gcWalletCache(manifest) { ... }` out of the
+    // source and re-instantiate it in isolation so we can call it directly,
+    // matching the extract-and-eval pattern used for LEGACY_CACHE_RX.
+    function extractGcWalletCache() {
+      const m = SW_SOURCE.match(/async function gcWalletCache\(manifest\)\s*\{[\s\S]*?\n\}/m);
+      if (!m) throw new Error("gcWalletCache not found in service-worker.js");
+      return m[0];
+    }
+
+    function buildGc(initialUrls, walletCacheName = "depix-wallet") {
+      const stored = new Map(initialUrls.map(url => [url, { url }]));
+      const cache = {
+        keys: async () => Array.from(stored.values()),
+        delete: async req => stored.delete(req.url)
       };
-      handlers.activate(fakeEvent);
-      await waitPromise;
-
-      // depix-legacy-v141 is the current cache (APP_VERSION=141), so it
-      // must NOT be deleted. depix-wallet is preserved unconditionally.
-      expect(deletedKeys.sort()).toEqual(
-        ["depix-legacy-v140", "depix-v138", "depix-v140"].sort()
+      const fakeCaches = {
+        open: async name => {
+          if (name !== walletCacheName) {
+            throw new Error(`unexpected caches.open(${name})`);
+          }
+          return cache;
+        }
+      };
+      const fakeSelf = { location: new URL("https://depixapp.com/") };
+      const runner = new Function(
+        "caches", "self", "WALLET_CACHE",
+        `${extractGcWalletCache()}\nreturn gcWalletCache;`
       );
-      expect(deletedKeys).not.toContain("depix-wallet");
-      expect(deletedKeys).not.toContain("depix-legacy-v141");
-      expect(deletedKeys).not.toContain("unrelated-cache");
+      return { gc: runner(fakeCaches, fakeSelf, walletCacheName), stored };
+    }
 
-      cleanup();
+    it("preserves entries referenced by the manifest and deletes the rest", async () => {
+      const { gc, stored } = buildGc([
+        "https://depixapp.com/dist/manifest.json",
+        "https://depixapp.com/dist/wallet-bundle-CURRENT.js",
+        "https://depixapp.com/dist/wallet-bundle-OLD.js",
+        "https://depixapp.com/dist/lwk_wasm_bg-CURRENT.wasm",
+        "https://depixapp.com/dist/lwk_wasm_bg-OLD.wasm"
+      ]);
+
+      await gc({
+        walletBundle: "dist/wallet-bundle-CURRENT.js",
+        walletWasm: "dist/lwk_wasm_bg-CURRENT.wasm"
+      });
+
+      expect(Array.from(stored.keys()).sort()).toEqual([
+        "https://depixapp.com/dist/lwk_wasm_bg-CURRENT.wasm",
+        "https://depixapp.com/dist/manifest.json",
+        "https://depixapp.com/dist/wallet-bundle-CURRENT.js"
+      ]);
+    });
+
+    it("never touches the manifest itself", async () => {
+      const { gc, stored } = buildGc([
+        "https://depixapp.com/dist/manifest.json",
+        "https://depixapp.com/dist/wallet-bundle-OLD.js"
+      ]);
+
+      await gc({ walletBundle: "dist/wallet-bundle-NEW.js", walletWasm: null });
+
+      expect(stored.has("https://depixapp.com/dist/manifest.json")).toBe(true);
+      expect(stored.has("https://depixapp.com/dist/wallet-bundle-OLD.js")).toBe(false);
+    });
+
+    it("ignores /dist entries that don't match the wallet artifact pattern", async () => {
+      const { gc, stored } = buildGc([
+        "https://depixapp.com/dist/wallet-bundle-OLD.js",
+        "https://depixapp.com/dist/foo-XYZ.js"
+      ]);
+
+      await gc({ walletBundle: "dist/wallet-bundle-NEW.js", walletWasm: null });
+
+      expect(stored.has("https://depixapp.com/dist/foo-XYZ.js")).toBe(true);
+      expect(stored.has("https://depixapp.com/dist/wallet-bundle-OLD.js")).toBe(false);
+    });
+
+    it("handles a missing walletWasm field without deleting the bundle", async () => {
+      const { gc, stored } = buildGc([
+        "https://depixapp.com/dist/wallet-bundle-CURRENT.js",
+        "https://depixapp.com/dist/lwk_wasm_bg-OLD.wasm"
+      ]);
+
+      await gc({ walletBundle: "dist/wallet-bundle-CURRENT.js", walletWasm: null });
+
+      expect(stored.has("https://depixapp.com/dist/wallet-bundle-CURRENT.js")).toBe(true);
+      expect(stored.has("https://depixapp.com/dist/lwk_wasm_bg-OLD.wasm")).toBe(false);
     });
   });
 });
