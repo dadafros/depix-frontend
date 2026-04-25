@@ -716,6 +716,30 @@ describe("biometric enrollment lifecycle", () => {
     expect(await wallet.hasBiometric()).toBe(true);
   }, 60_000);
 
+  // Documents the iOS-deleted-passkey gap: WebAuthn spec mandates the
+  // platform respond with NotAllowedError (after the timeout) when
+  // allowCredentials references a credential the authenticator no longer
+  // knows — for privacy, so a relying party can't probe credential
+  // existence. addBiometric currently treats this as user-cancel and
+  // preserves identifiers, so the user is stuck unless they wipe. This
+  // test pins that behavior so future changes that try to recover from
+  // this scenario also update the test.
+  it("deleted-passkey on iOS surfaces as NotAllowedError → identifiers preserved (known gap)", async () => {
+    const cred = makeBiometricCredentialsMock();
+    const { wallet } = makeModule({ credentialsImpl: cred });
+    await wallet.createWallet({ pin: STRONG_PIN, enrollBiometric: true });
+    await wallet.removeBiometric();
+
+    // iOS reports a deleted passkey as NotAllowedError after the timeout,
+    // indistinguishable from a real user-cancel — see WebAuthn spec.
+    cred.setFailGet("cancel");
+    await expect(wallet.addBiometric(STRONG_PIN)).rejects.toMatchObject({
+      code: ERROR_CODES.BIOMETRIC_REJECTED
+    });
+    expect(cred.create).toHaveBeenCalledTimes(1); // no fresh enroll
+    expect(await wallet.hasBiometric()).toBe(false);
+  }, 60_000);
+
   it("addBiometric creates a fresh passkey when none was ever enrolled", async () => {
     const cred = makeBiometricCredentialsMock();
     const { wallet } = makeModule({ credentialsImpl: cred });

@@ -914,9 +914,12 @@ export function createWalletModule({
         // User cancelled the OS prompt: don't destroy their identifiers.
         // They can retry; the soft-disabled state stays intact.
         if (isWalletError(err, ERROR_CODES.BIOMETRIC_REJECTED)) throw err;
-        // Anything else (passkey deleted from OS settings, transient device
-        // error) — clear the stale identifiers and fall through to a fresh
-        // enrollment below.
+        // Only treat the credential as gone when the platform explicitly
+        // says so (InvalidStateError ⇒ unknown credential). Other failures
+        // (transient biometric hardware hiccup, rpId mismatch, momentary OS
+        // error) are rethrown so the user retries against the existing
+        // passkey instead of creating a duplicate via fresh enroll.
+        if (err?.cause?.name !== "InvalidStateError") throw err;
         await patchCredentials(database, { credentialId: null, prfSalt: null });
       }
     }

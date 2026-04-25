@@ -3007,6 +3007,7 @@ export function registerWalletRoutes({
   q("wallet-unlock-biometric-btn")?.addEventListener("click", () => { void unlockWithBiometricAndBroadcast(); });
   q("wallet-unlock-use-pin")?.addEventListener("click", () => { swapUnlockToPinSection(); });
   q("wallet-unlock-use-biometric")?.addEventListener("click", () => {
+    if (!biometricAvailableForCurrentUnlock) return;
     swapUnlockToBiometricSection();
     void unlockWithBiometricAndBroadcast();
   });
