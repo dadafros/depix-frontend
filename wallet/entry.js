@@ -9,10 +9,11 @@
 // Sub-fase 2 wires the module + crypto + store + biometric + lwk loader. UI
 // (Sub-fase 3) and send/receive (Sub-fase 4+) consume these exports.
 
-// Import FIRST so the "depix" Trusted Types policy is registered before any
-// innerHTML sink in the bundle (see `wallet-ui.js`) fires. The legacy side
-// of the app registers its own copy via `script.js`; both succeed thanks
-// to CSP `trusted-types depix 'allow-duplicates'`.
+// Imported so the "depix" Trusted Types policy is in scope before any
+// innerHTML sink in the bundle (see `wallet-ui.js`) fires. `trusted-types.js`
+// is marked `external` in build.mjs, so this resolves at runtime to the
+// site-root module the legacy entry point already loaded — both sides share
+// one module instance and one `createPolicy` call (no `'allow-duplicates'`).
 import "../trusted-types.js";
 
 export {

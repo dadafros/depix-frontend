@@ -1,8 +1,13 @@
 // DePix — Main entry point (ES module)
 
-// Import FIRST so the "depix" Trusted Types policy is registered before
-// any innerHTML / insertAdjacentHTML write fires. Required for the CSP's
-// `require-trusted-types-for 'script'` directive.
+// Imports the "depix" Trusted Types policy module. Registration runs at
+// module-load time via the top-level `tt.createPolicy(...)` statement in
+// `trusted-types.js`, so by the time any route handler or event handler
+// fires an innerHTML / insertAdjacentHTML write the policy is already in
+// place. Source-order placement among siblings doesn't matter (ES module
+// graphs evaluate depth-first), but the import has to exist somewhere in
+// `script.js`'s module graph for the CSP's `require-trusted-types-for
+// 'script'` directive to be satisfied.
 import { toTrustedHTML } from "./trusted-types.js";
 import { route, navigate, initRouter } from "./router.js";
 import { isLoggedIn, setAuth, clearAuth, getUser, getRefreshToken } from "./auth.js";

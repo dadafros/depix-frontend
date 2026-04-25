@@ -1,6 +1,7 @@
-// Trusted Types policy registration. Imported FIRST by every entry point
+// Trusted Types policy registration. Imported by every entry point
 // (script.js + wallet/entry.js) so the "depix" policy is registered before
-// any innerHTML / insertAdjacentHTML write fires.
+// any innerHTML / insertAdjacentHTML write fires from a route or event
+// handler.
 //
 // The policy is identity by design: every sink in the codebase already
 // passes user-supplied data through utils.js#escapeHtml. The policy exists
@@ -10,15 +11,24 @@
 // call `el.innerHTML = "..."` directly anymore; they would have to import
 // our `toTrustedHTML` helper, which requires being inside our module graph.
 //
+// build.mjs marks this module as `external`, so the wallet bundle and the
+// legacy side share a single module instance and only one `createPolicy`
+// call ever runs. That lets the CSP omit `'allow-duplicates'` — the policy
+// name then acts as a real barrier (an injected attacker would have to
+// predict the unique name AND find this module instance to mint a
+// TrustedHTML).
+//
 // Registration is gated by a try/catch because:
-//   1. esbuild bundles `trusted-types.js` into the wallet bundle, so the
-//      bundle re-registers "depix" when it loads. CSP `'allow-duplicates'`
-//      lets the second registration succeed; if a future browser changes
-//      that, the catch keeps the page running with `policy = null` (sinks
-//      receive plain strings — innocuous when CSP enforcement is off, and
-//      a clear violation if enforcement is on, easy to spot in DevTools).
-//   2. Older browsers without Trusted Types report `trustedTypes` as
+//   1. Older browsers without Trusted Types report `trustedTypes` as
 //      undefined; the early-return path keeps the helper a no-op there.
+//   2. Defensive: if a future change accidentally re-introduces a second
+//      registration of "depix" (e.g. someone removes the `external`
+//      setting in build.mjs), the catch keeps the page running with
+//      `policy = null`. With CSP enforcement on, sinks then surface a
+//      clear violation in DevTools, which is easier to debug than a
+//      silent module-load crash. The `console.error` makes the underlying
+//      cause visible immediately rather than via spurious user-side
+//      innerHTML errors.
 
 let policy = null;
 
@@ -28,7 +38,8 @@ if (tt && typeof tt.createPolicy === "function") {
     policy = tt.createPolicy("depix", {
       createHTML: s => s
     });
-  } catch {
+  } catch (err) {
+    console.error("[trusted-types] createPolicy(\"depix\") failed:", err);
     policy = null;
   }
 }

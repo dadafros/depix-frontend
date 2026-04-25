@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 
 // Each test imports the module fresh via vitest's reset hook so the
 // module-top-level policy registration runs against the configured
@@ -6,8 +6,8 @@ import { describe, it, expect, afterEach } from "vitest";
 // first import wins and later mutations of globalThis.trustedTypes have
 // no effect on the cached `policy` reference.
 
-afterEach(async () => {
-  await import("vitest").then(v => v.vi.resetModules());
+afterEach(() => {
+  vi.resetModules();
   delete globalThis.trustedTypes;
 });
 
@@ -44,11 +44,17 @@ describe("trusted-types.js — toTrustedHTML", () => {
   });
 
   it("falls back to identity when createPolicy throws (e.g. duplicate without 'allow-duplicates')", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     globalThis.trustedTypes = {
       createPolicy() { throw new Error("policy already exists"); }
     };
     const { toTrustedHTML } = await import("../trusted-types.js");
     expect(toTrustedHTML("<b>x</b>")).toBe("<b>x</b>");
+    expect(errSpy).toHaveBeenCalledWith(
+      "[trusted-types] createPolicy(\"depix\") failed:",
+      expect.any(Error)
+    );
+    errSpy.mockRestore();
   });
 
   it("setInnerHTML wraps the assignment and tolerates a null target", async () => {
