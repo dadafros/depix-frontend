@@ -1910,7 +1910,10 @@ export function registerWalletRoutes({
   async function refreshBiometricRow() {
     const status = q("wallet-settings-biometric-status");
     const toggle = q("wallet-settings-biometric-toggle");
+    const reset = q("wallet-settings-biometric-reset");
     if (!status || !toggle) return;
+    // Default the reset link to hidden; only enrolled biometric reveals it.
+    reset?.classList.add("hidden");
     try {
       const supported = await wallet.biometricSupported();
       if (!supported) {
@@ -1925,6 +1928,10 @@ export function registerWalletRoutes({
         toggle.disabled = false;
         toggle.textContent = "Remover";
         toggle.dataset.action = "remove";
+        // Visible only when biometric is enrolled — that's the only state
+        // where a reset is meaningful (the iOS-deleted-passkey loop only
+        // triggers when identifiers are present).
+        reset?.classList.remove("hidden");
       } else {
         status.textContent = "Biometria não configurada.";
         toggle.disabled = false;
@@ -2015,6 +2022,70 @@ export function registerWalletRoutes({
         showMsg("wallet-biometric-pin-msg", "Autenticação cancelada.", "warning");
       } else {
         renderError("wallet-biometric-pin-msg", err);
+      }
+      if (btn) btn.disabled = false;
+    } finally {
+      await refreshBiometricRow();
+    }
+  });
+
+  // --- Biometric reset modal (escape hatch for iOS-deleted-passkey loop) ---
+  function resetBiometricResetModal() {
+    const pin = q("wallet-biometric-reset-pin");
+    if (pin) pin.value = "";
+    clearMsg("wallet-biometric-reset-msg");
+    const btn = q("wallet-biometric-reset-confirm");
+    if (btn) btn.disabled = false;
+  }
+
+  q("wallet-settings-biometric-reset")?.addEventListener("click", () => {
+    resetBiometricResetModal();
+    q("wallet-biometric-reset-modal")?.classList.remove("hidden");
+    q("wallet-biometric-reset-pin")?.focus();
+  });
+
+  q("wallet-biometric-reset-hint-ok")?.addEventListener("click", () => {
+    q("wallet-biometric-reset-hint-modal")?.classList.add("hidden");
+  });
+
+  q("wallet-biometric-reset-cancel")?.addEventListener("click", () => {
+    q("wallet-biometric-reset-modal")?.classList.add("hidden");
+    resetBiometricResetModal();
+  });
+
+  q("wallet-biometric-reset-confirm")?.addEventListener("click", async () => {
+    const pin = q("wallet-biometric-reset-pin")?.value ?? "";
+    const btn = q("wallet-biometric-reset-confirm");
+    clearMsg("wallet-biometric-reset-msg");
+    if (!isPinInputValid(pin)) {
+      showMsg("wallet-biometric-reset-msg", "Informe um PIN de 6 dígitos.", "error");
+      return;
+    }
+    if (btn) btn.disabled = true;
+    try {
+      const result = await wallet.resetBiometric(pin);
+      q("wallet-biometric-reset-modal")?.classList.add("hidden");
+      resetBiometricResetModal();
+      // The OS-level passkey we cannot delete from JS becomes orphan. Show
+      // the dedicated reset-hint modal (mirrors the wipe-passkey-hint copy
+      // but framed for reset — wallet not wiped, user stays on settings).
+      if (result?.hadBiometric) {
+        const hint = q("wallet-biometric-reset-hint-modal");
+        hint?.classList.remove("hidden");
+        q("wallet-biometric-reset-hint-ok")?.focus();
+      } else {
+        if (showToast) showToast("Biometria resetada.");
+      }
+    } catch (err) {
+      if (isWalletError(err, ERROR_CODES.WALLET_WIPED)) {
+        showMsg("wallet-biometric-reset-msg", "Muitas tentativas erradas. Carteira apagada.", "warning");
+        setTimeout(() => {
+          q("wallet-biometric-reset-modal")?.classList.add("hidden");
+          persistHomeMode("deposit");
+          navigate("#wallet-gate");
+        }, 1500);
+      } else {
+        renderError("wallet-biometric-reset-msg", err);
       }
       if (btn) btn.disabled = false;
     } finally {
@@ -2266,6 +2337,15 @@ export function registerWalletRoutes({
       if (biometricModal && !biometricModal.classList.contains("hidden")) {
         biometricModal.classList.add("hidden");
         resetBiometricPinModal();
+      }
+      const bioResetModal = q("wallet-biometric-reset-modal");
+      if (bioResetModal && !bioResetModal.classList.contains("hidden")) {
+        bioResetModal.classList.add("hidden");
+        resetBiometricResetModal();
+      }
+      const bioResetHintModal = q("wallet-biometric-reset-hint-modal");
+      if (bioResetHintModal && !bioResetHintModal.classList.contains("hidden")) {
+        bioResetHintModal.classList.add("hidden");
       }
       const unlockModal = q("wallet-unlock-modal");
       if (unlockModal && !unlockModal.classList.contains("hidden")) {

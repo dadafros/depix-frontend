@@ -944,6 +944,38 @@ export function createWalletModule({
     });
   }
 
+  // Hard-clear escape hatch for the iOS-deleted-passkey loop: when a user
+  // removes the DePix passkey from Settings → Senhas (or Android equivalent),
+  // the WebAuthn spec requires the platform to respond with NotAllowedError
+  // after the timeout — indistinguishable from user-cancel — so the reuse
+  // path in addBiometric() preserves identifiers and the user is stuck in a
+  // 60s loop with no in-app recovery.
+  //
+  // resetBiometric is the explicit recovery affordance. PIN-gated to prevent
+  // accidental presses; clears credentialId + prfSalt + wrappedSeedKey so
+  // the next addBiometric() falls through to the fresh-enroll branch and
+  // calls credentials.create(), producing a brand-new OS passkey. The
+  // previous OS passkey, if it still exists, becomes orphan in the device's
+  // passkey list — UI surfaces the same "remove from Settings" hint as wipe.
+  //
+  // Returns `{ hadBiometric }` mirroring wipeWallet, so the UI can branch
+  // identically on whether to show the orphan-passkey hint modal.
+  async function resetBiometric(pin) {
+    // PIN check via exportMnemonic — same gate wipeWallet uses. A wrong PIN
+    // throws WRONG_PIN before we touch IDB; an exhausted-attempt path may
+    // throw WALLET_WIPED, which already destroyed the wallet.
+    await exportMnemonic(pin);
+    const database = await db();
+    const record = await readCredentials(database);
+    const hadBiometric = record?.credentialId != null;
+    await patchCredentials(database, {
+      credentialId: null,
+      prfSalt: null,
+      wrappedSeedKey: null
+    });
+    return { hadBiometric };
+  }
+
   // Generates a fresh BIP39 mnemonic WITHOUT persisting it. Used by the
   // onboarding UI so the user can see/verify the 12 words before committing
   // anything to IndexedDB. `createWallet({ mnemonic })` persists it later.
@@ -1325,6 +1357,7 @@ export function createWalletModule({
     wipeWallet,
     addBiometric,
     removeBiometric,
+    resetBiometric,
     touch,
     _zeroInMemory: zeroInMemory
   });

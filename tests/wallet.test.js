@@ -553,6 +553,7 @@ describe("public API surface", () => {
       "wipeWallet",
       "addBiometric",
       "removeBiometric",
+      "resetBiometric",
       "touch",
       "_zeroInMemory"
     ];
@@ -789,4 +790,51 @@ describe("biometric enrollment lifecycle", () => {
       expect(result).toEqual({ hadBiometric: true });
     }
   }, 60_000);
+
+  // resetBiometric is the explicit recovery path for the iOS-deleted-passkey
+  // loop (when the OS passkey was removed from Settings → Senhas, addBiometric
+  // sits in a 60s NotAllowedError loop with no in-app recovery). The reset
+  // hard-clears credentialId + prfSalt + wrappedSeedKey behind a PIN gate so
+  // the next addBiometric falls through to fresh enroll.
+  describe("resetBiometric", () => {
+    it("hard-clears all biometric identifiers and lets next addBiometric fresh-enroll", async () => {
+      const cred = makeBiometricCredentialsMock();
+      const { wallet } = makeModule({ credentialsImpl: cred });
+      await wallet.createWallet({ pin: STRONG_PIN, enrollBiometric: true });
+      expect(cred.create).toHaveBeenCalledTimes(1);
+      expect(await wallet.hasBiometric()).toBe(true);
+
+      const result = await wallet.resetBiometric(STRONG_PIN);
+      expect(result).toEqual({ hadBiometric: true });
+      expect(await wallet.hasBiometric()).toBe(false);
+
+      // Next addBiometric must call create() again — the soft-disabled
+      // reuse path requires credentialId + prfSalt to be present.
+      await wallet.addBiometric(STRONG_PIN);
+      expect(cred.create).toHaveBeenCalledTimes(2); // fresh enroll, not reuse
+      expect(await wallet.hasBiometric()).toBe(true);
+    }, 60_000);
+
+    it("rejects with WRONG_PIN when the PIN is wrong, leaves identifiers intact", async () => {
+      const cred = makeBiometricCredentialsMock();
+      const { wallet } = makeModule({ credentialsImpl: cred });
+      await wallet.createWallet({ pin: STRONG_PIN, enrollBiometric: true });
+
+      await expect(wallet.resetBiometric(SECOND_PIN)).rejects.toMatchObject({
+        code: ERROR_CODES.WRONG_PIN
+      });
+      // Identifiers preserved — user can retry without losing biometric state.
+      expect(await wallet.hasBiometric()).toBe(true);
+    }, 60_000);
+
+    it("returns hadBiometric=false when no biometric was ever enrolled", async () => {
+      const cred = makeBiometricCredentialsMock();
+      const { wallet } = makeModule({ credentialsImpl: cred });
+      await wallet.createWallet({ pin: STRONG_PIN }); // no biometric
+
+      const result = await wallet.resetBiometric(STRONG_PIN);
+      expect(result).toEqual({ hadBiometric: false });
+      expect(cred.create).toHaveBeenCalledTimes(0);
+    }, 60_000);
+  });
 });
