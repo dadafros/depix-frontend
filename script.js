@@ -4240,7 +4240,7 @@ document.getElementById("btn-merchant-edit-save")?.addEventListener("click", asy
     const cnpjResult = validateCNPJ(value);
     if (!cnpjResult.valid) { setMsg("merchant-edit-modal-msg", cnpjResult.error); btn.disabled = false; btn.textContent = "Salvar"; return; }
   }
-  if ((field === "logo_url" || field === "default_callback_url" || field === "default_redirect_url") && value) {
+  if ((field === "default_callback_url" || field === "default_redirect_url") && value) {
     const urlError = validateHttpsUrl(value, field.replace(/_url$/, " URL").replace(/_/g, " "));
     if (urlError) { setMsg("merchant-edit-modal-msg", urlError); btn.disabled = false; btn.textContent = "Salvar"; return; }
   }
