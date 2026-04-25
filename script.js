@@ -9,8 +9,9 @@ import {
   abbreviateAddress, hasAddresses
 } from "./addresses.js";
 import { toCents, formatBRL, formatDePix, escapeHtml, slugify } from "./utils.js";
-import { validateLiquidAddress, validatePhone, validatePixKey, validateCPF, validateCNPJ, formatPixKey, preparePixKeyForApi } from "./validation.js";
+import { validateLiquidAddress, parseLiquidUri, validatePhone, validatePixKey, validateCPF, validateCNPJ, formatPixKey, preparePixKeyForApi } from "./validation.js";
 import { showToast, setMsg, goToAppropriateScreen as _goToAppropriateScreen } from "./script-helpers.js";
+import { scanQRCode, isQrScannerSupported, QR_SCANNER_ERRORS } from "./qr-scanner.js";
 import { captureReferralCode, buildRegistrationBody, clearReferralCode, buildAffiliateLink, renderReferralsHTML, generateFingerprint } from "./affiliates.js";
 import { renderBrandedQr } from "./qr.js";
 import { renderPrintableQr } from "./qr-print.js";
@@ -38,7 +39,8 @@ async function resolveWalletReceiveAddress() {
     const w = bundle.getDefaultWallet();
     if (!(await w.hasWallet())) return null;
     const addr = await w.getReceiveAddress();
-    return typeof addr === "string" && addr.length > 0 ? addr : null;
+    if (typeof addr !== "string" || !validateLiquidAddress(addr).valid) return null;
+    return addr;
   } catch {
     return null;
   }
@@ -772,22 +774,260 @@ function writeHomeDestinationChoice(choice) {
 }
 
 // Resolves the effective destination at submit time.
-//   { source: "wallet" | "external", addr: string | null }
-// `addr` is null when the effective choice lacks a usable address (user has
-// no wallet receive address yet, or no external address selected) — the
-// submit handler surfaces the usual "selecione um endereço" message.
+//   { source: "wallet" | "external", addr: string | null, error?: string }
+// `addr` is null when the effective choice lacks a usable address. When
+// `source === "wallet"` and `addr === null`, `error` is populated and the
+// caller MUST surface the failure (no silent fallback to external — that
+// would deposit to a different destination than the chip implies).
 async function resolveHomeDestination() {
   const hasWallet = await hasWalletFast();
   const choice = hasWallet ? readHomeDestinationChoice() : "external";
   if (choice === "wallet") {
     const walletAddr = await resolveWalletReceiveAddress();
     if (walletAddr) return { source: "wallet", addr: walletAddr };
-    // Wallet declared present but the bundle / receive address is not
-    // ready yet — fall back to external rather than stranding the user.
-    return { source: "external", addr: getSelectedAddress() };
+    // Wallet declared present but the bundle / receive address could not
+    // be obtained. Surface this distinctly so the handler can show the
+    // wallet-error modal — falling back silently is unacceptable because
+    // the chip still says "Carteira Integrada".
+    return { source: "wallet", addr: null, error: "wallet-resolve-failed" };
   }
   return { source: "external", addr: getSelectedAddress() };
 }
+
+// Lists the destination options available to the user — used by merchant
+// create/edit and commission payment flows. Each entry has a stable `source`
+// key and a user-facing label. Address resolution is deferred to submit time
+// (via `resolveDestinationAddress`) so we never load the wallet bundle just
+// to render a dropdown. `external` is included only when the user has a
+// selected external address, since unselected externals can't be used.
+async function listDestinationOptions() {
+  const out = [];
+  if (await hasWalletFast()) {
+    out.push({ source: "wallet", label: "Carteira Integrada" });
+  }
+  const externalAddr = getSelectedAddress();
+  if (externalAddr) {
+    out.push({
+      source: "external",
+      label: `Carteira Externa: ${abbreviateAddress(externalAddr)}`,
+      address: externalAddr
+    });
+  }
+  return out;
+}
+
+// Resolves a dropdown option to the actual Liquid address. Returns
+// `{ addr, error? }`. `error === "wallet-resolve-failed"` mirrors
+// `resolveHomeDestination` so callers can surface the same modal.
+async function resolveDestinationAddress(source) {
+  if (source === "wallet") {
+    const addr = await resolveWalletReceiveAddress();
+    if (addr) return { addr };
+    return { addr: null, error: "wallet-resolve-failed" };
+  }
+  if (source === "external") {
+    const addr = getSelectedAddress();
+    if (addr) return { addr };
+    return { addr: null, error: "no-external-selected" };
+  }
+  return { addr: null, error: "unknown-source" };
+}
+
+// Shows the wallet-error modal when the integrated wallet can't be reached
+// at submit time. The optional `context.onSwitchToExternal` callback lets
+// non-home callers (merchant-create, merchant-liquid-edit, payment-address)
+// flip THEIR own dropdown to external instead of mutating the global home
+// destination. Default (no context) keeps the home-flow behavior.
+let walletErrorContext = null;
+
+function showWalletErrorModal(context = null) {
+  walletErrorContext = context;
+  document.getElementById("wallet-error-modal")?.classList.remove("hidden");
+}
+
+function closeWalletErrorModal() {
+  document.getElementById("wallet-error-modal")?.classList.add("hidden");
+  walletErrorContext = null;
+}
+
+document.getElementById("btn-wallet-error-retry")?.addEventListener("click", () => {
+  closeWalletErrorModal();
+});
+
+document.getElementById("btn-wallet-error-external")?.addEventListener("click", () => {
+  const ctx = walletErrorContext;
+  closeWalletErrorModal();
+  if (ctx?.onSwitchToExternal) {
+    ctx.onSwitchToExternal();
+    return;
+  }
+  // Default: home-flow behavior — write the global preference + refresh chip.
+  writeHomeDestinationChoice("external");
+  void refreshHomeDestination();
+  // If user has no external selected, the chip and the next submit attempt
+  // both surface "Nenhum endereço" / "Selecione um endereço…" — same path
+  // a wallet-less user would hit.
+  if (!getSelectedAddress()) {
+    showToast("Cadastre um endereço externo no menu para continuar.");
+  } else {
+    showToast("Trocado para Carteira Externa.");
+  }
+});
+
+// Generic destination-dropdown helper. Used by merchant-create,
+// merchant-liquid-edit, and payment-address flows. Replaces three
+// near-identical populate functions and three separate outside-click
+// handlers with a single implementation.
+//
+// Returns:
+//   - populate(): re-renders options from listDestinationOptions(), shows
+//     empty-state when neither wallet nor external is configured.
+//   - selectOption(source): programmatically pick "wallet" | "external"
+//     (used by the wallet-error modal's "switch to external" callback).
+//   - getSource(): returns the currently selected source or null.
+function setupDestinationDropdown({
+  dropdownId,
+  optionsId,
+  toggleId,
+  toggleTextId,
+  emptyMsgId,
+  submitBtnId,
+}) {
+  const getEls = () => ({
+    dropdown: document.getElementById(dropdownId),
+    options: document.getElementById(optionsId),
+    toggle: document.getElementById(toggleId),
+    toggleText: document.getElementById(toggleTextId),
+    emptyMsg: emptyMsgId ? document.getElementById(emptyMsgId) : null,
+    submitBtn: submitBtnId ? document.getElementById(submitBtnId) : null,
+  });
+
+  document.getElementById(toggleId)?.addEventListener("click", () => {
+    const dropdown = document.getElementById(dropdownId);
+    const opts = document.getElementById(optionsId);
+    if (!dropdown || !opts) return;
+    const isOpen = dropdown.classList.contains("open");
+    dropdown.classList.toggle("open", !isOpen);
+    opts.classList.toggle("hidden", isOpen);
+  });
+
+  document.getElementById(optionsId)?.addEventListener("click", (e) => {
+    const opt = e.target.closest(".custom-dropdown-option");
+    if (!opt) return;
+    selectOption(opt.dataset.source);
+  });
+
+  function selectOption(sourceValue) {
+    const { dropdown, options: opts, toggleText } = getEls();
+    if (!dropdown || !opts) return;
+    const opt = opts.querySelector(`.custom-dropdown-option[data-source="${sourceValue}"]`);
+    if (!opt) return;
+    if (toggleText) toggleText.textContent = opt.textContent;
+    opts.querySelectorAll(".custom-dropdown-option").forEach(o => o.classList.remove("selected"));
+    opt.classList.add("selected");
+    dropdown.dataset.source = sourceValue;
+    dropdown.classList.remove("open");
+    opts.classList.add("hidden");
+  }
+
+  async function populate() {
+    const { dropdown, options: opts, toggleText, emptyMsg, submitBtn } = getEls();
+    if (!dropdown || !opts) return;
+    const list = await listDestinationOptions();
+    opts.innerHTML = "";
+    if (list.length === 0) {
+      dropdown.classList.add("hidden");
+      emptyMsg?.classList.remove("hidden");
+      if (submitBtn) submitBtn.disabled = true;
+      if (toggleText) toggleText.textContent = "Selecionar carteira…";
+      delete dropdown.dataset.source;
+      return;
+    }
+    dropdown.classList.remove("hidden");
+    emptyMsg?.classList.add("hidden");
+    if (submitBtn) submitBtn.disabled = false;
+    opts.innerHTML = list.map(o =>
+      `<div class="custom-dropdown-option" data-source="${o.source}">${escapeHtml(o.label)}</div>`
+    ).join("");
+    // Auto-select the first option so the form is submittable without an
+    // extra tap. Wallet beats external when both exist (matches home
+    // destination priority in resolveHomeDestination).
+    const first = opts.querySelector(".custom-dropdown-option");
+    if (first) {
+      first.classList.add("selected");
+      if (toggleText) toggleText.textContent = first.textContent;
+      dropdown.dataset.source = first.dataset.source;
+    }
+  }
+
+  function getSource() {
+    return document.getElementById(dropdownId)?.dataset.source || null;
+  }
+
+  return { populate, selectOption, getSource };
+}
+
+// Single global outside-click handler for every `.custom-dropdown.open`.
+// Replaces three separate per-dropdown handlers. Each handler used to fire
+// on every document click; this single one does the same work without
+// triplication.
+document.addEventListener("click", (e) => {
+  document.querySelectorAll(".custom-dropdown.open").forEach((dropdown) => {
+    if (!dropdown.contains(e.target)) {
+      dropdown.classList.remove("open");
+      dropdown.querySelector(".custom-dropdown-options")?.classList.add("hidden");
+    }
+  });
+});
+
+const paymentAddrDropdown = setupDestinationDropdown({
+  dropdownId: "payment-addr-dropdown",
+  optionsId: "payment-addr-options",
+  toggleId: "payment-addr-toggle",
+  toggleTextId: "payment-addr-toggle-text",
+  emptyMsgId: "payment-addr-empty",
+  submitBtnId: "btn-payment-address-submit",
+});
+
+const merchantLiquidEditDropdown = setupDestinationDropdown({
+  dropdownId: "merchant-liquid-edit-dropdown",
+  optionsId: "merchant-liquid-edit-options",
+  toggleId: "merchant-liquid-edit-toggle",
+  toggleTextId: "merchant-liquid-edit-toggle-text",
+  emptyMsgId: "merchant-liquid-edit-empty",
+  submitBtnId: "btn-merchant-liquid-edit-save",
+});
+
+const merchantAddrDropdown = setupDestinationDropdown({
+  dropdownId: "merchant-addr-dropdown",
+  optionsId: "merchant-addr-options",
+  toggleId: "merchant-addr-toggle",
+  toggleTextId: "merchant-addr-toggle-text",
+  emptyMsgId: "merchant-addr-empty",
+  submitBtnId: "btn-create-merchant",
+});
+
+// Hash navigation closes any open destination-flow modal and clears its
+// sensitive in-memory state. The router only swaps section[data-view]; it
+// doesn't touch modals or module-level state, so without this listener a
+// password / address can persist across views (CLAUDE.md "Red flags").
+window.addEventListener("hashchange", () => {
+  const liquidEdit = document.getElementById("merchant-liquid-edit-modal");
+  if (liquidEdit && !liquidEdit.classList.contains("hidden")) {
+    liquidEdit.classList.add("hidden");
+    pendingLiquidPassword = null;
+  }
+  const payAddr = document.getElementById("payment-address-modal");
+  if (payAddr && !payAddr.classList.contains("hidden")) {
+    payAddr.classList.add("hidden");
+  }
+  const payConfirm = document.getElementById("payment-confirm-modal");
+  if (payConfirm && !payConfirm.classList.contains("hidden")) {
+    payConfirm.classList.add("hidden");
+  }
+  pendingPaymentAddress = null;
+  closeWalletErrorModal();
+});
 
 // Flag-first check — reads the localStorage `depix-wallet-exists` cache
 // set on wallet create/restore and cleared on wipe. Falls back to a raw
@@ -1143,15 +1383,29 @@ document.getElementById("btnGerar")?.addEventListener("click", async () => {
   // exists) or an external address the user has explicitly selected via
   // the home tile's "Usar endereço externo" toggle. For users without a
   // wallet this always resolves to the external path — zero regression.
-  const { addr, source } = await resolveHomeDestination();
+  const { source, addr, error } = await resolveHomeDestination();
 
   if (!valorInput.value) {
     setMsg("mensagem", "Informe o valor");
     return;
   }
 
+  if (error === "wallet-resolve-failed") {
+    showWalletErrorModal();
+    return;
+  }
+
   if (!addr) {
     setMsg("mensagem", "Selecione um endereço no menu antes de continuar");
+    return;
+  }
+
+  // Defense in depth: revalidate the address right before submit. Catches
+  // cases where localStorage was tampered with, the wallet returned an
+  // invalid address, or a previous version stored something malformed.
+  const addrValidation = validateLiquidAddress(addr);
+  if (!addrValidation.valid) {
+    setMsg("mensagem", addrValidation.error);
     return;
   }
 
@@ -1471,6 +1725,15 @@ document.getElementById("btnSacar")?.addEventListener("click", async () => {
     const r = data.response;
     lastWithdrawalId = r.id;
 
+    // Validate the Liquid deposit address that came from Eulen before we
+    // either render its QR or hand it off to the integrated wallet send
+    // flow. Defends against a corrupted backend response — the user would
+    // otherwise broadcast L-BTC to a malformed address and lose funds.
+    const depositAddrValidation = validateLiquidAddress(r.depositAddress);
+    if (!depositAddrValidation.valid) {
+      throw new Error(`Endereço Liquid inválido recebido. Tente novamente ou contate o suporte.`);
+    }
+
     if (hasWallet) {
       // Bootstrap the wallet UI BEFORE dispatching the prefill event.
       // `registerWalletRoutes()` — invoked inside `ensureWalletBootstrapped()`
@@ -1508,10 +1771,7 @@ document.getElementById("btnSacar")?.addEventListener("click", async () => {
     document.getElementById("saqueDepositAmount").innerText = formatDePix(r.depositAmountInCents);
     document.getElementById("saquePayoutAmount").innerText = formatBRL(r.payoutAmountInCents);
     saqueDepositAddress = r.depositAddress;
-    const addrShort = r.depositAddress.length > 16
-      ? r.depositAddress.slice(0, 8) + "…" + r.depositAddress.slice(-8)
-      : r.depositAddress;
-    document.getElementById("saqueAddress").innerText = addrShort;
+    document.getElementById("saqueAddress").innerText = abbreviateAddress(r.depositAddress);
 
     // Generate branded QR code for the Liquid address
     const saqueQr = document.getElementById("saqueQr");
@@ -1992,6 +2252,38 @@ document.getElementById("btn-save-addr")?.addEventListener("click", () => {
   }
 });
 
+// QR scanner button in the "Adicionar novo endereço" section. Validates the
+// scanned text via parseLiquidUri (accepts plain Liquid addresses or BIP21
+// URIs), fills the input, and lets the user confirm by clicking "Salvar".
+// Hidden when getUserMedia is unavailable (older browsers / no permission).
+if (!isQrScannerSupported()) {
+  document.getElementById("new-addr-scan")?.classList.add("hidden");
+}
+document.getElementById("new-addr-scan")?.addEventListener("click", async () => {
+  let parsed = null;
+  try {
+    await scanQRCode({
+      title: "Escanear endereço Liquid",
+      hint: "Aponte para o QR do endereço de destino.",
+      validate: (text) => {
+        const p = parseLiquidUri(text);
+        if (!p.valid) return { ok: false, error: p.error };
+        parsed = p;
+        return { ok: true };
+      },
+    });
+  } catch (err) {
+    if (err && (err.code === QR_SCANNER_ERRORS.CANCELLED || err.code === QR_SCANNER_ERRORS.ABORTED)) return;
+    // Permission / camera errors already surface their own in-modal state.
+    return;
+  }
+  if (!parsed) return;
+  const input = document.getElementById("new-addr-input");
+  if (input) input.value = parsed.data.address;
+  setMsg("add-addr-msg", "");
+  showToast("QR code lido.");
+});
+
 // =========================================
 // REPORT POPOVER (shared logic)
 // =========================================
@@ -2274,43 +2566,61 @@ document.getElementById("close-commission-info")?.addEventListener("click", () =
 
 
 // ===== Payment request flow =====
+// Module-scoped pending address replaces the prior `window._paymentAddress`
+// global. Cleared on cancel + after a successful submit so a stale value
+// from a previous attempt can never silently feed a new request.
+let pendingPaymentAddress = null;
+
 document.getElementById("btn-request-payment")?.addEventListener("click", () => {
   document.getElementById("payment-warning-modal")?.classList.remove("hidden");
 });
 
-document.getElementById("btn-payment-warning-ok")?.addEventListener("click", () => {
+document.getElementById("btn-payment-warning-ok")?.addEventListener("click", async () => {
   document.getElementById("payment-warning-modal")?.classList.add("hidden");
-  document.getElementById("payment-address-input").value = "";
   setMsg("payment-address-msg", "");
+  await paymentAddrDropdown.populate();
   document.getElementById("payment-address-modal")?.classList.remove("hidden");
 });
 
 document.getElementById("btn-payment-address-cancel")?.addEventListener("click", () => {
   document.getElementById("payment-address-modal")?.classList.add("hidden");
+  pendingPaymentAddress = null;
 });
 
-document.getElementById("btn-payment-address-submit")?.addEventListener("click", () => {
-  const addr = document.getElementById("payment-address-input").value.trim();
-  const { valid, error } = validateLiquidAddress(addr);
-  if (!valid) {
-    setMsg("payment-address-msg", error || "Endereço Liquid inválido");
+document.getElementById("btn-payment-address-submit")?.addEventListener("click", async () => {
+  const source = paymentAddrDropdown.getSource();
+  setMsg("payment-address-msg", "");
+  if (!source) { setMsg("payment-address-msg", "Configure sua carteira primeiro."); return; }
+  const { addr, error } = await resolveDestinationAddress(source);
+  if (error === "wallet-resolve-failed") {
+    showWalletErrorModal({
+      onSwitchToExternal: () => paymentAddrDropdown.selectOption("external"),
+    });
     return;
   }
+  if (!addr) { setMsg("payment-address-msg", "Configure sua carteira primeiro."); return; }
+  const v = validateLiquidAddress(addr);
+  if (!v.valid) { setMsg("payment-address-msg", v.error); return; }
+
+  pendingPaymentAddress = addr;
   document.getElementById("payment-address-modal")?.classList.add("hidden");
   const amount = document.getElementById("affiliate-commission-value").innerText;
   document.getElementById("payment-confirm-amount").innerText = amount;
-  const addrShort = addr.length > 14 ? `${addr.slice(0, 8)}...${addr.slice(-4)}` : addr;
-  document.getElementById("payment-confirm-address").innerText = addrShort;
+  document.getElementById("payment-confirm-address").innerText = abbreviateAddress(addr);
   document.getElementById("payment-confirm-modal")?.classList.remove("hidden");
-  window._paymentAddress = addr;
 });
 
 document.getElementById("btn-payment-confirm-cancel")?.addEventListener("click", () => {
   document.getElementById("payment-confirm-modal")?.classList.add("hidden");
+  pendingPaymentAddress = null;
 });
 
 document.getElementById("btn-payment-confirm")?.addEventListener("click", async () => {
   const btn = document.getElementById("btn-payment-confirm");
+  if (!pendingPaymentAddress) {
+    showToast("Selecione um endereço primeiro.");
+    return;
+  }
   btn.disabled = true;
   btn.innerText = "Enviando...";
   try {
@@ -2318,7 +2628,7 @@ document.getElementById("btn-payment-confirm")?.addEventListener("click", async 
       method: "POST",
       body: JSON.stringify({
         tipo: "solicitar_comissao",
-        liquidAddress: window._paymentAddress
+        liquidAddress: pendingPaymentAddress
       })
     });
     const data = await res.json();
@@ -2327,6 +2637,7 @@ document.getElementById("btn-payment-confirm")?.addEventListener("click", async 
       return;
     }
     document.getElementById("payment-confirm-modal")?.classList.add("hidden");
+    pendingPaymentAddress = null;
     showToast("Solicitação enviada com sucesso!");
     loadAffiliateData();
   } catch (e) {
@@ -3351,27 +3662,10 @@ async function loadMerchantDispatcher() {
       const u = getUser();
       if (u && !u.verified) { u.verified = 1; localStorage.setItem("depix-user", JSON.stringify(u)); }
       merchantData = null;
+      // Populate dropdown BEFORE showing the form so the user never sees
+      // the empty-or-undecided state while listDestinationOptions resolves.
+      await merchantAddrDropdown.populate();
       document.getElementById("merchant-create").classList.remove("hidden");
-      // Pre-fill Liquid address from saved addresses
-      const savedAddrs = getAddresses();
-      const dropdown = document.getElementById("merchant-addr-dropdown");
-      const addrInput = document.getElementById("merchant-liquid-addr");
-      const optionsEl = document.getElementById("merchant-addr-options");
-      const toggleText = document.getElementById("merchant-addr-toggle-text");
-      if (savedAddrs.length > 0 && dropdown && optionsEl) {
-        optionsEl.innerHTML = savedAddrs.map(a => {
-          const abbr = abbreviateAddress(a);
-          return `<div class="custom-dropdown-option" data-value="${escapeHtml(a)}">${escapeHtml(abbr)}</div>`;
-        }).join("");
-        dropdown.classList.remove("hidden");
-        const selected = getSelectedAddress();
-        if (selected && !addrInput.value) {
-          addrInput.value = selected;
-          if (toggleText) toggleText.textContent = abbreviateAddress(selected);
-        }
-      } else if (dropdown) {
-        dropdown.classList.add("hidden");
-      }
       return;
     }
 
@@ -3430,7 +3724,7 @@ async function loadAccountView() {
     if (merchantData && container) {
       const mainFields = [
         { label: "Nome", value: merchantData.business_name, field: "business_name" },
-        { label: "Endereço Liquid", value: abbreviateHash(merchantData.liquid_address, 12, 8), field: "liquid_address" },
+        { label: "Endereço Liquid", value: abbreviateAddress(merchantData.liquid_address), field: "liquid_address" },
         { label: "CNPJ", value: merchantData.cnpj, field: "cnpj" },
         { label: "Website", value: merchantData.website, field: "website" },
       ];
@@ -4241,19 +4535,65 @@ document.getElementById("btn-merchant-edit-save")?.addEventListener("click", asy
     let sendValue = value || null;
     if (field === "website" && value) sendValue = normalizeWebsite(value);
     const body = { [field]: sendValue };
-    if (field === "liquid_address" && pendingLiquidPassword) {
-      body.password = pendingLiquidPassword;
-    }
     const res = await apiFetch("/api/merchants/me", { method: "PATCH", body: JSON.stringify(body) });
     const data = await res.json();
     if (!res.ok) { setMsg("merchant-edit-modal-msg", data?.response?.errorMessage || data?.errorMessage || "Erro ao salvar."); return; }
-    if (field === "liquid_address") pendingLiquidPassword = null;
     document.getElementById("merchant-edit-modal")?.classList.add("hidden");
     merchantData = null; // Force reload
     showToast("Dados atualizados");
     loadAccountView();
   } catch (e) { setMsg("merchant-edit-modal-msg", e.message || "Erro ao salvar."); }
   finally { btn.disabled = false; btn.textContent = "Salvar"; }
+});
+
+// =====================================================================
+// Liquid address edit — wallet/external dropdown + Configure-first gate.
+// Replaces the generic merchant-edit-modal text input for this field, so
+// the user can only pick from configured destinations (matches the
+// merchant-create flow). Password confirmation still gates the save.
+// Dropdown wiring lives in `merchantLiquidEditDropdown` (setupDestinationDropdown).
+// =====================================================================
+document.getElementById("btn-merchant-liquid-edit-cancel")?.addEventListener("click", () => {
+  document.getElementById("merchant-liquid-edit-modal")?.classList.add("hidden");
+  pendingLiquidPassword = null;
+});
+
+document.getElementById("btn-merchant-liquid-edit-save")?.addEventListener("click", async () => {
+  const source = merchantLiquidEditDropdown.getSource();
+  const btn = document.getElementById("btn-merchant-liquid-edit-save");
+  setMsg("merchant-liquid-edit-msg", "");
+  if (!source) { setMsg("merchant-liquid-edit-msg", "Configure sua carteira primeiro."); return; }
+  if (!pendingLiquidPassword) { setMsg("merchant-liquid-edit-msg", "Confirme sua senha novamente."); return; }
+  const { addr, error } = await resolveDestinationAddress(source);
+  if (error === "wallet-resolve-failed") {
+    showWalletErrorModal({
+      onSwitchToExternal: () => merchantLiquidEditDropdown.selectOption("external"),
+    });
+    return;
+  }
+  if (!addr) { setMsg("merchant-liquid-edit-msg", "Configure sua carteira primeiro."); return; }
+  const v = validateLiquidAddress(addr);
+  if (!v.valid) { setMsg("merchant-liquid-edit-msg", v.error); return; }
+
+  btn.disabled = true; btn.textContent = "Salvando...";
+  try {
+    const res = await apiFetch("/api/merchants/me", {
+      method: "PATCH",
+      body: JSON.stringify({ liquid_address: addr, password: pendingLiquidPassword })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setMsg("merchant-liquid-edit-msg", data?.response?.errorMessage || data?.errorMessage || "Erro ao salvar.");
+      return;
+    }
+    pendingLiquidPassword = null;
+    document.getElementById("merchant-liquid-edit-modal")?.classList.add("hidden");
+    merchantData = null;
+    showToast("Endereço Liquid atualizado");
+    loadAccountView();
+  } catch (e) {
+    setMsg("merchant-liquid-edit-msg", e.message || "Erro ao salvar.");
+  } finally { btn.disabled = false; btn.textContent = "Salvar"; }
 });
 
 // Password confirmation (for liquid_address edit or webhook rotation)
@@ -4265,11 +4605,10 @@ document.getElementById("btn-merchant-password-confirm")?.addEventListener("clic
   try {
     if (pendingMerchantAction?.type === "edit_liquid") {
       document.getElementById("merchant-password-modal")?.classList.add("hidden");
-      document.getElementById("merchant-edit-title").textContent = "Editar Endereço Liquid";
-      document.getElementById("merchant-edit-input").value = merchantData?.liquid_address || "";
-      document.getElementById("merchant-edit-input").dataset.field = "liquid_address";
       pendingLiquidPassword = password;
-      document.getElementById("merchant-edit-modal")?.classList.remove("hidden");
+      setMsg("merchant-liquid-edit-msg", "");
+      await merchantLiquidEditDropdown.populate();
+      document.getElementById("merchant-liquid-edit-modal")?.classList.remove("hidden");
     } else if (pendingMerchantAction?.type === "rotate_webhook") {
       const res = await apiFetch("/api/merchants/me/rotate-webhook-secret", {
         method: "POST", body: JSON.stringify({ password })
@@ -4286,51 +4625,37 @@ document.getElementById("btn-merchant-password-confirm")?.addEventListener("clic
   finally { btn.disabled = false; btn.textContent = "Confirmar"; pendingMerchantAction = null; }
 });
 
-// Merchant address dropdown
-document.getElementById("merchant-addr-toggle")?.addEventListener("click", () => {
-  const dropdown = document.getElementById("merchant-addr-dropdown");
-  const options = document.getElementById("merchant-addr-options");
-  const isOpen = dropdown.classList.contains("open");
-  dropdown.classList.toggle("open", !isOpen);
-  options.classList.toggle("hidden", isOpen);
-});
-document.getElementById("merchant-addr-options")?.addEventListener("click", (e) => {
-  const opt = e.target.closest(".custom-dropdown-option");
-  if (!opt) return;
-  const value = opt.dataset.value;
-  const input = document.getElementById("merchant-liquid-addr");
-  const toggleText = document.getElementById("merchant-addr-toggle-text");
-  if (value && input) input.value = value;
-  if (toggleText) toggleText.textContent = opt.textContent;
-  // Mark selected
-  document.querySelectorAll("#merchant-addr-options .custom-dropdown-option").forEach(o => o.classList.remove("selected"));
-  opt.classList.add("selected");
-  // Close dropdown
-  document.getElementById("merchant-addr-dropdown").classList.remove("open");
-  document.getElementById("merchant-addr-options").classList.add("hidden");
-});
-// Close dropdown on outside click
-document.addEventListener("click", (e) => {
-  const dropdown = document.getElementById("merchant-addr-dropdown");
-  if (dropdown && !dropdown.contains(e.target)) {
-    dropdown.classList.remove("open");
-    document.getElementById("merchant-addr-options")?.classList.add("hidden");
-  }
-});
+// Merchant create — dropdown wiring lives in `merchantAddrDropdown`
+// (setupDestinationDropdown). When the user has neither wallet nor an
+// external address selected, the dropdown is hidden, the "Configure sua
+// carteira primeiro" empty-state message shows, and the create button is
+// disabled. Selected `data-source` ("wallet" | "external") drives address
+// resolution at submit time.
 
 // Create merchant
 document.getElementById("btn-create-merchant")?.addEventListener("click", async () => {
   const name = document.getElementById("merchant-name")?.value.trim();
-  const addr = document.getElementById("merchant-liquid-addr")?.value.trim();
   const cnpj = document.getElementById("merchant-cnpj")?.value.trim();
   const website = document.getElementById("merchant-website")?.value.trim();
   const btn = document.getElementById("btn-create-merchant");
+  const source = merchantAddrDropdown.getSource();
   setMsg("merchant-create-msg", "");
   if (!name) { setMsg("merchant-create-msg", "Informe o nome do negócio."); return; }
-  if (!addr) { setMsg("merchant-create-msg", "Informe o endereço Liquid."); return; }
+  if (!source) { setMsg("merchant-create-msg", "Configure sua carteira primeiro."); return; }
+  if (cnpj) { const cnpjResult = validateCNPJ(cnpj); if (!cnpjResult.valid) { setMsg("merchant-create-msg", cnpjResult.error); return; } }
+
+  // Resolve the destination address now (deferred from dropdown render so we
+  // never load the wallet bundle just to populate the list).
+  const { addr, error } = await resolveDestinationAddress(source);
+  if (error === "wallet-resolve-failed") {
+    showWalletErrorModal({
+      onSwitchToExternal: () => merchantAddrDropdown.selectOption("external"),
+    });
+    return;
+  }
+  if (!addr) { setMsg("merchant-create-msg", "Configure sua carteira primeiro."); return; }
   const addrValid = validateLiquidAddress(addr);
   if (!addrValid.valid) { setMsg("merchant-create-msg", addrValid.error); return; }
-  if (cnpj) { const cnpjResult = validateCNPJ(cnpj); if (!cnpjResult.valid) { setMsg("merchant-create-msg", cnpjResult.error); return; } }
 
   btn.disabled = true; btn.textContent = "Criando...";
   try {
