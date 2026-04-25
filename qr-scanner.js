@@ -13,6 +13,7 @@
 // timers, and detaches document/window listeners.
 
 import { decodeQR } from "./jsqr.js";
+import { toTrustedHTML } from "./trusted-types.js";
 
 export const QR_SCANNER_ERRORS = Object.freeze({
   CANCELLED: "cancelled",
@@ -155,7 +156,7 @@ function ensureModalMounted() {
   modalEl.setAttribute("role", "dialog");
   modalEl.setAttribute("aria-modal", "true");
   modalEl.setAttribute("aria-labelledby", "qr-scanner-title");
-  modalEl.innerHTML = `
+  modalEl.innerHTML = toTrustedHTML(`
     <div class="modal-box qr-scanner-box">
       <div class="qr-scanner-header">
         <h2 id="qr-scanner-title">Escanear QR code</h2>
@@ -182,7 +183,7 @@ function ensureModalMounted() {
         <button id="qr-scanner-cancel" type="button" class="secondary">Cancelar</button>
       </div>
     </div>
-  `;
+  `);
   document.body.appendChild(modalEl);
   videoEl = modalEl.querySelector("#qr-scanner-video");
 
