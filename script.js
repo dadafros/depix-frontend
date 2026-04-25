@@ -39,7 +39,8 @@ async function resolveWalletReceiveAddress() {
     const w = bundle.getDefaultWallet();
     if (!(await w.hasWallet())) return null;
     const addr = await w.getReceiveAddress();
-    return typeof addr === "string" && addr.length > 0 ? addr : null;
+    if (typeof addr !== "string" || !validateLiquidAddress(addr).valid) return null;
+    return addr;
   } catch {
     return null;
   }
@@ -833,18 +834,34 @@ async function resolveDestinationAddress(source) {
 }
 
 // Shows the wallet-error modal when the integrated wallet can't be reached
-// at submit time. The user can either retry (close modal, try again) or
-// switch to external (writes the home-destination flag + refreshes the chip).
-function showWalletErrorModal() {
+// at submit time. The optional `context.onSwitchToExternal` callback lets
+// non-home callers (merchant-create, merchant-liquid-edit, payment-address)
+// flip THEIR own dropdown to external instead of mutating the global home
+// destination. Default (no context) keeps the home-flow behavior.
+let walletErrorContext = null;
+
+function showWalletErrorModal(context = null) {
+  walletErrorContext = context;
   document.getElementById("wallet-error-modal")?.classList.remove("hidden");
 }
 
-document.getElementById("btn-wallet-error-retry")?.addEventListener("click", () => {
+function closeWalletErrorModal() {
   document.getElementById("wallet-error-modal")?.classList.add("hidden");
+  walletErrorContext = null;
+}
+
+document.getElementById("btn-wallet-error-retry")?.addEventListener("click", () => {
+  closeWalletErrorModal();
 });
 
 document.getElementById("btn-wallet-error-external")?.addEventListener("click", () => {
-  document.getElementById("wallet-error-modal")?.classList.add("hidden");
+  const ctx = walletErrorContext;
+  closeWalletErrorModal();
+  if (ctx?.onSwitchToExternal) {
+    ctx.onSwitchToExternal();
+    return;
+  }
+  // Default: home-flow behavior — write the global preference + refresh chip.
   writeHomeDestinationChoice("external");
   void refreshHomeDestination();
   // If user has no external selected, the chip and the next submit attempt
@@ -855,6 +872,161 @@ document.getElementById("btn-wallet-error-external")?.addEventListener("click", 
   } else {
     showToast("Trocado para Carteira Externa.");
   }
+});
+
+// Generic destination-dropdown helper. Used by merchant-create,
+// merchant-liquid-edit, and payment-address flows. Replaces three
+// near-identical populate functions and three separate outside-click
+// handlers with a single implementation.
+//
+// Returns:
+//   - populate(): re-renders options from listDestinationOptions(), shows
+//     empty-state when neither wallet nor external is configured.
+//   - selectOption(source): programmatically pick "wallet" | "external"
+//     (used by the wallet-error modal's "switch to external" callback).
+//   - getSource(): returns the currently selected source or null.
+function setupDestinationDropdown({
+  dropdownId,
+  optionsId,
+  toggleId,
+  toggleTextId,
+  emptyMsgId,
+  submitBtnId,
+}) {
+  const getEls = () => ({
+    dropdown: document.getElementById(dropdownId),
+    options: document.getElementById(optionsId),
+    toggle: document.getElementById(toggleId),
+    toggleText: document.getElementById(toggleTextId),
+    emptyMsg: emptyMsgId ? document.getElementById(emptyMsgId) : null,
+    submitBtn: submitBtnId ? document.getElementById(submitBtnId) : null,
+  });
+
+  document.getElementById(toggleId)?.addEventListener("click", () => {
+    const dropdown = document.getElementById(dropdownId);
+    const opts = document.getElementById(optionsId);
+    if (!dropdown || !opts) return;
+    const isOpen = dropdown.classList.contains("open");
+    dropdown.classList.toggle("open", !isOpen);
+    opts.classList.toggle("hidden", isOpen);
+  });
+
+  document.getElementById(optionsId)?.addEventListener("click", (e) => {
+    const opt = e.target.closest(".custom-dropdown-option");
+    if (!opt) return;
+    selectOption(opt.dataset.source);
+  });
+
+  function selectOption(sourceValue) {
+    const { dropdown, options: opts, toggleText } = getEls();
+    if (!dropdown || !opts) return;
+    const opt = opts.querySelector(`.custom-dropdown-option[data-source="${sourceValue}"]`);
+    if (!opt) return;
+    if (toggleText) toggleText.textContent = opt.textContent;
+    opts.querySelectorAll(".custom-dropdown-option").forEach(o => o.classList.remove("selected"));
+    opt.classList.add("selected");
+    dropdown.dataset.source = sourceValue;
+    dropdown.classList.remove("open");
+    opts.classList.add("hidden");
+  }
+
+  async function populate() {
+    const { dropdown, options: opts, toggleText, emptyMsg, submitBtn } = getEls();
+    if (!dropdown || !opts) return;
+    const list = await listDestinationOptions();
+    opts.innerHTML = "";
+    if (list.length === 0) {
+      dropdown.classList.add("hidden");
+      emptyMsg?.classList.remove("hidden");
+      if (submitBtn) submitBtn.disabled = true;
+      if (toggleText) toggleText.textContent = "Selecionar carteira…";
+      delete dropdown.dataset.source;
+      return;
+    }
+    dropdown.classList.remove("hidden");
+    emptyMsg?.classList.add("hidden");
+    if (submitBtn) submitBtn.disabled = false;
+    opts.innerHTML = list.map(o =>
+      `<div class="custom-dropdown-option" data-source="${o.source}">${escapeHtml(o.label)}</div>`
+    ).join("");
+    // Auto-select the first option so the form is submittable without an
+    // extra tap. Wallet beats external when both exist (matches home
+    // destination priority in resolveHomeDestination).
+    const first = opts.querySelector(".custom-dropdown-option");
+    if (first) {
+      first.classList.add("selected");
+      if (toggleText) toggleText.textContent = first.textContent;
+      dropdown.dataset.source = first.dataset.source;
+    }
+  }
+
+  function getSource() {
+    return document.getElementById(dropdownId)?.dataset.source || null;
+  }
+
+  return { populate, selectOption, getSource };
+}
+
+// Single global outside-click handler for every `.custom-dropdown.open`.
+// Replaces three separate per-dropdown handlers. Each handler used to fire
+// on every document click; this single one does the same work without
+// triplication.
+document.addEventListener("click", (e) => {
+  document.querySelectorAll(".custom-dropdown.open").forEach((dropdown) => {
+    if (!dropdown.contains(e.target)) {
+      dropdown.classList.remove("open");
+      dropdown.querySelector(".custom-dropdown-options")?.classList.add("hidden");
+    }
+  });
+});
+
+const paymentAddrDropdown = setupDestinationDropdown({
+  dropdownId: "payment-addr-dropdown",
+  optionsId: "payment-addr-options",
+  toggleId: "payment-addr-toggle",
+  toggleTextId: "payment-addr-toggle-text",
+  emptyMsgId: "payment-addr-empty",
+  submitBtnId: "btn-payment-address-submit",
+});
+
+const merchantLiquidEditDropdown = setupDestinationDropdown({
+  dropdownId: "merchant-liquid-edit-dropdown",
+  optionsId: "merchant-liquid-edit-options",
+  toggleId: "merchant-liquid-edit-toggle",
+  toggleTextId: "merchant-liquid-edit-toggle-text",
+  emptyMsgId: "merchant-liquid-edit-empty",
+  submitBtnId: "btn-merchant-liquid-edit-save",
+});
+
+const merchantAddrDropdown = setupDestinationDropdown({
+  dropdownId: "merchant-addr-dropdown",
+  optionsId: "merchant-addr-options",
+  toggleId: "merchant-addr-toggle",
+  toggleTextId: "merchant-addr-toggle-text",
+  emptyMsgId: "merchant-addr-empty",
+  submitBtnId: "btn-create-merchant",
+});
+
+// Hash navigation closes any open destination-flow modal and clears its
+// sensitive in-memory state. The router only swaps section[data-view]; it
+// doesn't touch modals or module-level state, so without this listener a
+// password / address can persist across views (CLAUDE.md "Red flags").
+window.addEventListener("hashchange", () => {
+  const liquidEdit = document.getElementById("merchant-liquid-edit-modal");
+  if (liquidEdit && !liquidEdit.classList.contains("hidden")) {
+    liquidEdit.classList.add("hidden");
+    pendingLiquidPassword = null;
+  }
+  const payAddr = document.getElementById("payment-address-modal");
+  if (payAddr && !payAddr.classList.contains("hidden")) {
+    payAddr.classList.add("hidden");
+  }
+  const payConfirm = document.getElementById("payment-confirm-modal");
+  if (payConfirm && !payConfirm.classList.contains("hidden")) {
+    payConfirm.classList.add("hidden");
+  }
+  pendingPaymentAddress = null;
+  closeWalletErrorModal();
 });
 
 // Flag-first check — reads the localStorage `depix-wallet-exists` cache
@@ -1233,7 +1405,7 @@ document.getElementById("btnGerar")?.addEventListener("click", async () => {
   // invalid address, or a previous version stored something malformed.
   const addrValidation = validateLiquidAddress(addr);
   if (!addrValidation.valid) {
-    setMsg("mensagem", `Endereço Liquid inválido: ${addrValidation.error}`);
+    setMsg("mensagem", addrValidation.error);
     return;
   }
 
@@ -2088,26 +2260,28 @@ if (!isQrScannerSupported()) {
   document.getElementById("new-addr-scan")?.classList.add("hidden");
 }
 document.getElementById("new-addr-scan")?.addEventListener("click", async () => {
+  let parsed = null;
   try {
-    const result = await scanQRCode({
+    await scanQRCode({
       title: "Escanear endereço Liquid",
       hint: "Aponte para o QR do endereço de destino.",
       validate: (text) => {
-        const parsed = parseLiquidUri(text);
-        if (!parsed.valid) return { ok: false, error: parsed.error };
+        const p = parseLiquidUri(text);
+        if (!p.valid) return { ok: false, error: p.error };
+        parsed = p;
         return { ok: true };
       },
     });
-    const parsed = parseLiquidUri(result.rawText);
-    if (!parsed.valid) return;
-    const input = document.getElementById("new-addr-input");
-    if (input) input.value = parsed.data.address;
-    setMsg("add-addr-msg", "");
-    showToast("QR code lido.");
   } catch (err) {
     if (err && (err.code === QR_SCANNER_ERRORS.CANCELLED || err.code === QR_SCANNER_ERRORS.ABORTED)) return;
     // Permission / camera errors already surface their own in-modal state.
+    return;
   }
+  if (!parsed) return;
+  const input = document.getElementById("new-addr-input");
+  if (input) input.value = parsed.data.address;
+  setMsg("add-addr-msg", "");
+  showToast("QR code lido.");
 });
 
 // =========================================
@@ -2395,65 +2569,7 @@ document.getElementById("close-commission-info")?.addEventListener("click", () =
 // Module-scoped pending address replaces the prior `window._paymentAddress`
 // global. Cleared on cancel + after a successful submit so a stale value
 // from a previous attempt can never silently feed a new request.
-let pendingPaymentAddress = "";
-
-async function populatePaymentAddrDropdown() {
-  const dropdown = document.getElementById("payment-addr-dropdown");
-  const optionsEl = document.getElementById("payment-addr-options");
-  const toggleText = document.getElementById("payment-addr-toggle-text");
-  const emptyMsg = document.getElementById("payment-addr-empty");
-  const submitBtn = document.getElementById("btn-payment-address-submit");
-  if (!dropdown || !optionsEl) return;
-
-  const options = await listDestinationOptions();
-  optionsEl.innerHTML = "";
-  if (options.length === 0) {
-    dropdown.classList.add("hidden");
-    emptyMsg?.classList.remove("hidden");
-    if (submitBtn) submitBtn.disabled = true;
-    if (toggleText) toggleText.textContent = "Selecionar carteira…";
-    return;
-  }
-  dropdown.classList.remove("hidden");
-  emptyMsg?.classList.add("hidden");
-  if (submitBtn) submitBtn.disabled = false;
-  optionsEl.innerHTML = options.map(o =>
-    `<div class="custom-dropdown-option" data-source="${o.source}">${escapeHtml(o.label)}</div>`
-  ).join("");
-  const first = optionsEl.querySelector(".custom-dropdown-option");
-  if (first) {
-    first.classList.add("selected");
-    if (toggleText) toggleText.textContent = first.textContent;
-    dropdown.dataset.source = first.dataset.source;
-  }
-}
-
-document.getElementById("payment-addr-toggle")?.addEventListener("click", () => {
-  const dropdown = document.getElementById("payment-addr-dropdown");
-  const opts = document.getElementById("payment-addr-options");
-  const isOpen = dropdown.classList.contains("open");
-  dropdown.classList.toggle("open", !isOpen);
-  opts.classList.toggle("hidden", isOpen);
-});
-document.getElementById("payment-addr-options")?.addEventListener("click", (e) => {
-  const opt = e.target.closest(".custom-dropdown-option");
-  if (!opt) return;
-  const dropdown = document.getElementById("payment-addr-dropdown");
-  const toggleText = document.getElementById("payment-addr-toggle-text");
-  if (dropdown) dropdown.dataset.source = opt.dataset.source;
-  if (toggleText) toggleText.textContent = opt.textContent;
-  document.querySelectorAll("#payment-addr-options .custom-dropdown-option").forEach(o => o.classList.remove("selected"));
-  opt.classList.add("selected");
-  dropdown.classList.remove("open");
-  document.getElementById("payment-addr-options").classList.add("hidden");
-});
-document.addEventListener("click", (e) => {
-  const dropdown = document.getElementById("payment-addr-dropdown");
-  if (dropdown && !dropdown.contains(e.target)) {
-    dropdown.classList.remove("open");
-    document.getElementById("payment-addr-options")?.classList.add("hidden");
-  }
-});
+let pendingPaymentAddress = null;
 
 document.getElementById("btn-request-payment")?.addEventListener("click", () => {
   document.getElementById("payment-warning-modal")?.classList.remove("hidden");
@@ -2462,25 +2578,29 @@ document.getElementById("btn-request-payment")?.addEventListener("click", () => 
 document.getElementById("btn-payment-warning-ok")?.addEventListener("click", async () => {
   document.getElementById("payment-warning-modal")?.classList.add("hidden");
   setMsg("payment-address-msg", "");
-  await populatePaymentAddrDropdown();
+  await paymentAddrDropdown.populate();
   document.getElementById("payment-address-modal")?.classList.remove("hidden");
 });
 
 document.getElementById("btn-payment-address-cancel")?.addEventListener("click", () => {
   document.getElementById("payment-address-modal")?.classList.add("hidden");
-  pendingPaymentAddress = "";
+  pendingPaymentAddress = null;
 });
 
 document.getElementById("btn-payment-address-submit")?.addEventListener("click", async () => {
-  const dropdown = document.getElementById("payment-addr-dropdown");
-  const source = dropdown?.dataset.source;
+  const source = paymentAddrDropdown.getSource();
   setMsg("payment-address-msg", "");
   if (!source) { setMsg("payment-address-msg", "Configure sua carteira primeiro."); return; }
   const { addr, error } = await resolveDestinationAddress(source);
-  if (error === "wallet-resolve-failed") { showWalletErrorModal(); return; }
+  if (error === "wallet-resolve-failed") {
+    showWalletErrorModal({
+      onSwitchToExternal: () => paymentAddrDropdown.selectOption("external"),
+    });
+    return;
+  }
   if (!addr) { setMsg("payment-address-msg", "Configure sua carteira primeiro."); return; }
   const v = validateLiquidAddress(addr);
-  if (!v.valid) { setMsg("payment-address-msg", `Endereço Liquid inválido: ${v.error}`); return; }
+  if (!v.valid) { setMsg("payment-address-msg", v.error); return; }
 
   pendingPaymentAddress = addr;
   document.getElementById("payment-address-modal")?.classList.add("hidden");
@@ -2492,7 +2612,7 @@ document.getElementById("btn-payment-address-submit")?.addEventListener("click",
 
 document.getElementById("btn-payment-confirm-cancel")?.addEventListener("click", () => {
   document.getElementById("payment-confirm-modal")?.classList.add("hidden");
-  pendingPaymentAddress = "";
+  pendingPaymentAddress = null;
 });
 
 document.getElementById("btn-payment-confirm")?.addEventListener("click", async () => {
@@ -2517,7 +2637,7 @@ document.getElementById("btn-payment-confirm")?.addEventListener("click", async 
       return;
     }
     document.getElementById("payment-confirm-modal")?.classList.add("hidden");
-    pendingPaymentAddress = "";
+    pendingPaymentAddress = null;
     showToast("Solicitação enviada com sucesso!");
     loadAffiliateData();
   } catch (e) {
@@ -3542,8 +3662,10 @@ async function loadMerchantDispatcher() {
       const u = getUser();
       if (u && !u.verified) { u.verified = 1; localStorage.setItem("depix-user", JSON.stringify(u)); }
       merchantData = null;
+      // Populate dropdown BEFORE showing the form so the user never sees
+      // the empty-or-undecided state while listDestinationOptions resolves.
+      await merchantAddrDropdown.populate();
       document.getElementById("merchant-create").classList.remove("hidden");
-      await populateMerchantAddrDropdown();
       return;
     }
 
@@ -4429,82 +4551,29 @@ document.getElementById("btn-merchant-edit-save")?.addEventListener("click", asy
 // Replaces the generic merchant-edit-modal text input for this field, so
 // the user can only pick from configured destinations (matches the
 // merchant-create flow). Password confirmation still gates the save.
+// Dropdown wiring lives in `merchantLiquidEditDropdown` (setupDestinationDropdown).
 // =====================================================================
-async function populateMerchantLiquidEditDropdown() {
-  const dropdown = document.getElementById("merchant-liquid-edit-dropdown");
-  const optionsEl = document.getElementById("merchant-liquid-edit-options");
-  const toggleText = document.getElementById("merchant-liquid-edit-toggle-text");
-  const emptyMsg = document.getElementById("merchant-liquid-edit-empty");
-  const saveBtn = document.getElementById("btn-merchant-liquid-edit-save");
-  if (!dropdown || !optionsEl) return;
-
-  const options = await listDestinationOptions();
-  optionsEl.innerHTML = "";
-  if (options.length === 0) {
-    dropdown.classList.add("hidden");
-    emptyMsg?.classList.remove("hidden");
-    if (saveBtn) saveBtn.disabled = true;
-    if (toggleText) toggleText.textContent = "Selecionar carteira…";
-    return;
-  }
-  dropdown.classList.remove("hidden");
-  emptyMsg?.classList.add("hidden");
-  if (saveBtn) saveBtn.disabled = false;
-  optionsEl.innerHTML = options.map(o =>
-    `<div class="custom-dropdown-option" data-source="${o.source}">${escapeHtml(o.label)}</div>`
-  ).join("");
-  const first = optionsEl.querySelector(".custom-dropdown-option");
-  if (first) {
-    first.classList.add("selected");
-    if (toggleText) toggleText.textContent = first.textContent;
-    dropdown.dataset.source = first.dataset.source;
-  }
-}
-
-document.getElementById("merchant-liquid-edit-toggle")?.addEventListener("click", () => {
-  const dropdown = document.getElementById("merchant-liquid-edit-dropdown");
-  const opts = document.getElementById("merchant-liquid-edit-options");
-  const isOpen = dropdown.classList.contains("open");
-  dropdown.classList.toggle("open", !isOpen);
-  opts.classList.toggle("hidden", isOpen);
-});
-document.getElementById("merchant-liquid-edit-options")?.addEventListener("click", (e) => {
-  const opt = e.target.closest(".custom-dropdown-option");
-  if (!opt) return;
-  const dropdown = document.getElementById("merchant-liquid-edit-dropdown");
-  const toggleText = document.getElementById("merchant-liquid-edit-toggle-text");
-  if (dropdown) dropdown.dataset.source = opt.dataset.source;
-  if (toggleText) toggleText.textContent = opt.textContent;
-  document.querySelectorAll("#merchant-liquid-edit-options .custom-dropdown-option").forEach(o => o.classList.remove("selected"));
-  opt.classList.add("selected");
-  dropdown.classList.remove("open");
-  document.getElementById("merchant-liquid-edit-options").classList.add("hidden");
-});
-document.addEventListener("click", (e) => {
-  const dropdown = document.getElementById("merchant-liquid-edit-dropdown");
-  if (dropdown && !dropdown.contains(e.target)) {
-    dropdown.classList.remove("open");
-    document.getElementById("merchant-liquid-edit-options")?.classList.add("hidden");
-  }
-});
-
 document.getElementById("btn-merchant-liquid-edit-cancel")?.addEventListener("click", () => {
   document.getElementById("merchant-liquid-edit-modal")?.classList.add("hidden");
   pendingLiquidPassword = null;
 });
 
 document.getElementById("btn-merchant-liquid-edit-save")?.addEventListener("click", async () => {
-  const dropdown = document.getElementById("merchant-liquid-edit-dropdown");
-  const source = dropdown?.dataset.source;
+  const source = merchantLiquidEditDropdown.getSource();
   const btn = document.getElementById("btn-merchant-liquid-edit-save");
   setMsg("merchant-liquid-edit-msg", "");
   if (!source) { setMsg("merchant-liquid-edit-msg", "Configure sua carteira primeiro."); return; }
   if (!pendingLiquidPassword) { setMsg("merchant-liquid-edit-msg", "Confirme sua senha novamente."); return; }
   const { addr, error } = await resolveDestinationAddress(source);
-  if (error === "wallet-resolve-failed") { showWalletErrorModal(); return; }
+  if (error === "wallet-resolve-failed") {
+    showWalletErrorModal({
+      onSwitchToExternal: () => merchantLiquidEditDropdown.selectOption("external"),
+    });
+    return;
+  }
   if (!addr) { setMsg("merchant-liquid-edit-msg", "Configure sua carteira primeiro."); return; }
   const v = validateLiquidAddress(addr);
-  if (!v.valid) { setMsg("merchant-liquid-edit-msg", `Endereço Liquid inválido: ${v.error}`); return; }
+  if (!v.valid) { setMsg("merchant-liquid-edit-msg", v.error); return; }
 
   btn.disabled = true; btn.textContent = "Salvando...";
   try {
@@ -4538,7 +4607,7 @@ document.getElementById("btn-merchant-password-confirm")?.addEventListener("clic
       document.getElementById("merchant-password-modal")?.classList.add("hidden");
       pendingLiquidPassword = password;
       setMsg("merchant-liquid-edit-msg", "");
-      await populateMerchantLiquidEditDropdown();
+      await merchantLiquidEditDropdown.populate();
       document.getElementById("merchant-liquid-edit-modal")?.classList.remove("hidden");
     } else if (pendingMerchantAction?.type === "rotate_webhook") {
       const res = await apiFetch("/api/merchants/me/rotate-webhook-secret", {
@@ -4556,76 +4625,12 @@ document.getElementById("btn-merchant-password-confirm")?.addEventListener("clic
   finally { btn.disabled = false; btn.textContent = "Confirmar"; pendingMerchantAction = null; }
 });
 
-// Populates the Carteira Integrada / Carteira Externa dropdown in the
-// merchant create form. When the user has neither, the dropdown is hidden,
-// the "Configure sua carteira primeiro" message shows, and the create button
-// is disabled. The selected option carries `data-source` ("wallet" or
-// "external") which the submit handler reads to resolve the actual address.
-async function populateMerchantAddrDropdown() {
-  const dropdown = document.getElementById("merchant-addr-dropdown");
-  const optionsEl = document.getElementById("merchant-addr-options");
-  const toggleText = document.getElementById("merchant-addr-toggle-text");
-  const emptyMsg = document.getElementById("merchant-addr-empty");
-  const submitBtn = document.getElementById("btn-create-merchant");
-  const hiddenInput = document.getElementById("merchant-liquid-addr");
-  if (!dropdown || !optionsEl) return;
-
-  const options = await listDestinationOptions();
-  if (options.length === 0) {
-    dropdown.classList.add("hidden");
-    emptyMsg?.classList.remove("hidden");
-    if (submitBtn) submitBtn.disabled = true;
-    if (hiddenInput) hiddenInput.value = "";
-    if (toggleText) toggleText.textContent = "Selecionar carteira…";
-    optionsEl.innerHTML = "";
-    return;
-  }
-  dropdown.classList.remove("hidden");
-  emptyMsg?.classList.add("hidden");
-  if (submitBtn) submitBtn.disabled = false;
-  optionsEl.innerHTML = options.map(o =>
-    `<div class="custom-dropdown-option" data-source="${o.source}">${escapeHtml(o.label)}</div>`
-  ).join("");
-  // Auto-select the first option so the form is submittable without an extra
-  // tap. Wallet beats external when both exist (matches home destination
-  // priority in resolveHomeDestination).
-  const first = optionsEl.querySelector(".custom-dropdown-option");
-  if (first) {
-    first.classList.add("selected");
-    if (toggleText) toggleText.textContent = first.textContent;
-    if (hiddenInput) hiddenInput.dataset.source = first.dataset.source;
-  }
-}
-
-// Merchant address dropdown
-document.getElementById("merchant-addr-toggle")?.addEventListener("click", () => {
-  const dropdown = document.getElementById("merchant-addr-dropdown");
-  const options = document.getElementById("merchant-addr-options");
-  const isOpen = dropdown.classList.contains("open");
-  dropdown.classList.toggle("open", !isOpen);
-  options.classList.toggle("hidden", isOpen);
-});
-document.getElementById("merchant-addr-options")?.addEventListener("click", (e) => {
-  const opt = e.target.closest(".custom-dropdown-option");
-  if (!opt) return;
-  const source = opt.dataset.source;
-  const hiddenInput = document.getElementById("merchant-liquid-addr");
-  const toggleText = document.getElementById("merchant-addr-toggle-text");
-  if (hiddenInput && source) hiddenInput.dataset.source = source;
-  if (toggleText) toggleText.textContent = opt.textContent;
-  document.querySelectorAll("#merchant-addr-options .custom-dropdown-option").forEach(o => o.classList.remove("selected"));
-  opt.classList.add("selected");
-  document.getElementById("merchant-addr-dropdown").classList.remove("open");
-  document.getElementById("merchant-addr-options").classList.add("hidden");
-});
-// Close dropdown on outside click
-document.addEventListener("click", (e) => {
-  const dropdown = document.getElementById("merchant-addr-dropdown");
-  if (dropdown && !dropdown.contains(e.target)) {
-    dropdown.classList.remove("open");
-    document.getElementById("merchant-addr-options")?.classList.add("hidden");
-  }
-});
+// Merchant create — dropdown wiring lives in `merchantAddrDropdown`
+// (setupDestinationDropdown). When the user has neither wallet nor an
+// external address selected, the dropdown is hidden, the "Configure sua
+// carteira primeiro" empty-state message shows, and the create button is
+// disabled. Selected `data-source` ("wallet" | "external") drives address
+// resolution at submit time.
 
 // Create merchant
 document.getElementById("btn-create-merchant")?.addEventListener("click", async () => {
@@ -4633,8 +4638,7 @@ document.getElementById("btn-create-merchant")?.addEventListener("click", async 
   const cnpj = document.getElementById("merchant-cnpj")?.value.trim();
   const website = document.getElementById("merchant-website")?.value.trim();
   const btn = document.getElementById("btn-create-merchant");
-  const hiddenInput = document.getElementById("merchant-liquid-addr");
-  const source = hiddenInput?.dataset.source;
+  const source = merchantAddrDropdown.getSource();
   setMsg("merchant-create-msg", "");
   if (!name) { setMsg("merchant-create-msg", "Informe o nome do negócio."); return; }
   if (!source) { setMsg("merchant-create-msg", "Configure sua carteira primeiro."); return; }
@@ -4643,10 +4647,15 @@ document.getElementById("btn-create-merchant")?.addEventListener("click", async 
   // Resolve the destination address now (deferred from dropdown render so we
   // never load the wallet bundle just to populate the list).
   const { addr, error } = await resolveDestinationAddress(source);
-  if (error === "wallet-resolve-failed") { showWalletErrorModal(); return; }
+  if (error === "wallet-resolve-failed") {
+    showWalletErrorModal({
+      onSwitchToExternal: () => merchantAddrDropdown.selectOption("external"),
+    });
+    return;
+  }
   if (!addr) { setMsg("merchant-create-msg", "Configure sua carteira primeiro."); return; }
   const addrValid = validateLiquidAddress(addr);
-  if (!addrValid.valid) { setMsg("merchant-create-msg", `Endereço Liquid inválido: ${addrValid.error}`); return; }
+  if (!addrValid.valid) { setMsg("merchant-create-msg", addrValid.error); return; }
 
   btn.disabled = true; btn.textContent = "Criando...";
   try {

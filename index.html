@@ -142,16 +142,16 @@
   }
   </script>
 
-  <link rel="manifest" href="manifest.json?v=144" />
-  <link rel="icon" href="icon-192.png?v=144" />
-  <link rel="apple-touch-icon" href="icon-192.png?v=144" />
+  <link rel="manifest" href="manifest.json?v=145" />
+  <link rel="icon" href="icon-192.png?v=145" />
+  <link rel="apple-touch-icon" href="icon-192.png?v=145" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
   <!-- Asset version must match APP_VERSION in service-worker.js -->
-  <link rel="stylesheet" href="style.css?v=144" />
+  <link rel="stylesheet" href="style.css?v=145" />
 </head>
 <body>
 
@@ -160,7 +160,7 @@
 
   <nav class="landing-nav">
     <div class="landing-nav-inner">
-      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=144" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
+      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=145" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
       <div class="landing-nav-right">
         <a href="https://blog.depixapp.com/" class="landing-nav-link">Blog</a>
         <a href="#login" class="landing-nav-cta">Entrar</a>
@@ -1056,7 +1056,7 @@
       Carteira Externa. Se trocar, você precisará escolher um endereço externo
       cadastrado para continuar.
     </p>
-    <button id="btn-wallet-error-retry">Tentar novamente</button>
+    <button id="btn-wallet-error-retry">Tentar mais tarde</button>
     <button id="btn-wallet-error-external" class="secondary">Trocar para Carteira Externa</button>
   </div>
 </div>
@@ -1341,8 +1341,8 @@
   <div class="modal-box">
     <h2>Endereço para pagamento</h2>
     <p class="info-text">Escolha qual carteira receberá o pagamento:</p>
-    <div id="payment-addr-dropdown" class="custom-dropdown">
-      <button type="button" id="payment-addr-toggle" class="custom-dropdown-toggle">
+    <div id="payment-addr-dropdown" class="custom-dropdown hidden">
+      <button type="button" id="payment-addr-toggle" class="custom-dropdown-toggle" aria-label="Selecionar carteira">
         <span id="payment-addr-toggle-text">Selecionar carteira…</span>
         <svg class="custom-dropdown-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </button>
@@ -1611,17 +1611,16 @@
       <p class="info-text">Crie sua conta de lojista para aceitar pagamentos via DePix.</p>
       <label for="merchant-name">Nome do negócio *</label>
       <input id="merchant-name" placeholder="Ex: Camisetas do João" />
-      <label>Endereço Liquid *</label>
+      <label id="merchant-addr-label">Endereço Liquid *</label>
       <p class="info-text">Escolha qual carteira receberá os pagamentos do seu negócio.</p>
-      <div id="merchant-addr-dropdown" class="custom-dropdown">
-        <button type="button" id="merchant-addr-toggle" class="custom-dropdown-toggle">
+      <div id="merchant-addr-dropdown" class="custom-dropdown hidden">
+        <button type="button" id="merchant-addr-toggle" class="custom-dropdown-toggle" aria-labelledby="merchant-addr-label">
           <span id="merchant-addr-toggle-text">Selecionar carteira…</span>
           <svg class="custom-dropdown-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
         </button>
         <div id="merchant-addr-options" class="custom-dropdown-options hidden"></div>
       </div>
       <p id="merchant-addr-empty" class="mensagem hidden">Configure sua carteira primeiro. Crie uma <strong>Carteira Integrada</strong> ou cadastre um endereço de <strong>Carteira Externa</strong> no menu antes de continuar.</p>
-      <input id="merchant-liquid-addr" type="hidden" />
       <label for="merchant-cnpj">CNPJ</label>
       <input id="merchant-cnpj" placeholder="Opcional" maxlength="14" />
       <label for="merchant-website">Website</label>
@@ -2891,8 +2890,8 @@
   <div class="modal-box">
     <h2 id="merchant-liquid-edit-title">Editar Endereço Liquid</h2>
     <p class="info-text">Escolha qual carteira receberá os pagamentos do seu negócio.</p>
-    <div id="merchant-liquid-edit-dropdown" class="custom-dropdown">
-      <button type="button" id="merchant-liquid-edit-toggle" class="custom-dropdown-toggle">
+    <div id="merchant-liquid-edit-dropdown" class="custom-dropdown hidden">
+      <button type="button" id="merchant-liquid-edit-toggle" class="custom-dropdown-toggle" aria-labelledby="merchant-liquid-edit-title">
         <span id="merchant-liquid-edit-toggle-text">Selecionar carteira…</span>
         <svg class="custom-dropdown-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </button>
@@ -3376,6 +3375,6 @@
 
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 <!-- Asset version must match APP_VERSION in service-worker.js -->
-<script type="module" src="script.js?v=144"></script>
+<script type="module" src="script.js?v=145"></script>
 </body>
 </html>
