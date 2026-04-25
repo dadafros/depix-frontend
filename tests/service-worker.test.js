@@ -21,6 +21,15 @@ function extractRegex() {
   return new RegExp(m[1], m[2]);
 }
 
+function extractAppVersion() {
+  // Pull `const APP_VERSION = N;` so the activate-handler test can compute
+  // the expected current cache name dynamically and stays correct across
+  // future bumps without anyone editing this file.
+  const m = SW_SOURCE.match(/const\s+APP_VERSION\s*=\s*(\d+)\s*;/);
+  if (!m) throw new Error("APP_VERSION literal not found in service-worker.js");
+  return parseInt(m[1], 10);
+}
+
 describe("service-worker cache policy", () => {
   describe("LEGACY_CACHE_RX", () => {
     const rx = extractRegex();
@@ -53,16 +62,25 @@ describe("service-worker cache policy", () => {
     // Build a minimal scope where service-worker.js can be evaluated without
     // a real ServiceWorkerGlobalScope. We only need to capture handler
     // registrations and run the activate handler against a mocked caches API.
+    const APP_VERSION = extractAppVersion();
+    const CURRENT_LEGACY_CACHE = `depix-legacy-v${APP_VERSION}`;
+    // Older keys the activate handler should delete. All numeric values are
+    // expressed relative to `APP_VERSION` so the test stays valid through
+    // future bumps without editing this file.
+    const OLD_LEGACY_KEYS = [
+      `depix-v${APP_VERSION - 3}`,        // pre-split combined, very old
+      `depix-v${APP_VERSION - 1}`,        // pre-split combined, last
+      `depix-legacy-v${APP_VERSION - 1}`  // post-split, prior release
+    ];
+
     function buildScope() {
       const handlers = {};
       const deletedKeys = [];
 
       const fakeCaches = {
         keys: async () => [
-          "depix-v143",
-          "depix-v145",
-          "depix-legacy-v145",
-          "depix-legacy-v146",
+          ...OLD_LEGACY_KEYS,
+          CURRENT_LEGACY_CACHE,
           "depix-wallet",
           "unrelated-cache"
         ],
@@ -122,13 +140,12 @@ describe("service-worker cache policy", () => {
         handlers.activate(fakeEvent);
         await waitPromise;
 
-        // depix-legacy-v146 is the current cache (APP_VERSION=146), so it
-        // must NOT be deleted. depix-wallet is preserved unconditionally.
-        expect(deletedKeys.sort()).toEqual(
-          ["depix-legacy-v145", "depix-v143", "depix-v145"].sort()
-        );
+        // The current LEGACY_CACHE (whatever APP_VERSION is at the time
+        // this test runs) must NOT be deleted. `depix-wallet` and any
+        // unrelated cache are preserved unconditionally.
+        expect(deletedKeys.sort()).toEqual([...OLD_LEGACY_KEYS].sort());
         expect(deletedKeys).not.toContain("depix-wallet");
-        expect(deletedKeys).not.toContain("depix-legacy-v146");
+        expect(deletedKeys).not.toContain(CURRENT_LEGACY_CACHE);
         expect(deletedKeys).not.toContain("unrelated-cache");
       } finally {
         cleanup();
