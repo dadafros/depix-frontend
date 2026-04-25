@@ -478,6 +478,14 @@ And reference it in `index.html` with the matching query string:
 <link rel="stylesheet" href="new-file.css?v=124" />
 ```
 
+## Wallet runtime dependencies
+
+Deps that ship inside the wallet bundle at runtime must be **pinned exact** (no caret, no tilde) in `package.json`. A minor bump that changes Argon2id defaults or WASM memory layout would produce a different derived key for the same PIN — existing wallets would fail to decrypt their seed on next unlock.
+
+Currently pinned: `hash-wasm` (Argon2id → AES key), `lwk_wasm` (LWK signer). The repo-level `.npmrc` sets `save-exact=true` so any future `npm install <pkg>` defaults to exact pins.
+
+Dev-only deps (`esbuild`, `vitest`, `jsdom`, `fake-indexeddb`) may keep carets — they don't affect user data.
+
 ## Workflow Rules
 
 - **Always start from latest main**: Before starting any task, pull the latest `main` from remote (`git pull origin main`) to ensure you're working with the most recent code.
