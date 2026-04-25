@@ -1,7 +1,24 @@
 // Service Worker — DePix PWA
 // Bump APP_VERSION on every release. Keep in sync with ?v= query strings in index.html.
-const APP_VERSION = 145;
-const CACHE_NAME = `depix-v${APP_VERSION}`;
+const APP_VERSION = 146;
+
+// Two caches, two lifecycles:
+//   LEGACY_CACHE — bumps with APP_VERSION. Holds HTML, script.js, style.css,
+//                  legacy JS modules, manifest.json, icons. Deleted and
+//                  rebuilt on every release.
+//   WALLET_CACHE — never bumps. Holds /dist/* (wallet bundle, LWK WASM,
+//                  dist/manifest.json). Filenames are content-hashed by
+//                  esbuild, so a new build naturally produces new keys; the
+//                  GC routine prunes stale hashed entries when the manifest
+//                  rotates. This survives APP_VERSION bumps so a 5px CSS
+//                  tweak no longer evicts the 5 MB LWK WASM blob.
+const LEGACY_CACHE = `depix-legacy-v${APP_VERSION}`;
+const WALLET_CACHE = "depix-wallet";
+
+// Matches both the pre-split combined caches (`depix-v144`, `depix-v145`) AND
+// the new `depix-legacy-vN` form. Activate uses this to scope eviction to
+// legacy caches only — `depix-wallet` is preserved.
+const LEGACY_CACHE_RX = /^depix-(legacy-)?v\d+$/;
 
 // Timeout for WASM fetch before falling back to cache. WASM binaries are large
 // (~5 MB for lwk_wasm). Cellular networks can stall; we refuse to spin forever.
@@ -58,10 +75,12 @@ const STATIC_FILES = [
   ...ICON_FILES.map(f => `./${f}`)
 ];
 
-// Install — cache all static assets and activate immediately
+// Install — cache all legacy assets and activate immediately. /dist/* is
+// not pre-cached; the wallet loader populates WALLET_CACHE lazily on first
+// use, and content-hashed filenames make explicit cache-busting unnecessary.
 self.addEventListener("install", event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache =>
+    caches.open(LEGACY_CACHE).then(cache =>
       Promise.all(
         STATIC_FILES.map(url =>
           fetch(url, { cache: "reload" }).then(res => cache.put(url, res))
@@ -72,12 +91,26 @@ self.addEventListener("install", event => {
   self.skipWaiting();
 });
 
-// Activate — delete old caches and take control of all clients
+// Activate — delete previous legacy caches (combined `depix-vN` from before
+// the split, and older `depix-legacy-vN` from prior releases). Preserves
+// `depix-wallet` so a CSS-only deploy no longer evicts the 5 MB wallet bundle.
+//
+// One-time migration cost: existing v145 users pay one final wallet re-download
+// here. Their pre-split `depix-v145` cache holds the wallet artifacts, the
+// regex matches it, and `depix-wallet` does not exist yet — so on the next
+// wallet open the loader refetches the bundle from the network. Salvaging the
+// entries cache-to-cache during activate would skip that one-time cost, but
+// adds risk to the activate path; the trade-off is intentional. After v146,
+// future legacy bumps preserve `depix-wallet`.
 self.addEventListener("activate", event => {
   event.waitUntil(
     caches.keys().then(keys =>
       Promise.all(
-        keys.map(key => key !== CACHE_NAME && caches.delete(key))
+        keys.map(key =>
+          LEGACY_CACHE_RX.test(key) && key !== LEGACY_CACHE
+            ? caches.delete(key)
+            : null
+        )
       )
     )
   );
@@ -89,6 +122,29 @@ function fetchWithTimeout(req, ms) {
   const timer = setTimeout(() => controller.abort(), ms);
   return fetch(req, { signal: controller.signal }).finally(() =>
     clearTimeout(timer)
+  );
+}
+
+// Best-effort cleanup of stale hashed wallet artifacts. Called after a
+// successful manifest fetch; deletes any /dist/{wallet-bundle,lwk_wasm}_*
+// entry whose filename is no longer referenced by the live manifest. Never
+// touches the manifest itself or other cache entries. Failures are swallowed.
+async function gcWalletCache(manifest) {
+  const cache = await caches.open(WALLET_CACHE);
+  const keep = new Set(
+    [manifest.walletBundle, manifest.walletWasm]
+      .filter(Boolean)
+      .map(rel => new URL(`./${rel}`, self.location).pathname)
+  );
+  const reqs = await cache.keys();
+  await Promise.all(
+    reqs.map(req => {
+      const p = new URL(req.url).pathname;
+      if (!/^\/dist\/(wallet-bundle-|lwk_wasm_bg-).*\.(js|wasm)$/.test(p)) {
+        return null;
+      }
+      return keep.has(p) ? null : cache.delete(req);
+    })
   );
 }
 
@@ -114,7 +170,7 @@ self.addEventListener("fetch", event => {
       fetch(req)
         .then(response => {
           const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(req, clone));
+          caches.open(LEGACY_CACHE).then(cache => cache.put(req, clone));
           return response;
         })
         .catch(() => caches.match(req))
@@ -122,19 +178,22 @@ self.addEventListener("fetch", event => {
     return;
   }
 
-  // Wallet manifest — network-first. The manifest points the loader at the
-  // current content-hashed bundle filename; a stale cached manifest would
-  // reference a filename that no longer exists on the server after a wallet-
-  // only deploy (hash rotated, APP_VERSION unchanged). Keep it fresh.
-  // Falls back to cache when offline so a reload without network can still
-  // read whatever bundle was last installed.
+  // Wallet manifest — network-first into WALLET_CACHE. Manifest points the
+  // loader at the current content-hashed bundle filename; a stale cached
+  // manifest would reference a filename that no longer exists on the server
+  // after a wallet-only deploy. Falls back to cache when offline.
+  // Triggers GC of old hashed entries opportunistically (non-blocking).
   if (url.pathname === "/dist/manifest.json") {
     event.respondWith(
       fetch(req, { cache: "no-cache" })
         .then(response => {
           if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(req, clone));
+            const cacheClone = response.clone();
+            const gcClone = response.clone();
+            caches.open(WALLET_CACHE).then(cache => cache.put(req, cacheClone));
+            gcClone.json()
+              .then(json => gcWalletCache(json))
+              .catch(err => console.warn("sw: wallet GC failed", err));
           }
           return response;
         })
@@ -143,14 +202,14 @@ self.addEventListener("fetch", event => {
     return;
   }
 
-  // Wallet bundle + WASM — cache-first (content-hashed filename, so a new
-  // build always produces a new URL). Timeout on the network fallback so a
-  // stalled cellular fetch does not block wallet init forever.
+  // Wallet bundle + WASM — cache-first into WALLET_CACHE (content-hashed
+  // filename, so a new build always produces a new URL). Timeout on the
+  // network fallback so a stalled cellular fetch does not block wallet
+  // init forever.
   //
   // On cold install + timeout the fetch rejects with AbortError; we catch it
-  // and synthesize a 504 Response so the Sub-fase 2 loader can branch on
-  // response.ok / response.status instead of unwrapping a raw reject. UX copy
-  // ("Carregando carteira…" etc.) is rendered by the loader in Sub-fase 2+.
+  // and synthesize a 504 Response so the loader can branch on response.ok /
+  // response.status instead of unwrapping a raw reject.
   if (url.pathname.startsWith("/dist/") && /\.(wasm|js)$/.test(url.pathname)) {
     event.respondWith(
       caches.match(req).then(cached => {
@@ -159,7 +218,7 @@ self.addEventListener("fetch", event => {
           .then(response => {
             if (response.ok) {
               const clone = response.clone();
-              caches.open(CACHE_NAME).then(cache => cache.put(req, clone));
+              caches.open(WALLET_CACHE).then(cache => cache.put(req, clone));
             }
             return response;
           })
@@ -183,7 +242,7 @@ self.addEventListener("fetch", event => {
         .then(response => {
           if (response.ok) {
             const clone = response.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(req, clone));
+            caches.open(LEGACY_CACHE).then(cache => cache.put(req, clone));
           }
           return response;
         })
@@ -199,7 +258,7 @@ self.addEventListener("fetch", event => {
       return fetch(req).then(response => {
         if (response.ok) {
           const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(req, clone));
+          caches.open(LEGACY_CACHE).then(cache => cache.put(req, clone));
         }
         return response;
       });

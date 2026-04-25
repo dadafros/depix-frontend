@@ -411,7 +411,10 @@ The app uses a service worker with three caching strategies:
 - **JS / CSS**: Network-first — prevents stale ES module drift (see "iOS PWA blank-screen incident" below). Falls back to cache when offline.
 - **Images / icons / manifest**: Cache-first — served from cache for speed. Versioned via `?v=N`.
 
-A single `APP_VERSION` constant in `service-worker.js` controls cache naming (`depix-v${APP_VERSION}`). When bumped, the install event creates a brand-new cache and the activate event deletes older ones.
+Two caches with separate lifecycles:
+
+- **`depix-legacy-v${APP_VERSION}`** — HTML, `script.js`, `style.css`, legacy JS modules, `manifest.json`, icons. Bumped on every release (deploy checklist below). On activate, any cache matching `/^depix-(legacy-)?v\d+$/` that isn't the current one is deleted.
+- **`depix-wallet`** — `/dist/*` (wallet bundle, LWK WASM, `dist/manifest.json`). Never bumps. Filenames are content-hashed by esbuild, so a new build naturally produces new keys; old hashed entries are GC'd opportunistically when the manifest is refetched. This cache survives every legacy bump, so a 5-pixel CSS tweak no longer evicts the 5 MB LWK WASM blob.
 
 The SW uses `skipWaiting()` + `clients.claim()` so new versions activate immediately. The app detects `controllerchange` and auto-reloads — users never stay stuck on an old version.
 
@@ -452,7 +455,7 @@ Both steps are required. If you only bump `APP_VERSION` but not the HTML query s
 - `index.html` does NOT hardcode the hashed filename. Instead, the loader reads `dist/manifest.json` at runtime and imports the file it points to.
 - You never edit `?v=` for anything under `dist/`.
 
-The SW bump from regime A still controls the cache **namespace** (`depix-v${APP_VERSION}`), so a legacy-file edit invalidates the wallet cache too. If you only touch `wallet/`, you don't need to bump `APP_VERSION` — the content hash already does the job, and the SW precache doesn't include `dist/` (the loader fetches lazily).
+These two regimes are now in **separate caches**, so a regime-A bump no longer evicts wallet artifacts. Wallet files live in `depix-wallet`, which is never invalidated by `APP_VERSION`. Stale hashed entries are GC'd opportunistically by the SW when `dist/manifest.json` rotates.
 
 ### What happens if you forget
 
