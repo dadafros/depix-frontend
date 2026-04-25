@@ -95,12 +95,12 @@ self.addEventListener("install", event => {
 // the split, and older `depix-legacy-vN` from prior releases). Preserves
 // `depix-wallet` so a CSS-only deploy no longer evicts the 5 MB wallet bundle.
 //
-// One-time migration cost: existing v140 users pay one final wallet re-download
-// here. Their pre-split `depix-v140` cache holds the wallet artifacts, the
+// One-time migration cost: existing v145 users pay one final wallet re-download
+// here. Their pre-split `depix-v145` cache holds the wallet artifacts, the
 // regex matches it, and `depix-wallet` does not exist yet — so on the next
 // wallet open the loader refetches the bundle from the network. Salvaging the
 // entries cache-to-cache during activate would skip that one-time cost, but
-// adds risk to the activate path; the trade-off is intentional. After v141,
+// adds risk to the activate path; the trade-off is intentional. After v146,
 // future legacy bumps preserve `depix-wallet`.
 self.addEventListener("activate", event => {
   event.waitUntil(

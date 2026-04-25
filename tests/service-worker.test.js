@@ -59,10 +59,10 @@ describe("service-worker cache policy", () => {
 
       const fakeCaches = {
         keys: async () => [
-          "depix-v138",
-          "depix-v140",
-          "depix-legacy-v140",
-          "depix-legacy-v141",
+          "depix-v143",
+          "depix-v145",
+          "depix-legacy-v145",
+          "depix-legacy-v146",
           "depix-wallet",
           "unrelated-cache"
         ],
@@ -122,13 +122,13 @@ describe("service-worker cache policy", () => {
         handlers.activate(fakeEvent);
         await waitPromise;
 
-        // depix-legacy-v141 is the current cache (APP_VERSION=141), so it
+        // depix-legacy-v146 is the current cache (APP_VERSION=146), so it
         // must NOT be deleted. depix-wallet is preserved unconditionally.
         expect(deletedKeys.sort()).toEqual(
-          ["depix-legacy-v140", "depix-v138", "depix-v140"].sort()
+          ["depix-legacy-v145", "depix-v143", "depix-v145"].sort()
         );
         expect(deletedKeys).not.toContain("depix-wallet");
-        expect(deletedKeys).not.toContain("depix-legacy-v141");
+        expect(deletedKeys).not.toContain("depix-legacy-v146");
         expect(deletedKeys).not.toContain("unrelated-cache");
       } finally {
         cleanup();
