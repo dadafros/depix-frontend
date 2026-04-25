@@ -34,6 +34,7 @@ import {
 } from "./asset-registry.js";
 import { validateLiquidAddress, parseLiquidUri } from "../validation.js";
 import { scanQRCode, isQrScannerSupported, QR_SCANNER_ERRORS } from "../qr-scanner.js";
+import { toTrustedHTML } from "../trusted-types.js";
 import { getDefaultTelemetryClient, TELEMETRY_EVENTS } from "./telemetry.js";
 import { archiveWithdrawTxid } from "./withdraw-archive.js";
 import { getDefaultConfigClient } from "./config.js";
@@ -2668,7 +2669,7 @@ export function registerWalletRoutes({
     btn.disabled = on;
     if (on) {
       if (btn.dataset.restText === undefined) btn.dataset.restText = btn.textContent || "";
-      btn.innerHTML = '<span class="spinner"></span> Enviando…';
+      btn.innerHTML = toTrustedHTML('<span class="spinner"></span> Enviando…');
     } else if (btn.dataset.restText !== undefined) {
       btn.textContent = btn.dataset.restText;
     }

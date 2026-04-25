@@ -1,6 +1,6 @@
 // Service Worker — DePix PWA
 // Bump APP_VERSION on every release. Keep in sync with ?v= query strings in index.html.
-const APP_VERSION = 148;
+const APP_VERSION = 149;
 
 // Two caches, two lifecycles:
 //   LEGACY_CACHE — bumps with APP_VERSION. Holds HTML, script.js, style.css,
@@ -43,6 +43,7 @@ const JS_MODULES = [
   "image-resize.js",
   "qr-scanner.js",
   "jsqr.js",
+  "trusted-types.js",
   "wallet-bundle-loader.js",
   "wallet-home-gate.js",
   "wallet-integrated-gate.js",

@@ -1,5 +1,12 @@
 // DePix — Main entry point (ES module)
 
+// Imports the "depix" Trusted Types policy module. The CSP currently
+// declares the policy name (`trusted-types depix`) without
+// `require-trusted-types-for 'script'`, so the wrappers are a no-op at
+// runtime — they exist so a future PR can flip enforcement on without
+// rewriting every call site. See `trusted-types.js` header for why
+// enforcement is deferred (Cloudflare Turnstile incompatibility).
+import { toTrustedHTML, toTrustedScriptURL } from "./trusted-types.js";
 import { route, navigate, initRouter } from "./router.js";
 import { isLoggedIn, setAuth, clearAuth, getUser, getRefreshToken } from "./auth.js";
 import { apiFetch } from "./api.js";
@@ -66,7 +73,7 @@ let transactionsPollingInterval = null;
 
 // Register service worker with update detection
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./service-worker.js").then(reg => {
+  navigator.serviceWorker.register(toTrustedScriptURL("./service-worker.js")).then(reg => {
     // Check for SW updates on every page load
     reg.update();
   });
@@ -934,7 +941,7 @@ function setupDestinationDropdown({
     const { dropdown, options: opts, toggleText, emptyMsg, submitBtn } = getEls();
     if (!dropdown || !opts) return;
     const list = await listDestinationOptions();
-    opts.innerHTML = "";
+    opts.innerHTML = toTrustedHTML("");
     if (list.length === 0) {
       dropdown.classList.add("hidden");
       emptyMsg?.classList.remove("hidden");
@@ -946,9 +953,9 @@ function setupDestinationDropdown({
     dropdown.classList.remove("hidden");
     emptyMsg?.classList.add("hidden");
     if (submitBtn) submitBtn.disabled = false;
-    opts.innerHTML = list.map(o =>
+    opts.innerHTML = toTrustedHTML(list.map(o =>
       `<div class="custom-dropdown-option" data-source="${o.source}">${escapeHtml(o.label)}</div>`
-    ).join("");
+    ).join(""));
     // Auto-select the first option so the form is submittable without an
     // extra tap. Wallet beats external when both exist (matches home
     // destination priority in resolveHomeDestination).
@@ -1130,7 +1137,7 @@ function switchMode(mode) {
   // Remove iframe and clean up when leaving convert mode
   if (mode !== "convert") {
     const container = document.getElementById("converterContent");
-    if (container) container.innerHTML = "";
+    if (container) container.innerHTML = toTrustedHTML("");
     document.getElementById("converterError")?.classList.add("hidden");
     document.getElementById("converterLoading")?.classList.add("hidden");
     if (brswapMessageHandler) {
@@ -1215,7 +1222,7 @@ function loadBrswapWidget() {
     brswapMessageHandler = null;
   }
 
-  container.innerHTML = "";
+  container.innerHTML = toTrustedHTML("");
   errorEl.classList.add("hidden");
   loadingEl?.classList.add("hidden");
 
@@ -1266,7 +1273,7 @@ function loadBrswapWidget() {
 
   iframe.addEventListener("error", () => {
     loadingEl?.classList.add("hidden");
-    container.innerHTML = "";
+    container.innerHTML = toTrustedHTML("");
     errorEl.classList.remove("hidden");
   });
 
@@ -1284,7 +1291,7 @@ function loadBrswapWidget() {
   setTimeout(() => {
     if (!loaded && container.contains(iframe)) {
       loadingEl?.classList.add("hidden");
-      container.innerHTML = "";
+      container.innerHTML = toTrustedHTML("");
       errorEl.classList.remove("hidden");
     }
   }, 10000);
@@ -1448,7 +1455,7 @@ document.getElementById("btnGerar")?.addEventListener("click", async () => {
     const hintEl = document.getElementById("qrHint");
     if (hintEl) {
       const walletLabel = source === "wallet" ? "integrada" : "externa";
-      hintEl.innerHTML = `Escaneie com o app do seu banco ou copie o código Pix para pagar.<br>O valor irá cair na sua carteira ${walletLabel}.`;
+      hintEl.innerHTML = toTrustedHTML(`Escaneie com o app do seu banco ou copie o código Pix para pagar.<br>O valor irá cair na sua carteira ${walletLabel}.`);
     }
 
     document.getElementById("formDeposito").classList.add("hidden");
@@ -1784,12 +1791,12 @@ document.getElementById("btnSacar")?.addEventListener("click", async () => {
     const warnIcon = '<svg class="saque-warning-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
     const infoEl = document.getElementById("saqueWarningInfo");
     if (infoEl) {
-      infoEl.innerHTML = `${warnIcon} Sacando ${formatBRL(r.payoutAmountInCents)} para a chave Pix <b>${escapeHtml(pixResult.formatted)}</b>. Confira com cuidado antes de enviar.`;
+      infoEl.innerHTML = toTrustedHTML(`${warnIcon} Sacando ${formatBRL(r.payoutAmountInCents)} para a chave Pix <b>${escapeHtml(pixResult.formatted)}</b>. Confira com cuidado antes de enviar.`);
       infoEl.classList.remove("hidden");
     }
     const amountEl = document.getElementById("saqueWarningAmount");
     if (amountEl) {
-      amountEl.innerHTML = `${warnIcon} Envie EXATAMENTE ${formatDePix(r.depositAmountInCents)}. Qualquer outro valor ou moeda causará perda permanente.`;
+      amountEl.innerHTML = toTrustedHTML(`${warnIcon} Envie EXATAMENTE ${formatDePix(r.depositAmountInCents)}. Qualquer outro valor ou moeda causará perda permanente.`);
       amountEl.classList.remove("hidden");
     }
 
@@ -2088,11 +2095,11 @@ function renderAddressList() {
   const selected = getSelectedAddress();
 
   if (addresses.length === 0) {
-    container.innerHTML = '<p class="info-text">Nenhum endereço adicionado ainda. Use o campo acima para cadastrar o primeiro.</p>';
+    container.innerHTML = toTrustedHTML('<p class="info-text">Nenhum endereço adicionado ainda. Use o campo acima para cadastrar o primeiro.</p>');
     return;
   }
 
-  container.innerHTML = addresses.map(addr => {
+  container.innerHTML = toTrustedHTML(addresses.map(addr => {
     const isSelected = addr === selected;
     const safe = escapeHtml(addr);
     return `
@@ -2102,7 +2109,7 @@ function renderAddressList() {
         <button class="addr-delete" data-delete="${safe}" title="Remover">🗑</button>
       </div>
     `;
-  }).join("");
+  }).join(""));
 
   container.querySelectorAll(".addr-list-item").forEach(item => {
     item.addEventListener("click", (e) => {
@@ -2478,7 +2485,7 @@ function renderReferrals(referrals) {
   const empty = document.getElementById("affiliates-empty");
 
   const { html, isEmpty } = renderReferralsHTML(referrals, formatDateShort);
-  list.innerHTML = html;
+  list.innerHTML = toTrustedHTML(html);
   empty.classList.toggle("hidden", !isEmpty);
 }
 
@@ -2501,13 +2508,13 @@ function renderPayments(payments) {
   if (!list) return;
 
   if (!payments || payments.length === 0) {
-    list.innerHTML = "";
+    list.innerHTML = toTrustedHTML("");
     if (empty) empty.classList.remove("hidden");
     return;
   }
 
   if (empty) empty.classList.add("hidden");
-  list.innerHTML = payments.map(p => {
+  list.innerHTML = toTrustedHTML(payments.map(p => {
     const amount = escapeHtml(formatDePix(p.amountCents));
     const date = escapeHtml(formatDateShort(p.paidAt));
     const addr = p.liquidAddress || "";
@@ -2529,7 +2536,7 @@ function renderPayments(payments) {
         </div>
       </div>
     `;
-  }).join("");
+  }).join(""));
 }
 
 // Commission rate info modal
@@ -2770,7 +2777,7 @@ async function loadTransactions() {
   loading.classList.remove("hidden");
   setMsg("transactions-msg", "");
   const list = document.getElementById("transactions-list");
-  list.innerHTML = '<div id="transactions-sentinel" aria-hidden="true" style="height:1px"></div>';
+  list.innerHTML = toTrustedHTML('<div id="transactions-sentinel" aria-hidden="true" style="height:1px"></div>');
   document.getElementById("transactions-empty").classList.add("hidden");
 
   try {
@@ -2842,7 +2849,7 @@ function applyFilters() {
 
   displayedCount = 0;
   const list = document.getElementById("transactions-list");
-  list.innerHTML = '<div id="transactions-sentinel" aria-hidden="true" style="height:1px"></div>';
+  list.innerHTML = toTrustedHTML('<div id="transactions-sentinel" aria-hidden="true" style="height:1px"></div>');
   renderNextPage();
   setupTransactionsObserver();
 }
@@ -2891,9 +2898,9 @@ function renderNextPage() {
   }).join("");
 
   if (sentinel) {
-    sentinel.insertAdjacentHTML("beforebegin", html);
+    sentinel.insertAdjacentHTML("beforebegin", toTrustedHTML(html));
   } else {
-    list.insertAdjacentHTML("beforeend", html);
+    list.insertAdjacentHTML("beforeend", toTrustedHTML(html));
   }
 
   displayedCount += nextBatch.length;
@@ -3338,7 +3345,7 @@ route("#home", () => {
   if (valorSaqueInput) { valorSaqueInput.value = ""; valorSaqueInput.placeholder = "0,00 DePix"; }
   // Reset converter state
   const converterContent = document.getElementById("converterContent");
-  if (converterContent) converterContent.innerHTML = "";
+  if (converterContent) converterContent.innerHTML = toTrustedHTML("");
   document.getElementById("converterError")?.classList.add("hidden");
   document.getElementById("converterLoading")?.classList.add("hidden");
   // Fetch BRSwap feature config
@@ -3775,12 +3782,12 @@ async function loadAccountView() {
             </div>
           </div>
         </div>`;
-      container.innerHTML = '<div class="account-list">'
+      container.innerHTML = toTrustedHTML('<div class="account-list">'
         + mainFields.map(renderField).join("")
         + logoFieldHtml
         + `<div class="account-advanced-toggle-row"><button id="btn-account-advanced" class="advanced-toggle-btn">Configurações avançadas <span id="account-advanced-arrow" class="advanced-toggle-arrow">▸</span></button></div>`
         + `<div id="account-advanced-fields" class="account-advanced hidden">${advancedFields.map(renderField).join("")}</div>`
-        + '</div>';
+        + '</div>');
       // Re-attach edit handlers
       // Advanced toggle
       document.getElementById("btn-account-advanced")?.addEventListener("click", () => {
@@ -3880,11 +3887,11 @@ async function loadApiView() {
     const list = document.getElementById("api-keys-list");
     const empty = document.getElementById("api-keys-empty");
     if (keys.length === 0) {
-      list.innerHTML = "";
+      list.innerHTML = toTrustedHTML("");
       empty?.classList.remove("hidden");
     } else {
       empty?.classList.add("hidden");
-      list.innerHTML = keys.map(k => {
+      list.innerHTML = toTrustedHTML(keys.map(k => {
         const isLive = k.is_live === 1 || k.is_live === true;
         const typeBadge = isLive
           ? '<span class="badge badge-green">Produção</span>'
@@ -3902,13 +3909,13 @@ async function loadApiView() {
           <div class="api-key-value"><span class="mono">${escapeHtml(keyDisplay)}</span></div>
           <div class="api-key-detail"><span class="${expiresClass}">${expiresText}</span> · usado: ${lastUsed}</div>
         </div>`;
-      }).join("");
+      }).join(""));
 
       // Expired key alert
       const expiredKey = keys.find(k => k.expires_at && new Date(k.expires_at) < new Date());
       const expAlert = document.getElementById("merchant-alert-expired-key");
       if (expiredKey && expAlert) {
-        expAlert.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Sua chave ${escapeHtml(expiredKey.prefix)}...${expiredKey.label ? " (" + escapeHtml(expiredKey.label) + ")" : ""} expirou. Crie uma nova.`;
+        expAlert.innerHTML = toTrustedHTML(`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Sua chave ${escapeHtml(expiredKey.prefix)}...${expiredKey.label ? " (" + escapeHtml(expiredKey.label) + ")" : ""} expirou. Crie uma nova.`);
         expAlert.classList.remove("hidden");
       } else if (expAlert) {
         expAlert.classList.add("hidden");
@@ -3972,7 +3979,7 @@ async function populateSalesProductDropdown() {
     }
     if (salesProductsCache) {
       // Keep "Todos" option, rebuild the rest
-      dropdown.innerHTML = '<option value="">Todos</option>';
+      dropdown.innerHTML = toTrustedHTML('<option value="">Todos</option>');
       for (const p of salesProductsCache) {
         const opt = document.createElement("option");
         opt.value = p.id;
@@ -4006,7 +4013,7 @@ async function loadSalesView() {
   document.getElementById("sales-empty")?.classList.add("hidden");
   setMsg("sales-msg", "");
   const list = document.getElementById("sales-list");
-  list.innerHTML = '<div id="sales-sentinel" aria-hidden="true" style="height:1px"></div>';
+  list.innerHTML = toTrustedHTML('<div id="sales-sentinel" aria-hidden="true" style="height:1px"></div>');
 
   try {
     const params = buildSalesFilterParams();
@@ -4062,7 +4069,7 @@ function applySalesFilters() {
     : [...allSalesCheckouts];
   salesDisplayedCount = 0;
   const list = document.getElementById("sales-list");
-  list.innerHTML = '<div id="sales-sentinel" aria-hidden="true" style="height:1px"></div>';
+  list.innerHTML = toTrustedHTML('<div id="sales-sentinel" aria-hidden="true" style="height:1px"></div>');
   renderSalesNextPage();
   setupSalesObserver();
 }
@@ -4074,7 +4081,7 @@ function renderSalesNextPage() {
   if (salesDisplayedCount === 0 && batch.length === 0) { empty?.classList.remove("hidden"); return; }
   empty?.classList.add("hidden");
   const html = batch.map(c => renderCheckoutItem(c)).join("");
-  sentinel?.insertAdjacentHTML("beforebegin", html);
+  sentinel?.insertAdjacentHTML("beforebegin", toTrustedHTML(html));
   salesDisplayedCount += batch.length;
 }
 
@@ -4104,12 +4111,12 @@ async function loadWebhookLogs() {
     const logs = data.logs || [];
     const list = document.getElementById("webhook-logs-list");
     if (logs.length === 0) {
-      list.innerHTML = "";
+      list.innerHTML = toTrustedHTML("");
       document.getElementById("webhook-logs-empty")?.classList.remove("hidden");
       return;
     }
 
-    list.innerHTML = logs.map(log => {
+    list.innerHTML = toTrustedHTML(logs.map(log => {
       const statusClass = log.status_code >= 200 && log.status_code < 300 ? "status-green" : "status-red";
       return `<div class="webhook-log-item">
         <div class="webhook-log-header">
@@ -4125,7 +4132,7 @@ async function loadWebhookLogs() {
           ${log.error ? `<div class="webhook-log-body text-danger"><strong>Erro:</strong> ${escapeHtml(log.error)}</div>` : ""}
         </div>
       </div>`;
-    }).join("");
+    }).join(""));
 
     list.querySelectorAll(".webhook-log-item").forEach(item => {
       item.querySelector(".webhook-log-header")?.addEventListener("click", () => {
@@ -4171,7 +4178,7 @@ async function loadProductsView() {
   document.getElementById("products-empty")?.classList.add("hidden");
   setMsg("products-msg", "");
   const list = document.getElementById("products-list");
-  if (list) list.innerHTML = "";
+  if (list) list.innerHTML = toTrustedHTML("");
 
   try {
     const res = await apiFetch("/api/products");
@@ -4196,7 +4203,7 @@ async function loadProductsView() {
       return;
     }
 
-    list.innerHTML = products.map(p => {
+    list.innerHTML = toTrustedHTML(products.map(p => {
       const statusBadge = p.active
         ? '<span class="badge badge-green">Ativo</span>'
         : '<span class="badge badge-gray">Inativo</span>';
@@ -4225,7 +4232,7 @@ async function loadProductsView() {
           </div>
         </div>
       </div>`;
-    }).join("");
+    }).join(""));
 
     // Attach edit/checkout handlers
     list.querySelectorAll(".btn-product-edit").forEach(btn => {

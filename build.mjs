@@ -50,6 +50,13 @@ function buildOptions() {
     sourcemap: false,
     metafile: true,
     legalComments: "linked",
+    // Keep `trusted-types.js` external so the bundle emits a runtime
+    // `import "../trusted-types.js"` that resolves (relative to the
+    // hashed bundle in dist/) to the same site-root module the legacy
+    // entry point loaded. One module instance = one `createPolicy`
+    // call, so the CSP can drop `'allow-duplicates'` and the policy
+    // name acts as a real barrier.
+    external: ["../trusted-types.js"],
     loader: {
       ".wasm": "file"
     },

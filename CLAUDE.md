@@ -148,6 +148,40 @@ Each view is a `<section data-view="name">` in index.html, shown/hidden by the r
 - **connect-src**: Only allows `https://depix-backend.vercel.app`
 - **QR URL validation**: `isAllowedImageUrl()` validates every QR image URL against allowlist before setting `img.src`
 
+### Trusted Types — scaffolding without enforcement (deferred until Turnstile is replaced)
+
+The CSP declares `trusted-types depix` (declarative — registers the policy name, **does not enforce**). It does NOT include `require-trusted-types-for 'script'`. This is intentional: the wrapper machinery is in place but the enforcement switch is off.
+
+**Why scaffolding matters even with the switch off:**
+- `trusted-types.js` registers the `depix` policy with `createHTML` + `createScriptURL`.
+- Every `.innerHTML = ...`, `.insertAdjacentHTML(...)` and `navigator.serviceWorker.register(...)` site in `script.js`, `qr-scanner.js`, `wallet/wallet-ui.js` is wrapped via `toTrustedHTML(...)` / `toTrustedScriptURL(...)`. New code MUST follow the pattern — otherwise grep for unwrapped sinks during review (see "Red flags" above).
+- `build.mjs` marks `../trusted-types.js` as `external`, so the wallet bundle and the legacy entry share a single module instance and only one `createPolicy` call ever runs across the site (the policy name is a real barrier — an injected attacker can't re-register `depix`).
+
+**Why enforcement is off:**
+
+Cloudflare Turnstile (loaded on `#register` / `#login` for bot protection from `https://challenges.cloudflare.com/turnstile/v0/api.js`) writes innerHTML internally when its widget renders, with no API to plug a Trusted Types policy in. Cloudflare hasn't shipped TT compatibility for Turnstile. Enabling `require-trusted-types-for 'script'` today breaks the register flow in production — verified by the depix-dev Playwright pre-flight (`tests/wallet/trusted-types.spec.js`), which catches a TrustedHTML violation on `#register` whenever Turnstile is loaded.
+
+**How to flip enforcement on (one-line change, safe to do anytime Turnstile is gone):**
+
+```diff
+-    trusted-types depix" />
++    trusted-types depix; require-trusted-types-for 'script'" />
+```
+
+Before flipping, verify:
+1. The depix-dev Playwright pre-flight passes (it synthetically enforces and stubs Turnstile, so a green run means the codebase is enforcement-clean for OUR sinks):
+   ```bash
+   cd ../depix-dev/tests/wallet && npx playwright test trusted-types.spec.js --project=chromium
+   ```
+2. Turnstile is either removed OR replaced with a TT-compatible captcha OR Cloudflare has shipped a TT-compatible Turnstile build (check release notes). If Turnstile is still present, the register flow will break.
+
+**What the wrappers buy us today (with enforcement off):**
+- Auditability — `grep '\.innerHTML\s*=' | grep -v toTrustedHTML` returns zero hits across the SPA. Any new unwrapped sink stands out in PR review.
+- Pattern documentation — new code in this file area follows TT-aware shape by default, lowering the migration tax when enforcement turns on.
+- Pre-flight test in CI — the Playwright spec is a regression net: any future PR that adds an unwrapped sink will fail the pre-flight, even though enforcement is off in production.
+
+If you change `trusted-types.js` (e.g. add a new wrapper), bump the unit tests in `tests/trusted-types.test.js` and re-run the depix-dev Playwright pre-flight to confirm coverage.
+
 ## Commands
 
 ```bash
