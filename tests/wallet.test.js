@@ -1,10 +1,45 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import { webcrypto, createHash } from "node:crypto";
 import { IDBFactory } from "fake-indexeddb";
 
 import { createWalletModule } from "../wallet/wallet.js";
 import { WalletError, ERROR_CODES } from "../wallet/wallet-errors.js";
 import { BIP39_WORDLIST } from "../wallet/bip39-wordlist.js";
+
+// Build a stateful credentials mock that tracks how many times create/get
+// were invoked. `failGet` controls the next get() call's behavior:
+//   - false      → returns the same PRF bytes on every call (reuse path).
+//   - "cancel"   → throws NotAllowedError (user-cancel).
+//   - "missing"  → throws InvalidStateError (passkey deleted from device).
+function makeBiometricCredentialsMock() {
+  const PRF_BYTES = new Uint8Array(32).fill(7);
+  const RAW_ID = new Uint8Array([0x42, 0x43, 0x44, 0x45]);
+  let failGetMode = false;
+  const create = vi.fn(async () => ({
+    rawId: RAW_ID,
+    getClientExtensionResults: () => ({
+      prf: { results: { first: PRF_BYTES } }
+    })
+  }));
+  const get = vi.fn(async () => {
+    if (failGetMode === "cancel") {
+      throw new DOMException("user canceled", "NotAllowedError");
+    }
+    if (failGetMode === "missing") {
+      throw new DOMException("unknown credential", "InvalidStateError");
+    }
+    return {
+      getClientExtensionResults: () => ({
+        prf: { results: { first: PRF_BYTES } }
+      })
+    };
+  });
+  return {
+    create,
+    get,
+    setFailGet: mode => { failGetMode = mode; }
+  };
+}
 
 // Real BIP39 checksum validation — matches the semantics of LWK's Mnemonic
 // constructor so unit tests can distinguish word-count errors from
@@ -582,4 +617,152 @@ describe("failedPinAttempts persistence across module instances", () => {
     });
     expect(await walletB.hasWallet()).toBe(false);
   }, 180_000);
+});
+
+describe("biometric enrollment lifecycle", () => {
+  // Node 22 ships a built-in navigator on globalThis as a getter-only
+  // property. Stub it via Object.defineProperty so wallet-biometric.js's
+  // hasWebAuthn() returns true, and unstub on suite teardown to keep
+  // other suites' state clean. PublicKeyCredential is not built-in, so a
+  // plain assignment is fine.
+  let originalNavigatorDescriptor;
+  let originalPKC;
+  beforeAll(() => {
+    originalNavigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+    originalPKC = globalThis.PublicKeyCredential;
+    Object.defineProperty(globalThis, "navigator", {
+      value: { credentials: {} },
+      configurable: true,
+      writable: true
+    });
+    globalThis.PublicKeyCredential = {
+      isUserVerifyingPlatformAuthenticatorAvailable: async () => true
+    };
+  });
+  afterAll(() => {
+    if (originalNavigatorDescriptor) {
+      Object.defineProperty(globalThis, "navigator", originalNavigatorDescriptor);
+    } else {
+      delete globalThis.navigator;
+    }
+    globalThis.PublicKeyCredential = originalPKC;
+  });
+
+  it("toggle cycle reuses the existing passkey instead of creating a duplicate", async () => {
+    const cred = makeBiometricCredentialsMock();
+    const { wallet } = makeModule({ credentialsImpl: cred });
+    await wallet.createWallet({ pin: STRONG_PIN, enrollBiometric: true });
+    expect(cred.create).toHaveBeenCalledTimes(1);
+    expect(await wallet.hasBiometric()).toBe(true);
+
+    // Soft-disable.
+    await wallet.removeBiometric();
+    expect(await wallet.hasBiometric()).toBe(false);
+    expect(cred.create).toHaveBeenCalledTimes(1); // still 1 — no new passkey
+
+    // Re-enable. The reuse path calls get() against the existing passkey
+    // and re-wraps the seed under the same PRF secret. No second create().
+    await wallet.addBiometric(STRONG_PIN);
+    expect(cred.get).toHaveBeenCalledTimes(1);
+    expect(cred.create).toHaveBeenCalledTimes(1);
+    expect(await wallet.hasBiometric()).toBe(true);
+
+    // Unlock proves the rewrap actually works end-to-end.
+    wallet.lock();
+    cred.get.mockClear();
+    const unlock = await wallet.unlockWithBiometric();
+    expect(unlock.descriptor).toMatch(/^ct\(/);
+    expect(cred.get).toHaveBeenCalledTimes(1);
+  }, 60_000);
+
+  it("falls through to a fresh enrollment when the passkey was deleted from the OS", async () => {
+    const cred = makeBiometricCredentialsMock();
+    const { wallet } = makeModule({ credentialsImpl: cred });
+    await wallet.createWallet({ pin: STRONG_PIN, enrollBiometric: true });
+    await wallet.removeBiometric();
+
+    cred.setFailGet("missing");
+    await wallet.addBiometric(STRONG_PIN);
+    cred.setFailGet(false);
+    expect(cred.get).toHaveBeenCalledTimes(1);  // attempted reuse
+    expect(cred.create).toHaveBeenCalledTimes(2); // fresh enroll after fall-through
+    expect(await wallet.hasBiometric()).toBe(true);
+
+    // The new credential works for unlock.
+    wallet.lock();
+    const unlock = await wallet.unlockWithBiometric();
+    expect(unlock.descriptor).toMatch(/^ct\(/);
+  }, 60_000);
+
+  it("user-cancel during reuse rethrows BIOMETRIC_REJECTED and preserves identifiers", async () => {
+    const cred = makeBiometricCredentialsMock();
+    const { wallet } = makeModule({ credentialsImpl: cred });
+    await wallet.createWallet({ pin: STRONG_PIN, enrollBiometric: true });
+    await wallet.removeBiometric();
+
+    cred.setFailGet("cancel");
+    await expect(wallet.addBiometric(STRONG_PIN)).rejects.toMatchObject({
+      code: ERROR_CODES.BIOMETRIC_REJECTED
+    });
+    expect(cred.create).toHaveBeenCalledTimes(1); // NOT bumped — no new passkey
+    expect(await wallet.hasBiometric()).toBe(false);
+
+    // Identifiers must still be in IDB so a retry hits the reuse path.
+    cred.setFailGet(false);
+    cred.get.mockClear();
+    await wallet.addBiometric(STRONG_PIN);
+    expect(cred.get).toHaveBeenCalledTimes(1);
+    expect(cred.create).toHaveBeenCalledTimes(1); // still no second create
+    expect(await wallet.hasBiometric()).toBe(true);
+  }, 60_000);
+
+  it("addBiometric creates a fresh passkey when none was ever enrolled", async () => {
+    const cred = makeBiometricCredentialsMock();
+    const { wallet } = makeModule({ credentialsImpl: cred });
+    await wallet.createWallet({ pin: STRONG_PIN }); // no biometric on create
+    expect(cred.create).toHaveBeenCalledTimes(0);
+
+    await wallet.addBiometric(STRONG_PIN);
+    expect(cred.create).toHaveBeenCalledTimes(1);
+    expect(cred.get).toHaveBeenCalledTimes(0);     // reuse path skipped
+    expect(await wallet.hasBiometric()).toBe(true);
+  }, 60_000);
+
+  it("unlockWithBiometric maps decrypt failure to BIOMETRIC_DECRYPT_FAILED", async () => {
+    const cred = makeBiometricCredentialsMock();
+    const { wallet } = makeModule({ credentialsImpl: cred });
+    await wallet.createWallet({ pin: STRONG_PIN, enrollBiometric: true });
+    wallet.lock();
+    // Corrupt the wrapped seed key so the AES-GCM unwrap fails. We can't
+    // reach into IDB easily here without a helper, so the cleanest path is
+    // to make get() return DIFFERENT PRF bytes than were used to wrap the
+    // key — same effect on decrypt: AES-GCM rejects with auth-tag mismatch.
+    cred.get.mockResolvedValueOnce({
+      getClientExtensionResults: () => ({
+        prf: { results: { first: new Uint8Array(32).fill(0xfe) } }
+      })
+    });
+    await expect(wallet.unlockWithBiometric()).rejects.toMatchObject({
+      code: ERROR_CODES.BIOMETRIC_DECRYPT_FAILED
+    });
+  }, 60_000);
+
+  it("wipeWallet returns hadBiometric reflecting prior enrollment", async () => {
+    const cred = makeBiometricCredentialsMock();
+
+    // Without biometric.
+    {
+      const { wallet } = makeModule({ credentialsImpl: cred });
+      await wallet.createWallet({ pin: STRONG_PIN });
+      const result = await wallet.wipeWallet(STRONG_PIN);
+      expect(result).toEqual({ hadBiometric: false });
+    }
+    // With biometric.
+    {
+      const { wallet } = makeModule({ credentialsImpl: cred });
+      await wallet.createWallet({ pin: STRONG_PIN, enrollBiometric: true });
+      const result = await wallet.wipeWallet(STRONG_PIN);
+      expect(result).toEqual({ hadBiometric: true });
+    }
+  }, 60_000);
 });

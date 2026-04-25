@@ -1,6 +1,6 @@
 // Service Worker — DePix PWA
 // Bump APP_VERSION on every release. Keep in sync with ?v= query strings in index.html.
-const APP_VERSION = 146;
+const APP_VERSION = 147;
 
 // Two caches, two lifecycles:
 //   LEGACY_CACHE — bumps with APP_VERSION. Holds HTML, script.js, style.css,

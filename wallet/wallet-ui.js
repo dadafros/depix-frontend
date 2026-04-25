@@ -2158,6 +2158,30 @@ export function registerWalletRoutes({
     if (btn) btn.disabled = false;
   }
 
+  // Shown after a successful wipe when the wallet had a biometric
+  // credential enrolled. The OS-level passkey survives the IDB destroy
+  // (we cannot delete it from JS), so we tell the user it's still in
+  // their device's passkey list. Only one button — acknowledgement
+  // closes the hint and navigates to the wallet gate.
+  function showWipePasskeyHint() {
+    const hint = q("wallet-wipe-passkey-hint-modal");
+    if (!hint) {
+      // Fallback if markup was not rendered yet — preserve the previous
+      // navigate-immediately behavior so the user is never stranded.
+      if (showToast) showToast("Carteira apagada deste aparelho.");
+      navigate("#wallet-gate");
+      return;
+    }
+    hint.classList.remove("hidden");
+    q("wallet-wipe-passkey-hint-ok")?.focus();
+  }
+
+  q("wallet-wipe-passkey-hint-ok")?.addEventListener("click", () => {
+    q("wallet-wipe-passkey-hint-modal")?.classList.add("hidden");
+    if (showToast) showToast("Carteira apagada deste aparelho.");
+    navigate("#wallet-gate");
+  });
+
   q("wallet-settings-wipe")?.addEventListener("click", () => {
     resetWipeModal();
     q("wallet-wipe-modal")?.classList.remove("hidden");
@@ -2178,15 +2202,22 @@ export function registerWalletRoutes({
     }
     if (btn) btn.disabled = true;
     try {
-      await wallet.wipeWallet(pin);
+      const wipeResult = await wallet.wipeWallet(pin);
       try {
         getDefaultTelemetryClient().track(TELEMETRY_EVENTS.WALLET_WIPED, { errorCode: "user-initiated" });
       } catch { /* best-effort */ }
       q("wallet-wipe-modal")?.classList.add("hidden");
       resetWipeModal();
       persistHomeMode("deposit");
-      if (showToast) showToast("Carteira apagada deste aparelho.");
-      navigate("#wallet-gate");
+      if (wipeResult?.hadBiometric) {
+        // OS-level passkey cannot be deleted from JS; surface a one-time
+        // hint so the user can clean it up manually if desired. Wallet is
+        // already wiped — navigation happens after acknowledgement.
+        showWipePasskeyHint();
+      } else {
+        if (showToast) showToast("Carteira apagada deste aparelho.");
+        navigate("#wallet-gate");
+      }
     } catch (err) {
       if (isWalletError(err, ERROR_CODES.WALLET_WIPED)) {
         try {
@@ -2226,6 +2257,10 @@ export function registerWalletRoutes({
       if (wipeModal && !wipeModal.classList.contains("hidden")) {
         wipeModal.classList.add("hidden");
         resetWipeModal();
+      }
+      const wipeHintModal = q("wallet-wipe-passkey-hint-modal");
+      if (wipeHintModal && !wipeHintModal.classList.contains("hidden")) {
+        wipeHintModal.classList.add("hidden");
       }
       const biometricModal = q("wallet-biometric-pin-modal");
       if (biometricModal && !biometricModal.classList.contains("hidden")) {
@@ -2603,6 +2638,12 @@ export function registerWalletRoutes({
     }
   }
 
+  // Tracks whether the current unlock modal session has biometric enrolled
+  // and supported by the device. Set by openUnlockModal; consumed by the
+  // silent-fallback swap to decide whether to expose the "Usar biometria"
+  // retry link in the PIN section.
+  let biometricAvailableForCurrentUnlock = false;
+
   async function openUnlockModal() {
     const modal = q("wallet-unlock-modal");
     if (!modal) return;
@@ -2611,9 +2652,12 @@ export function registerWalletRoutes({
     if (pinEl) pinEl.value = "";
     const bioSection = q("wallet-unlock-biometric");
     const pinSection = q("wallet-unlock-pin-section");
+    const useBioLink = q("wallet-unlock-use-biometric");
     bioSection?.classList.add("hidden");
     pinSection?.classList.remove("hidden");
+    useBioLink?.classList.add("hidden");
     modal.classList.remove("hidden");
+    biometricAvailableForCurrentUnlock = false;
     let autoBiometric = false;
     try {
       const [has, supported] = await Promise.all([
@@ -2621,8 +2665,10 @@ export function registerWalletRoutes({
         wallet.biometricSupported()
       ]);
       if (has && supported) {
+        biometricAvailableForCurrentUnlock = true;
         bioSection?.classList.remove("hidden");
         pinSection?.classList.add("hidden");
+        useBioLink?.classList.remove("hidden");
         q("wallet-unlock-biometric-btn")?.focus();
         autoBiometric = true;
       } else {
@@ -2634,7 +2680,9 @@ export function registerWalletRoutes({
     // Plan (Sub-fase 5 → "biometria auto"): once the modal knows biometric is
     // enrolled + supported, fire the platform prompt immediately so the user
     // doesn't have to tap an extra button before Face ID / Touch ID shows up.
-    // The `Usar biometria` button stays as a manual retry after cancellation.
+    // If it fails, swapUnlockToPinSection silently shows the PIN — no toast,
+    // no "cancelled" warning. The "Usar biometria" link in the PIN section
+    // is the explicit retry path.
     if (autoBiometric) {
       void unlockWithBiometricAndBroadcast();
     }
@@ -2647,6 +2695,27 @@ export function registerWalletRoutes({
     clearMsg("wallet-unlock-msg");
   }
 
+  // Silently switch the unlock modal from biometric to PIN. Used both as
+  // the manual "Usar PIN" link target and as the auto-fallback when any
+  // biometric error occurs (cancel, decrypt-fail, device unavailable).
+  // Idempotent — exits early if the PIN section is already visible.
+  function swapUnlockToPinSection() {
+    const pinSection = q("wallet-unlock-pin-section");
+    if (pinSection && !pinSection.classList.contains("hidden")) return;
+    q("wallet-unlock-biometric")?.classList.add("hidden");
+    pinSection?.classList.remove("hidden");
+    clearMsg("wallet-unlock-msg");
+    q("wallet-unlock-pin")?.focus();
+  }
+
+  function swapUnlockToBiometricSection() {
+    if (!biometricAvailableForCurrentUnlock) return;
+    q("wallet-unlock-pin-section")?.classList.add("hidden");
+    q("wallet-unlock-biometric")?.classList.remove("hidden");
+    clearMsg("wallet-unlock-msg");
+    q("wallet-unlock-biometric-btn")?.focus();
+  }
+
   async function unlockWithBiometricAndBroadcast() {
     clearMsg("wallet-unlock-msg");
     const btn = q("wallet-unlock-biometric-btn");
@@ -2654,13 +2723,20 @@ export function registerWalletRoutes({
     try {
       await wallet.unlockWithBiometric();
     } catch (err) {
-      if (isWalletError(err, ERROR_CODES.BIOMETRIC_REJECTED)) {
-        showMsg("wallet-unlock-msg", "Autenticação cancelada.", "warning");
-      } else if (isWalletError(err, ERROR_CODES.BIOMETRIC_UNAVAILABLE)) {
-        showMsg("wallet-unlock-msg", "Biometria indisponível. Use o PIN.", "warning");
-      } else {
-        renderError("wallet-unlock-msg", err);
+      // Silent fallback for any biometric failure (user cancel, PRF unwrap
+      // failure, device temporarily unavailable). The PIN section absorbs
+      // the user's next input without an explicit error toast — they can
+      // still retry biometric via the "Usar biometria" link in that section.
+      if (
+        isWalletError(err, ERROR_CODES.BIOMETRIC_REJECTED) ||
+        isWalletError(err, ERROR_CODES.BIOMETRIC_UNAVAILABLE) ||
+        isWalletError(err, ERROR_CODES.BIOMETRIC_DECRYPT_FAILED)
+      ) {
+        if (btn) btn.disabled = false;
+        swapUnlockToPinSection();
+        return;
       }
+      renderError("wallet-unlock-msg", err);
       if (btn) btn.disabled = false;
       return;
     }
@@ -2929,10 +3005,10 @@ export function registerWalletRoutes({
   q("wallet-unlock-cancel")?.addEventListener("click", closeUnlockModal);
   q("wallet-unlock-confirm")?.addEventListener("click", () => onUnlockConfirmClick());
   q("wallet-unlock-biometric-btn")?.addEventListener("click", () => { void unlockWithBiometricAndBroadcast(); });
-  q("wallet-unlock-use-pin")?.addEventListener("click", () => {
-    q("wallet-unlock-biometric")?.classList.add("hidden");
-    q("wallet-unlock-pin-section")?.classList.remove("hidden");
-    q("wallet-unlock-pin")?.focus();
+  q("wallet-unlock-use-pin")?.addEventListener("click", () => { swapUnlockToPinSection(); });
+  q("wallet-unlock-use-biometric")?.addEventListener("click", () => {
+    swapUnlockToBiometricSection();
+    void unlockWithBiometricAndBroadcast();
   });
   q("wallet-unlock-pin")?.addEventListener("keydown", evt => {
     if (evt.key === "Enter") {
