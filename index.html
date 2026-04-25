@@ -142,16 +142,16 @@
   }
   </script>
 
-  <link rel="manifest" href="manifest.json?v=146" />
-  <link rel="icon" href="icon-192.png?v=146" />
-  <link rel="apple-touch-icon" href="icon-192.png?v=146" />
+  <link rel="manifest" href="manifest.json?v=148" />
+  <link rel="icon" href="icon-192.png?v=148" />
+  <link rel="apple-touch-icon" href="icon-192.png?v=148" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
   <!-- Asset version must match APP_VERSION in service-worker.js -->
-  <link rel="stylesheet" href="style.css?v=146" />
+  <link rel="stylesheet" href="style.css?v=148" />
 </head>
 <body>
 
@@ -160,7 +160,7 @@
 
   <nav class="landing-nav">
     <div class="landing-nav-inner">
-      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=146" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
+      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=148" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
       <div class="landing-nav-right">
         <a href="https://blog.depixapp.com/" class="landing-nav-link">Blog</a>
         <a href="#login" class="landing-nav-cta">Entrar</a>
@@ -2453,6 +2453,7 @@
       <div class="wallet-setting-body">
         <strong>Biometria</strong>
         <p class="info-text" id="wallet-settings-biometric-status">Verificando…</p>
+        <button id="wallet-settings-biometric-reset" class="link-btn hidden" type="button">Problemas com biometria? Resetar</button>
       </div>
       <button id="wallet-settings-biometric-toggle" class="secondary" type="button">Ativar</button>
     </div>
@@ -2606,6 +2607,7 @@
     <div id="wallet-unlock-pin-section" class="wallet-unlock-pin-section">
       <label for="wallet-unlock-pin">PIN</label>
       <input id="wallet-unlock-pin" type="password" inputmode="numeric" pattern="\d*" autocomplete="off" maxlength="6" />
+      <button id="wallet-unlock-use-biometric" type="button" class="link-btn hidden">Usar biometria</button>
     </div>
 
     <div id="wallet-unlock-msg" class="mensagem"></div>
@@ -2668,6 +2670,42 @@
   </div>
 </div>
 
+<!-- ===== MODAL: HINT PASSKEY APÓS RESETAR BIOMETRIA ===== -->
+<!-- Reuses the same copy pattern as wallet-wipe-passkey-hint-modal (orphan
+     passkey in OS Settings) but framed for reset (wallet not wiped) and
+     does not navigate away — user stays on wallet-settings. -->
+<div id="wallet-biometric-reset-hint-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="wallet-biometric-reset-hint-title">
+  <div class="modal-box">
+    <h2 id="wallet-biometric-reset-hint-title">Biometria resetada</h2>
+    <p class="info-text">A passkey antiga do DePix pode continuar em <strong>Configurações → Senhas</strong> do seu aparelho. Você pode removê-la manualmente se desejar — sua carteira segue intacta. Para usar biometria de novo, toque em "Ativar".</p>
+    <div class="wallet-action-row">
+      <button id="wallet-biometric-reset-hint-ok" type="button">Entendi</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: RESETAR BIOMETRIA ===== -->
+<!-- Escape hatch for the iOS-deleted-passkey loop. The user gets here via
+     the "Problemas com biometria? Resetar" link in wallet-settings, which
+     is visible only when biometric is currently enrolled. PIN-gated as a
+     confirmation. After confirm, identifiers are hard-cleared and the
+     wipe-passkey-hint modal appears so the user knows the OS-level passkey
+     became orphan. -->
+<div id="wallet-biometric-reset-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="wallet-biometric-reset-title">
+  <div class="modal-box">
+    <h2 id="wallet-biometric-reset-title">Resetar biometria</h2>
+    <p class="info-text">Use isso se a passkey do DePix foi removida do seu aparelho ou se o Face ID parou de funcionar para entrar na carteira.</p>
+    <p class="info-text">Sua carteira e seus fundos <strong>continuam intactos</strong>. Você só precisa ativar a biometria de novo depois.</p>
+    <label for="wallet-biometric-reset-pin">PIN</label>
+    <input id="wallet-biometric-reset-pin" type="password" inputmode="numeric" pattern="\d*" autocomplete="off" maxlength="6" />
+    <div id="wallet-biometric-reset-msg" class="mensagem"></div>
+    <div class="wallet-action-row">
+      <button id="wallet-biometric-reset-cancel" class="secondary">Cancelar</button>
+      <button id="wallet-biometric-reset-confirm">Resetar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== MODAL: APAGAR CARTEIRA ===== -->
 <div id="wallet-wipe-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="wallet-wipe-title">
   <div class="modal-box">
@@ -2679,6 +2717,20 @@
     <div class="wallet-action-row">
       <button id="wallet-wipe-cancel" class="secondary">Cancelar</button>
       <button id="wallet-wipe-confirm" class="wallet-settings-danger">Apagar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: HINT DA PASSKEY APÓS WIPE ===== -->
+<!-- Mostrado quando a carteira apagada tinha biometria. A passkey OS-level
+     não pode ser deletada via JS; este modal informa o usuário que ela
+     continua nas configurações do aparelho e pode ser removida manualmente. -->
+<div id="wallet-wipe-passkey-hint-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="wallet-wipe-passkey-hint-title">
+  <div class="modal-box">
+    <h2 id="wallet-wipe-passkey-hint-title">Carteira apagada</h2>
+    <p class="info-text">Uma chave de acesso (passkey) do DePix permanecerá em <strong>Configurações → Senhas</strong> do seu aparelho. Você pode removê-la manualmente se desejar.</p>
+    <div class="wallet-action-row">
+      <button id="wallet-wipe-passkey-hint-ok" type="button">Entendi</button>
     </div>
   </div>
 </div>
@@ -3375,6 +3427,6 @@
 
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 <!-- Asset version must match APP_VERSION in service-worker.js -->
-<script type="module" src="script.js?v=146"></script>
+<script type="module" src="script.js?v=148"></script>
 </body>
 </html>
