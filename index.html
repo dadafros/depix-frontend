@@ -142,16 +142,16 @@
   }
   </script>
 
-  <link rel="manifest" href="manifest.json?v=143" />
-  <link rel="icon" href="icon-192.png?v=143" />
-  <link rel="apple-touch-icon" href="icon-192.png?v=143" />
+  <link rel="manifest" href="manifest.json?v=144" />
+  <link rel="icon" href="icon-192.png?v=144" />
+  <link rel="apple-touch-icon" href="icon-192.png?v=144" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
   <!-- Asset version must match APP_VERSION in service-worker.js -->
-  <link rel="stylesheet" href="style.css?v=143" />
+  <link rel="stylesheet" href="style.css?v=144" />
 </head>
 <body>
 
@@ -160,7 +160,7 @@
 
   <nav class="landing-nav">
     <div class="landing-nav-inner">
-      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=143" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
+      <a href="#landing" class="landing-logo"><img src="icon-192.png?v=144" alt="DePix App" class="landing-logo-icon" width="32" height="32"><span>DePix App</span></a>
       <div class="landing-nav-right">
         <a href="https://blog.depixapp.com/" class="landing-nav-link">Blog</a>
         <a href="#login" class="landing-nav-cta">Entrar</a>
@@ -1038,6 +1038,29 @@
 
 <!-- ===== SELECIONAR ENDEREÇO (modal) ===== -->
 <!-- ===== CARTEIRA EXTERNA — INTRO (shown only when user has integrated wallet) ===== -->
+<!-- ===== WALLET ERROR MODAL ===== -->
+<!-- Shown when resolveHomeDestination/resolveDestinationAddress fails to
+     reach the integrated wallet. The user can retry (close + try the action
+     again) or switch to the external wallet path. We never silently fall
+     back — that would deposit/operate on a destination different from what
+     the chip implies. -->
+<div id="wallet-error-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="wallet-error-title">
+  <div class="modal-box">
+    <h2 id="wallet-error-title">Carteira Integrada indisponível</h2>
+    <p class="info-text">
+      Não foi possível acessar sua Carteira Integrada agora. Isso pode acontecer
+      com conexão instável ou bloqueio de armazenamento local pelo navegador.
+    </p>
+    <p class="info-text">
+      Você pode tentar novamente em alguns segundos, ou trocar para uma
+      Carteira Externa. Se trocar, você precisará escolher um endereço externo
+      cadastrado para continuar.
+    </p>
+    <button id="btn-wallet-error-retry">Tentar novamente</button>
+    <button id="btn-wallet-error-external" class="secondary">Trocar para Carteira Externa</button>
+  </div>
+</div>
+
 <div id="external-wallet-intro-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="external-wallet-intro-title">
   <div class="modal-box">
     <h2 id="external-wallet-intro-title">Carteira Externa</h2>
@@ -1069,7 +1092,12 @@
       <p class="info-text">Cole um endereço Liquid (começa com <code>lq1…</code>, <code>tlq1…</code>, <code>VJL…</code> ou <code>ex1…</code>). Você encontra na aba "Receber" do seu app externo.</p>
       <p class="external-wallet-help"><button type="button" id="external-wallet-guide-link" class="link-button">Como cadastrar carteira externa com o app SideSwap</button></p>
       <div id="add-addr-msg" class="mensagem"></div>
-      <input id="new-addr-input" placeholder="Cole o endereço aqui" />
+      <div class="addr-input-wrap">
+        <input id="new-addr-input" placeholder="Cole o endereço aqui" />
+        <button id="new-addr-scan" type="button" class="addr-input-scan" aria-label="Escanear QR code">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="15" y="3" width="6" height="6" rx="1"/><rect x="3" y="15" width="6" height="6" rx="1"/><path d="M15 15h2v2"/><path d="M19 15v6"/><path d="M15 19h6"/></svg>
+        </button>
+      </div>
       <button id="btn-save-addr">Salvar endereço</button>
     </div>
 
@@ -1312,8 +1340,15 @@
 <div id="payment-address-modal" class="modal hidden">
   <div class="modal-box">
     <h2>Endereço para pagamento</h2>
-    <p class="info-text">Informe o endereço Liquid onde deseja receber o pagamento:</p>
-    <input id="payment-address-input" type="text" placeholder="lq1... ou ex1..." />
+    <p class="info-text">Escolha qual carteira receberá o pagamento:</p>
+    <div id="payment-addr-dropdown" class="custom-dropdown">
+      <button type="button" id="payment-addr-toggle" class="custom-dropdown-toggle">
+        <span id="payment-addr-toggle-text">Selecionar carteira…</span>
+        <svg class="custom-dropdown-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div id="payment-addr-options" class="custom-dropdown-options hidden"></div>
+    </div>
+    <p id="payment-addr-empty" class="mensagem hidden">Configure sua carteira primeiro. Crie uma <strong>Carteira Integrada</strong> ou cadastre um endereço de <strong>Carteira Externa</strong> no menu antes de continuar.</p>
     <p id="payment-address-msg" class="mensagem"></p>
     <div class="modal-actions">
       <button id="btn-payment-address-cancel" class="secondary">Cancelar</button>
@@ -1576,15 +1611,17 @@
       <p class="info-text">Crie sua conta de lojista para aceitar pagamentos via DePix.</p>
       <label for="merchant-name">Nome do negócio *</label>
       <input id="merchant-name" placeholder="Ex: Camisetas do João" />
-      <label for="merchant-liquid-addr">Endereço Liquid *</label>
-      <div id="merchant-addr-dropdown" class="custom-dropdown hidden">
+      <label>Endereço Liquid *</label>
+      <p class="info-text">Escolha qual carteira receberá os pagamentos do seu negócio.</p>
+      <div id="merchant-addr-dropdown" class="custom-dropdown">
         <button type="button" id="merchant-addr-toggle" class="custom-dropdown-toggle">
-          <span id="merchant-addr-toggle-text">Selecionar endereço salvo…</span>
+          <span id="merchant-addr-toggle-text">Selecionar carteira…</span>
           <svg class="custom-dropdown-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
         </button>
         <div id="merchant-addr-options" class="custom-dropdown-options hidden"></div>
       </div>
-      <input id="merchant-liquid-addr" placeholder="Ou cole um endereço manualmente" />
+      <p id="merchant-addr-empty" class="mensagem hidden">Configure sua carteira primeiro. Crie uma <strong>Carteira Integrada</strong> ou cadastre um endereço de <strong>Carteira Externa</strong> no menu antes de continuar.</p>
+      <input id="merchant-liquid-addr" type="hidden" />
       <label for="merchant-cnpj">CNPJ</label>
       <input id="merchant-cnpj" placeholder="Opcional" maxlength="14" />
       <label for="merchant-website">Website</label>
@@ -2846,6 +2883,30 @@
   </div>
 </div>
 
+<!-- Liquid address edit (specialized modal with wallet/external dropdown).
+     Opens after password confirmation in place of the generic merchant-edit
+     modal — a free-text input doesn't fit the "configure your wallet first"
+     gate the user requires for this field. -->
+<div id="merchant-liquid-edit-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="merchant-liquid-edit-title">
+  <div class="modal-box">
+    <h2 id="merchant-liquid-edit-title">Editar Endereço Liquid</h2>
+    <p class="info-text">Escolha qual carteira receberá os pagamentos do seu negócio.</p>
+    <div id="merchant-liquid-edit-dropdown" class="custom-dropdown">
+      <button type="button" id="merchant-liquid-edit-toggle" class="custom-dropdown-toggle">
+        <span id="merchant-liquid-edit-toggle-text">Selecionar carteira…</span>
+        <svg class="custom-dropdown-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div id="merchant-liquid-edit-options" class="custom-dropdown-options hidden"></div>
+    </div>
+    <p id="merchant-liquid-edit-empty" class="mensagem hidden">Configure sua carteira primeiro. Crie uma <strong>Carteira Integrada</strong> ou cadastre um endereço de <strong>Carteira Externa</strong> no menu antes de continuar.</p>
+    <div id="merchant-liquid-edit-msg" class="mensagem"></div>
+    <div class="modal-actions">
+      <button id="btn-merchant-liquid-edit-cancel" class="secondary">Cancelar</button>
+      <button id="btn-merchant-liquid-edit-save">Salvar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== CONTATO (modal) ===== -->
 <!-- ===== MODAL: CHECKOUT METADATA ===== -->
 <div id="checkout-metadata-modal" class="modal hidden">
@@ -3315,6 +3376,6 @@
 
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 <!-- Asset version must match APP_VERSION in service-worker.js -->
-<script type="module" src="script.js?v=143"></script>
+<script type="module" src="script.js?v=144"></script>
 </body>
 </html>

@@ -1399,7 +1399,15 @@ export function registerWalletRoutes({
 
   async function ensureReceiveAddress() {
     if (cachedReceiveAddress) return cachedReceiveAddress;
-    cachedReceiveAddress = await wallet.getReceiveAddress();
+    const addr = await wallet.getReceiveAddress();
+    // Defense in depth: validate the LWK output before showing it / encoding
+    // a QR. If WASM ever returns a malformed string we want a clear error,
+    // not a corrupt QR that funds a bad descriptor.
+    const v = validateLiquidAddress(addr);
+    if (!v.valid) {
+      throw new Error(`Endereço gerado pela carteira é inválido: ${v.error}`);
+    }
+    cachedReceiveAddress = addr;
     return cachedReceiveAddress;
   }
 
