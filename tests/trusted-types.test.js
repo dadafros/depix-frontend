@@ -79,4 +79,29 @@ describe("trusted-types.js — toTrustedHTML", () => {
     expect(calls).toEqual([["beforeend", "<b>row</b>"]]);
     expect(() => insertHTML(null, "beforeend", "<b>x</b>")).not.toThrow();
   });
+
+  it("toTrustedScriptURL returns the input unchanged when Trusted Types is unavailable", async () => {
+    delete globalThis.trustedTypes;
+    const { toTrustedScriptURL } = await import("../trusted-types.js");
+    expect(toTrustedScriptURL("./service-worker.js")).toBe("./service-worker.js");
+  });
+
+  it("toTrustedScriptURL routes through the policy when Trusted Types exists", async () => {
+    let capturedUrl = null;
+    globalThis.trustedTypes = {
+      createPolicy(name, def) {
+        return {
+          createHTML: html => def.createHTML(html),
+          createScriptURL: url => {
+            capturedUrl = url;
+            return { __trustedScript: true, raw: def.createScriptURL(url) };
+          }
+        };
+      }
+    };
+    const { toTrustedScriptURL } = await import("../trusted-types.js");
+    const out = toTrustedScriptURL("./service-worker.js");
+    expect(capturedUrl).toBe("./service-worker.js");
+    expect(out).toEqual({ __trustedScript: true, raw: "./service-worker.js" });
+  });
 });

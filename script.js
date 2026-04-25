@@ -1,14 +1,12 @@
 // DePix — Main entry point (ES module)
 
-// Imports the "depix" Trusted Types policy module. Registration runs at
-// module-load time via the top-level `tt.createPolicy(...)` statement in
-// `trusted-types.js`, so by the time any route handler or event handler
-// fires an innerHTML / insertAdjacentHTML write the policy is already in
-// place. Source-order placement among siblings doesn't matter (ES module
-// graphs evaluate depth-first), but the import has to exist somewhere in
-// `script.js`'s module graph for the CSP's `require-trusted-types-for
-// 'script'` directive to be satisfied.
-import { toTrustedHTML } from "./trusted-types.js";
+// Imports the "depix" Trusted Types policy module. The CSP currently
+// declares the policy name (`trusted-types depix`) without
+// `require-trusted-types-for 'script'`, so the wrappers are a no-op at
+// runtime — they exist so a future PR can flip enforcement on without
+// rewriting every call site. See `trusted-types.js` header for why
+// enforcement is deferred (Cloudflare Turnstile incompatibility).
+import { toTrustedHTML, toTrustedScriptURL } from "./trusted-types.js";
 import { route, navigate, initRouter } from "./router.js";
 import { isLoggedIn, setAuth, clearAuth, getUser, getRefreshToken } from "./auth.js";
 import { apiFetch } from "./api.js";
@@ -73,7 +71,7 @@ let transactionsPollingInterval = null;
 
 // Register service worker with update detection
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./service-worker.js").then(reg => {
+  navigator.serviceWorker.register(toTrustedScriptURL("./service-worker.js")).then(reg => {
     // Check for SW updates on every page load
     reg.update();
   });
