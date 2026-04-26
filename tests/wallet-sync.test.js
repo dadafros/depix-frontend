@@ -47,12 +47,19 @@ function makeFakeLwkWithSync({
     address() { return this._a; }
   }
   class Update {
-    constructor(bytes) { this._bytes = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || [1, 2, 3]); }
+    constructor(bytes) {
+      this._bytes = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || [1, 2, 3]);
+      this._onlyTip = false;
+      this._pruned = false;
+    }
     serialize() { return this._bytes; }
+    onlyTip() { return this._onlyTip; }
+    prune(_w) { this._pruned = true; }
     free() {}
   }
   // Track last applied update per-wallet so tests can assert the state
-  // transition through sync.
+  // transition through sync. status() advances deterministically with each
+  // apply so loadPersisted's chain-replay can be exercised end-to-end.
   class Wollet {
     constructor(_net, desc) {
       this._desc = desc.toString();
@@ -62,11 +69,22 @@ function makeFakeLwkWithSync({
     balance() { return this._applied.length > 0 ? { applied: true } : { applied: false }; }
     transactions() { return []; }
     applyUpdate(u) { this._applied.push(u); }
+    neverScanned() { return this._applied.length === 0; }
+    status() {
+      // Deterministic-from-state hash so the test's chain replay finds
+      // matching keys. BigInt is the documented return type in lwk_wasm.
+      let s = 0n;
+      for (const u of this._applied) {
+        for (const b of u._bytes ?? []) s = (s * 31n + BigInt(b)) & 0xffffffffffffffffn;
+      }
+      return s;
+    }
     free() {}
   }
   class EsploraClient {
     constructor(_net, url, _waterfalls, _concurrency, _incremental) {
       this._url = url;
+      this._concurrency = _concurrency;
       this.freed = false;
       EsploraClient.calls = (EsploraClient.calls ?? 0) + 1;
       EsploraClient.urls = (EsploraClient.urls ?? []);
@@ -74,8 +92,16 @@ function makeFakeLwkWithSync({
     }
     async fullScan() {
       EsploraClient.scanCalls = (EsploraClient.scanCalls ?? 0) + 1;
-      // `fullScanHold` is the test-provided gate promise. We await it so
-      // the test can fan out concurrent syncWallet calls before releasing.
+      EsploraClient.lastMethod = "fullScan";
+      if (fullScanHold) await fullScanHold;
+      if (fullScanError) throw fullScanError;
+      if (throwOnScan) throw new Error("esplora boom");
+      return scanResult === undefined ? new Update(new Uint8Array([9, 9, 9])) : scanResult;
+    }
+    async fullScanToIndex(_w, index) {
+      EsploraClient.scanCalls = (EsploraClient.scanCalls ?? 0) + 1;
+      EsploraClient.lastMethod = "fullScanToIndex";
+      EsploraClient.lastIndex = index;
       if (fullScanHold) await fullScanHold;
       if (fullScanError) throw fullScanError;
       if (throwOnScan) throw new Error("esplora boom");
@@ -170,6 +196,192 @@ describe("wallet.syncWallet", () => {
     await wallet.syncWallet();
     expect(factory).toHaveBeenCalled();
   }, 60_000);
+
+  // ----------------------------------------------------------------------
+  // Cold start vs. warm: the Wollet's neverScanned() boolean drives which
+  // EsploraClient method we call. Cold uses fullScanToIndex(w, 200) to
+  // bridge any >20-address gap in the user's derivation chain (the bug
+  // that produced the 138-out-of-250 reproducible mis-sync). Warm stays
+  // on plain fullScan(w) for incremental cheap updates.
+  // ----------------------------------------------------------------------
+  describe("cold start vs warm sync", () => {
+    it("calls fullScanToIndex(200) on the very first sync (cold)", async () => {
+      const { fakeLwk, wallet } = makeModule();
+      await wallet.createWallet({ pin: STRONG_PIN });
+      wallet.lock();
+      fakeLwk.EsploraClient.lastMethod = null;
+      fakeLwk.EsploraClient.lastIndex = null;
+
+      await wallet.syncWallet();
+
+      expect(fakeLwk.EsploraClient.lastMethod).toBe("fullScanToIndex");
+      expect(fakeLwk.EsploraClient.lastIndex).toBe(200);
+    }, 60_000);
+
+    it("switches to fullScan() on subsequent syncs (warm)", async () => {
+      const { fakeLwk, wallet } = makeModule();
+      await wallet.createWallet({ pin: STRONG_PIN });
+      wallet.lock();
+
+      await wallet.syncWallet(); // cold — fullScanToIndex
+      fakeLwk.EsploraClient.lastMethod = null;
+
+      await wallet.syncWallet(); // warm — fullScan
+      expect(fakeLwk.EsploraClient.lastMethod).toBe("fullScan");
+    }, 60_000);
+  });
+
+  // ----------------------------------------------------------------------
+  // Chained-Update persistence: each successful (non-onlyTip) scan
+  // appends an entry to wallet-updates-v1 keyed by Wollet.status() taken
+  // BEFORE the apply. On cold start, loadPersisted() walks that chain to
+  // restore the in-memory state without re-scanning. Mirrors the pattern
+  // from RCasatta/liquid-web-wallet (index.ts:3134-3155).
+  // ----------------------------------------------------------------------
+  describe("chained-Update persistence", () => {
+    it("each non-onlyTip scan appends a new entry, never overwrites", async () => {
+      const idbFactory = new IDBFactory();
+      const fakeLwk = makeFakeLwkWithSync();
+      const wallet = createWalletModule({
+        indexedDbImpl: idbFactory,
+        cryptoImpl: webcrypto,
+        lwkLoader: async () => fakeLwk,
+        esploraUrl: "https://fake-esplora/api"
+      });
+      await wallet.createWallet({ pin: STRONG_PIN });
+      wallet.lock();
+
+      // Three syncs against a fake whose status() advances after each apply,
+      // so each Update is keyed by a distinct status hash and the chain is
+      // append-only (never overwrites a single key).
+      await wallet.syncWallet();
+      await wallet.syncWallet();
+      await wallet.syncWallet();
+
+      // Open the SAME IDB the wallet wrote to and assert the chain has 3
+      // distinct entries — proves persistScan never collapses to one key.
+      const { openDb, countUpdates } = await import("../wallet/wallet-store.js");
+      const db = await openDb(idbFactory);
+      expect(await countUpdates(db)).toBe(3);
+      db.close();
+    }, 60_000);
+
+    it("skips persistence when Update.onlyTip() is true", async () => {
+      // Build a fake that always returns an onlyTip Update.
+      const fakeLwk = makeFakeLwkWithSync();
+      // Override the default Update returned by EsploraClient.fullScan/
+      // fullScanToIndex so it's onlyTip=true.
+      const tipOnly = new fakeLwk.Update(new Uint8Array([0xab]));
+      tipOnly._onlyTip = true;
+      const factory = (_l, _net, provider) => {
+        const c = new fakeLwk.EsploraClient(_net, provider?.url ?? "");
+        c.fullScan = async () => tipOnly;
+        c.fullScanToIndex = async () => tipOnly;
+        return c;
+      };
+      const wallet = createWalletModule({
+        indexedDbImpl: new IDBFactory(),
+        cryptoImpl: webcrypto,
+        lwkLoader: async () => fakeLwk,
+        esploraUrl: "https://fake-esplora/api",
+        esploraClientFactory: factory
+      });
+      await wallet.createWallet({ pin: STRONG_PIN });
+      wallet.lock();
+
+      const res = await wallet.syncWallet();
+      expect(res.changed).toBe(true);
+      // The Update was applied (lastScanAt advanced) but NOT persisted —
+      // tipOnly._pruned would be true if we'd called prune(); we only
+      // call prune on the persistence path, so it stays false here.
+      expect(tipOnly._pruned).toBe(false);
+    }, 60_000);
+
+    it("calls Update.prune(wollet) before serializing for persistence", async () => {
+      const fakeLwk = makeFakeLwkWithSync();
+      const persistable = new fakeLwk.Update(new Uint8Array([1, 2, 3]));
+      const factory = (_l, _net, provider) => {
+        const c = new fakeLwk.EsploraClient(_net, provider?.url ?? "");
+        c.fullScan = async () => persistable;
+        c.fullScanToIndex = async () => persistable;
+        return c;
+      };
+      const wallet = createWalletModule({
+        indexedDbImpl: new IDBFactory(),
+        cryptoImpl: webcrypto,
+        lwkLoader: async () => fakeLwk,
+        esploraUrl: "https://fake-esplora/api",
+        esploraClientFactory: factory
+      });
+      await wallet.createWallet({ pin: STRONG_PIN });
+      wallet.lock();
+
+      await wallet.syncWallet();
+      expect(persistable._pruned).toBe(true);
+    }, 60_000);
+
+    it("loadPersisted replays the chain on a fresh wallet module (cross-session restore)", async () => {
+      // Simulate two app sessions sharing one IndexedDB. Session 1 syncs
+      // and persists. Session 2 mounts (new module instance, same DB)
+      // and getBalances() should hydrate from the chain WITHOUT a fresh
+      // scan — proving loadPersisted picked up the saved chain link.
+      const idbFactory = new IDBFactory();
+      const fakeLwk = makeFakeLwkWithSync();
+
+      // Session 1: create wallet, sync once.
+      const session1 = createWalletModule({
+        indexedDbImpl: idbFactory,
+        cryptoImpl: webcrypto,
+        lwkLoader: async () => fakeLwk,
+        esploraUrl: "https://fake-esplora/api"
+      });
+      await session1.createWallet({ pin: STRONG_PIN });
+      await session1.syncWallet();
+      // Capture the balance state established by session 1.
+      const bal1 = await session1.getBalances();
+      expect(bal1.applied).toBe(true);
+
+      // Session 2: brand-new module, same DB. Inject a factory that throws
+      // on any scan call so the only way getBalances can report applied:true
+      // is via loadPersisted's chain replay (no fresh scan possible).
+      const throwingFactory = (_l, _net, provider) => {
+        const c = new fakeLwk.EsploraClient(_net, provider?.url ?? "");
+        c.fullScan = async () => { throw new Error("session2 must not scan"); };
+        c.fullScanToIndex = async () => { throw new Error("session2 must not scan"); };
+        return c;
+      };
+      const session2 = createWalletModule({
+        indexedDbImpl: idbFactory,
+        cryptoImpl: webcrypto,
+        lwkLoader: async () => fakeLwk,
+        esploraUrl: "https://fake-esplora/api",
+        esploraClientFactory: throwingFactory
+      });
+      const bal2 = await session2.getBalances();
+      expect(bal2.applied).toBe(true);
+    }, 60_000);
+  });
+
+  // ----------------------------------------------------------------------
+  // isFreshScan() exposes Wollet.neverScanned() for the UI's cold-start
+  // copy ("Primeira sincronização (pode levar alguns minutos)").
+  // ----------------------------------------------------------------------
+  describe("isFreshScan", () => {
+    it("returns true on a brand-new wallet (before any sync)", async () => {
+      const { wallet } = makeModule();
+      await wallet.createWallet({ pin: STRONG_PIN });
+      wallet.lock();
+      expect(await wallet.isFreshScan()).toBe(true);
+    }, 60_000);
+
+    it("returns false after the first successful sync", async () => {
+      const { wallet } = makeModule();
+      await wallet.createWallet({ pin: STRONG_PIN });
+      wallet.lock();
+      await wallet.syncWallet();
+      expect(await wallet.isFreshScan()).toBe(false);
+    }, 60_000);
+  });
 
   describe("dedup (syncInFlight)", () => {
     it("three concurrent syncWallet calls share one in-flight fullScan", async () => {
@@ -296,11 +508,16 @@ describe("wallet.syncWallet", () => {
         //   { throw: Error }      — reject with that error
         //   missing               — same as { ok: true }
         const outcome = outcomes[provider.name];
-        client.fullScan = async () => {
+        const scan = async () => {
           fakeLwk.EsploraClient.scanCalls = (fakeLwk.EsploraClient.scanCalls ?? 0) + 1;
           if (outcome?.throw) throw outcome.throw;
           return new fakeLwk.Update(new Uint8Array([0xde, 0xad]));
         };
+        // Cover both the cold-start (fullScanToIndex) and warm (fullScan)
+        // branches so test outcomes apply regardless of which the wallet
+        // chooses based on Wollet.neverScanned().
+        client.fullScan = scan;
+        client.fullScanToIndex = scan;
         return client;
       };
       const wallet = createWalletModule({
@@ -430,7 +647,7 @@ describe("wallet.syncWallet", () => {
       let provBCallCount = 0;
       const factory = (_l, _net, provider) => {
         const client = new fakeLwk.EsploraClient(_net, provider.url);
-        client.fullScan = async () => {
+        const scan = async () => {
           if (provider.name === "provA") {
             provACallCount++;
             // First call: simulate a transient 429 so the scheduler falls
@@ -442,6 +659,8 @@ describe("wallet.syncWallet", () => {
           }
           return new fakeLwk.Update(new Uint8Array([0xde, 0xad]));
         };
+        client.fullScan = scan;
+        client.fullScanToIndex = scan;
         return client;
       };
       const wallet = createWalletModule({
@@ -478,17 +697,20 @@ describe("wallet.syncWallet", () => {
   // ----------------------------------------------------------------------
   // Outer timeout — LWK 0.16.x retries 429s internally without ever
   // surfacing the error. We guard every provider attempt with a
-  // Promise.race(SYNC_TIMEOUT_MS) so the fallback loop can move on when
-  // the upstream client is hung. Tests inject a small timeout so the
-  // assertion runs in milliseconds instead of 60s real-time.
+  // Promise.race(SYNC_TIMEOUT_MS / COLD_START_TIMEOUT_MS) so the fallback
+  // loop can move on when the upstream client is hung. Tests inject a
+  // small timeout so the assertion runs in milliseconds.
+  //
+  // The synthetic timeout error carries `code: "SYNC_TIMEOUT"` which
+  // isRateLimitError() now ignores (the message text is no longer relied
+  // on for classification). Result: a hung sync surfaces as
+  // ESPLORA_UNAVAILABLE, NOT rate-limited — so the UI shows the cached
+  // balance + manual-retry CTA instead of triggering the exponential
+  // backoff. This is the right behavior because a real 429 vs. a "cell
+  // tower hung" timeout demand different UX (backoff vs. retry).
   // ----------------------------------------------------------------------
   describe("SYNC_TIMEOUT_MS", () => {
-    it("times out a hung fullScan and classifies the timeout as rate-limited", async () => {
-      // fullScan never resolves — simulates the LWK retry loop wedge we
-      // observed against Blockstream in dev. With syncTimeoutMs=50 the
-      // outer Promise.race fires after 50ms and rejects with "rate limit"
-      // in the synthetic message; isRateLimitError() routes that into
-      // ESPLORA_RATE_LIMITED so the UI applies its backoff.
+    it("times out a hung fullScan and classifies the timeout as ESPLORA_UNAVAILABLE", async () => {
       const neverResolves = new Promise(() => {});
       const fakeLwk = makeFakeLwkWithSync({ fullScanHold: neverResolves });
       const wallet = createWalletModule({
@@ -497,6 +719,27 @@ describe("wallet.syncWallet", () => {
         lwkLoader: async () => fakeLwk,
         esploraUrl: "https://fake-esplora/api",
         syncTimeoutMs: 50
+      });
+      await wallet.createWallet({ pin: STRONG_PIN });
+      wallet.lock();
+
+      await expect(wallet.syncWallet()).rejects.toMatchObject({
+        code: ERROR_CODES.ESPLORA_UNAVAILABLE
+      });
+    }, 10_000);
+
+    it("real 429 from upstream still surfaces as ESPLORA_RATE_LIMITED (proves the discriminator works)", async () => {
+      // Sanity check: the SYNC_TIMEOUT discriminator must NOT swallow
+      // legitimate rate-limit errors from upstream. This mirrors the
+      // single-provider rate-limit path that previously lived above.
+      const fakeLwk = makeFakeLwkWithSync({
+        fullScanError: new Error("error response 429 Too Many Requests")
+      });
+      const wallet = createWalletModule({
+        indexedDbImpl: new IDBFactory(),
+        cryptoImpl: webcrypto,
+        lwkLoader: async () => fakeLwk,
+        esploraUrl: "https://fake-esplora/api"
       });
       await wallet.createWallet({ pin: STRONG_PIN });
       wallet.lock();
