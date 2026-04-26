@@ -173,6 +173,12 @@ function makeFakeLwkWithSend({
     }
     transactions() { return this._txs; }
     applyUpdate(u) { this._applied.push(u); }
+    neverScanned() { return this._applied.length === 0; }
+    status() {
+      let s = 0n;
+      for (let i = 0; i < this._applied.length; i++) s = s * 31n + BigInt(i + 1);
+      return s;
+    }
     finalize(pset) { pset._finalized = true; return pset; }
     psetDetails(pset) {
       return {
@@ -199,6 +205,14 @@ function makeFakeLwkWithSend({
       this.scanCount = 0;
     }
     async fullScan(_w) {
+      this.scanCount++;
+      scanCount++;
+      return new Update(new Uint8Array([scanCount, scanCount, scanCount]));
+    }
+    async fullScanToIndex(_w, _idx) {
+      // Cold-start branch: same observable behavior as fullScan for tests
+      // that just want to count "did a scan happen". Real LWK calls one or
+      // the other based on Wollet.neverScanned().
       this.scanCount++;
       scanCount++;
       return new Update(new Uint8Array([scanCount, scanCount, scanCount]));

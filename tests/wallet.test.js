@@ -546,6 +546,7 @@ describe("public API surface", () => {
       "listTransactions",
       "getDescriptor",
       "getLastScanAt",
+      "isFreshScan",
       "syncWallet",
       "prepareSend",
       "confirmSend",

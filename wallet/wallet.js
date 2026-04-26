@@ -33,9 +33,10 @@ import {
   resetFailedPinAttempts,
   incrementFailedPinAttempts,
   hasCredentials as storeHasCredentials,
-  readSync,
-  writeSync,
-  patchSync
+  getUpdate,
+  putUpdate,
+  readMeta,
+  writeMeta
 } from "./wallet-store.js";
 import {
   assertStrongPin,
@@ -84,27 +85,42 @@ function buildDescriptorFromMnemonic(lwk, mnemonicStr, network) {
   return { signer, mnemonic, descriptor };
 }
 
-// Public Liquid Esplora endpoints we fall through on rate-limit or network
-// failure. Both speak the Esplora REST API that LWK expects. Ordered by
-// preference — Blockstream first (authoritative, well-monitored), Liquid.network
-// (mempool.space's Liquid instance) second.
+// Liquid Esplora endpoints, in fallback order. The wallet's primary upstream
+// is our own depix-backend reverse proxy at /api/esplora; Blockstream is the
+// last-resort fallback for the case where our backend is down. Liquid.network
+// has been removed because it never functioned as a browser fallback — it
+// returns no Access-Control-Allow-Origin headers, so direct-from-browser
+// requests were always blocked by CORS, even though the wallet listed it as
+// a fallback. The proxy reaches liquid.network server-side (no CORS) when
+// it needs to, so the redundancy is preserved through the proxy itself.
 //
-// Rationale for fallback vs. a single upstream: users behind CGNAT / shared
-// mobile carrier NATs share an IP with dozens-to-hundreds of other Blockstream
-// callers, so their "per-IP" quota can be exhausted by strangers. Falling
-// through to a different provider with a fresh IP quota unblocks those users
-// without us running our own Esplora.
+// Why proxy now after the original "direct-from-client" comment argued
+// against it: three problems made the previous design untenable for users
+// with active wallets (~250+ txs):
 //
-// Direct-from-client (each browser → Esplora) stays the right topology — proxying
-// through our backend would concentrate all traffic through a small Vercel IP
-// pool and make the rate-limit problem worse, not better, because Liquid
-// addresses are user-unique so there is no cross-user cache hit to amortize.
+//   1. LWK 0.16 retries 429s without backoff — observed ~3000 requests in
+//      30 minutes for one sync attempt, hammering the same URL 8x with
+//      429 responses. Burns the per-IP quota and false-positive trips our
+//      60s timeout, locking the user out via exponential backoff.
+//   2. Block headers and confirmed raw txs are immutable but the wallet
+//      had no shared cache — every browser refetched them from scratch.
+//      The proxy fronts them with Vercel-CDN-Cache-Control s-maxage=1y,
+//      so warm requests are served from edge without invoking the
+//      function or hitting upstream at all.
+//   3. liquid.network was theater. Either we drop it (now done) or we
+//      access it through a server-side intermediary (also now done).
 //
-// Can be overridden with `esploraUrl` (single URL, legacy) or `esploraProviders`
-// (array of {name, url}) for tests and alt networks.
+// The "cross-user cache hit to amortize" concern in the old comment was
+// only true for scripthash queries (per-address, user-unique); block
+// headers, raw txs, and merkle proofs are universal across users, and
+// PIX deposit clustering produces high overlap on the address-list pages
+// for confirmed history. Proxy-side cache pays back even at low DAU.
+//
+// Can be overridden with `esploraUrl` (single URL, legacy) or
+// `esploraProviders` (array of {name, url}) for tests and alt networks.
 const DEFAULT_PROVIDERS_MAINNET = Object.freeze([
-  Object.freeze({ name: "Blockstream", url: "https://blockstream.info/liquid/api" }),
-  Object.freeze({ name: "Liquid.network", url: "https://liquid.network/api" })
+  Object.freeze({ name: "depix-proxy", url: "https://depix-backend.vercel.app/api/esplora" }),
+  Object.freeze({ name: "Blockstream", url: "https://blockstream.info/liquid/api" })
 ]);
 
 // Cheap mirror of `hasWallet()` into localStorage. IDB remains the source of
@@ -139,9 +155,17 @@ function clearWalletExistsFlag() {
 // typed discriminator; a breaking upstream change would silently degrade
 // this into the generic ESPLORA_UNAVAILABLE path, which is acceptable — the
 // 60s backoff UX is a nicety, not a correctness guarantee.
+//
+// Discriminator: errors we synthesize with `code: "SYNC_TIMEOUT"` are NOT
+// rate-limit signals even if their message happens to contain "rate limit"
+// or "429" (avoids feedback loops where our own timeout text mis-fires the
+// classifier). The runSingleScan timeout sets this code; everyone else
+// must avoid that exact string code if they want their error treated as
+// a rate-limit by this function.
 function isRateLimitError(err) {
   let cur = err;
   for (let i = 0; i < 4 && cur; i++) {
+    if (cur.code === "SYNC_TIMEOUT") return false;
     const msg = String(cur.message ?? cur ?? "").toLowerCase();
     if (msg.includes("429") || msg.includes("too many requests") || msg.includes("rate limit")) {
       return true;
@@ -566,29 +590,56 @@ export function createWalletModule({
       );
     }
     wollet = await restoreWollet(descriptorStr);
-    // Rehydrate from the cached Update blob if we have one — gives the UI
-    // an instant first paint with last-known balances while a fresh scan
-    // runs in the background. Failure here is non-fatal: corrupt blob is
-    // just dropped on the next successful sync.
+    // Rehydrate from the persisted Update chain. Each Update is keyed by
+    // the Wollet's status() hash BEFORE its apply was performed; replay
+    // walks the chain by recomputing status after every apply and looking
+    // up the next link until the chain is exhausted. Failure mid-chain
+    // (status mismatch from a corrupt or orphaned link) stops the loop
+    // gracefully — a future full_scan recovers the missing state without
+    // needing to delete anything (a future scan might fill the gap).
     if (!appliedCachedUpdate) {
       try {
-        const database = await db();
-        const syncRecord = await readSync(database);
-        if (syncRecord?.updateBlob) {
-          const l = await lwk();
-          const bytes = toUint8(syncRecord.updateBlob);
-          const update = new l.Update(bytes);
-          wollet.applyUpdate(update);
-          if (typeof syncRecord.lastScanAt === "number") {
-            lastScanAt = syncRecord.lastScanAt;
-          }
-        }
+        const loadedAt = await loadPersisted(wollet);
+        if (loadedAt > 0) lastScanAt = loadedAt;
       } catch {
-        // swallow — cached blob is best-effort.
+        // swallow — cached chain is best-effort.
       }
       appliedCachedUpdate = true;
     }
     return wollet;
+  }
+
+  // Replay the persisted chain into the Wollet. Mirrors the pattern from
+  // RCasatta/liquid-web-wallet's `loadPersisted` (index.ts:3134-3155):
+  // recompute the Wollet's status, look up the Update keyed by that
+  // status, apply it, repeat until no entry matches the current status.
+  // Returns the meta.lastScanAt timestamp so the caller can restore its
+  // "synced N seconds ago" UI without an extra round-trip.
+  async function loadPersisted(wolletLocal) {
+    const database = await db();
+    const meta = await readMeta(database);
+    let prevStatus = null;
+    while (true) {
+      const status = wolletLocal.status().toString();
+      if (status === prevStatus) break; // guard: prevent infinite loop
+      const record = await getUpdate(database, status);
+      if (!record?.updateBlob) break;
+      const l = await lwk();
+      const bytes = toUint8(record.updateBlob);
+      const update = new l.Update(bytes);
+      try {
+        wolletLocal.applyUpdate(update);
+      } catch {
+        // Status mismatch — chain broken. Stop and let the next full_scan
+        // recover. Don't delete the orphaned entry; a future intermediate
+        // scan might bridge the gap.
+        if (update.free) try { update.free(); } catch { /* best effort */ }
+        break;
+      }
+      if (update.free) try { update.free(); } catch { /* best effort */ }
+      prevStatus = status;
+    }
+    return typeof meta?.lastScanAt === "number" ? meta.lastScanAt : 0;
   }
 
   // Resolve the provider list. Priority:
@@ -607,50 +658,87 @@ export function createWalletModule({
     return [];
   }
 
-  // Build one EsploraClient for a specific provider. Concurrency=1 keeps a
-  // gap-limit scan (~40 address lookups) serial so bursts don't trip per-IP
-  // limits, which previously wedged LWK in an internal retry loop. The
-  // injected `esploraClientFactory` gets the provider metadata so tests can
-  // fan out per-provider behavior.
+  // Build one EsploraClient for a specific provider.
+  //
+  // Concurrency choice depends on the upstream:
+  //   - "depix-proxy" runs at concurrency=4. Our backend absorbs the burst
+  //     with edge cache + server-side fallback, so parallelism translates
+  //     directly into faster cold starts. ~4× wall-clock speedup observed
+  //     in the reference implementation (liquidwebwallet.org also uses 4).
+  //   - any other upstream (Blockstream direct, custom URLs from tests)
+  //     stays at concurrency=1 to avoid burst-tripping public per-IP
+  //     limits. The proxy is the only upstream we trust to handle bursts.
+  //
+  // Tests inject `esploraClientFactory` to fan out per-provider behavior.
   async function buildEsploraClient(l, net, provider) {
     if (typeof esploraClientFactory === "function") {
       return esploraClientFactory(l, net, provider);
     }
-    return new l.EsploraClient(net, provider.url, false, 1, false);
+    const concurrency = provider?.name === "depix-proxy" ? 4 : 1;
+    return new l.EsploraClient(net, provider.url, false, concurrency, false);
   }
 
-  // Outer wall-clock guard on a single provider's fullScan. LWK 0.16.x retries
-  // 429s internally without surfacing the error, which can wedge the promise
-  // forever. We cap each provider attempt at 60s; the synthetic error message
-  // contains "rate limit" so isRateLimitError() classifies it and the
-  // fallback loop moves on to the next provider.
+  // Wall-clock guards on a single provider's scan. Two timeouts because
+  // cold-start (first scan ever, against an empty Wollet) does dramatically
+  // more work than a warm incremental sync:
   //
-  // 60s (not 30s) tolerates legitimately slow scans on bad mobile networks —
-  // a fresh wallet's ~40-address gap-limit serial scan can genuinely take
-  // 40-50s on congested 3G/4G without any rate-limit involvement. A 30s
-  // timeout in that scenario would false-positive into the exponential
-  // backoff, stranding the user in a 10-min cool-down when their only
-  // "problem" was a slow cell tower. The cost is a higher worst-case
-  // wait (2 providers × 60s = 120s) when both upstreams are genuinely
-  // hung, but the cached balance stays on screen the whole time and the
-  // "Tentar novamente" CTA lets users escape the wait manually.
+  //   - SYNC_TIMEOUT_MS (60s): warm incremental scan — LWK starts from the
+  //     persisted cursor and only fetches new addresses + new block
+  //     headers. Typically <5s through the proxy; 60s is a generous ceiling
+  //     to absorb temporary upstream slowness without classifying it as a
+  //     rate limit.
   //
-  // Overridable via the `syncTimeoutMs` option so tests can assert the
-  // timeout path deterministically without 60s real-time waits.
+  //   - COLD_START_TIMEOUT_MS (300s = 5 min): first scan needs to walk up
+  //     to COLD_START_INDEX addresses on each chain (external + internal),
+  //     download every confirmed tx in the user's history, and fetch one
+  //     block header per unique block. For a heavy wallet (~250 txs across
+  //     ~200 unique blocks) this is hundreds of HTTP round-trips. Through
+  //     the proxy (concurrency=4 + edge cache for headers) it generally
+  //     finishes in 30-90s on broadband, but on congested 3G/4G it can
+  //     legitimately take 2-3 minutes. 5 minutes is the comfort margin.
+  //
+  // Overridable via `syncTimeoutMs` so tests can assert the timeout path
+  // deterministically without 60s real-time waits.
   const SYNC_TIMEOUT_MS = typeof syncTimeoutMs === "number" ? syncTimeoutMs : 60_000;
+  const COLD_START_TIMEOUT_MS = typeof syncTimeoutMs === "number" ? syncTimeoutMs : 300_000;
 
-  // Run fullScan against one client, enforced by the 30s timeout. Returns the
-  // Update on success; throws the underlying error on failure (the caller
-  // decides whether to fall through to the next provider or surface it).
+  // Force scan up to AT LEAST this index on each derivation chain on cold
+  // start, regardless of LWK's gap-limit (default 20). 200 covers the
+  // typical maximum address-index for an active SideSwap user without
+  // wasting requests on never-used indices, and gap-limit=20 still applies
+  // *after* index 200 if the wallet kept growing. If a user reports
+  // "balance still incomplete after upgrade", bumping this constant is the
+  // single-line fix; observe the empirical 138/250 reproducibility on the
+  // bug-reporter's wallet for the rationale on choosing 200 specifically
+  // (the wallet has discontinuities >20 in the index space, but the
+  // contiguous block of "missing" txs sat between indices ~95 and ~190 in
+  // chronological order).
+  const COLD_START_INDEX = 200;
+
+  // Run a scan against one client, enforced by the appropriate timeout.
+  // On cold start (Wollet has never received an update applied to it),
+  // call fullScanToIndex(w, COLD_START_INDEX) to ensure coverage past any
+  // >20-address gap in derivation. On warm syncs, call fullScan(w) and
+  // let LWK incremental from the persisted cursor.
+  //
+  // The synthetic timeout error carries `code: "SYNC_TIMEOUT"` so
+  // isRateLimitError() doesn't false-fire on the message text.
   async function runSingleScan(client, w) {
+    const isCold = w.neverScanned();
+    const timeoutMs = isCold ? COLD_START_TIMEOUT_MS : SYNC_TIMEOUT_MS;
+    const scanPromise = isCold
+      ? client.fullScanToIndex(w, COLD_START_INDEX)
+      : client.fullScan(w);
     let timer;
     try {
       return await Promise.race([
-        client.fullScan(w),
+        scanPromise,
         new Promise((_, reject) => {
           timer = setTimeout(() => {
-            reject(new Error(`fullScan timed out after ${SYNC_TIMEOUT_MS}ms — upstream likely rate limit`));
-          }, SYNC_TIMEOUT_MS);
+            const err = new Error(`fullScan timed out after ${timeoutMs}ms`);
+            err.code = "SYNC_TIMEOUT";
+            reject(err);
+          }, timeoutMs);
         })
       ]);
     } finally {
@@ -768,27 +856,61 @@ export function createWalletModule({
   async function persistScan(w, update) {
     const scanAt = getNow();
     if (update) {
+      // The chain link's key is the Wollet status BEFORE applyUpdate —
+      // that's what loadPersisted will look up against a freshly-built
+      // empty Wollet on the next cold start. Capture it before mutating.
+      let statusBefore = null;
+      try { statusBefore = w.status().toString(); } catch { /* defensive */ }
+
+      // Whether the Update is a meaningful payload (txs / scripts / spent
+      // outpoints) or just a tip-bump. liquidwebwallet skips persistence on
+      // tip-only Updates because they bloat the chain without adding
+      // restorable state — the tip is recoverable from the next non-tip
+      // scan. We mirror that to keep the IDB chain bounded.
+      let onlyTip = false;
+      try { onlyTip = typeof update.onlyTip === "function" ? update.onlyTip() : false; } catch { /* defensive */ }
+
       w.applyUpdate(update);
-      try {
-        const bytes = update.serialize();
-        const database = await db();
-        await writeSync(database, { updateBlob: bytes, lastScanAt: scanAt });
-      } catch {
-        // If persistence fails (quota, private mode), the scan still applied
-        // in memory — next mount just has no warm start.
+
+      if (!onlyTip && statusBefore) {
+        try {
+          // Prune drops witness data the wallet doesn't need for balance/
+          // history rendering — small win on storage, big win across many
+          // scans for an active wallet.
+          if (typeof update.prune === "function") {
+            try { update.prune(w); } catch { /* best effort */ }
+          }
+          const bytes = update.serialize();
+          const database = await db();
+          await putUpdate(database, statusBefore, bytes);
+          await writeMeta(database, { lastScanAt: scanAt, lastSuccessAt: scanAt });
+        } catch {
+          // QuotaExceeded / private mode / serialize crash — flag for
+          // diagnostics but don't propagate. The scan still applied to
+          // the in-memory Wollet; the UI keeps working until reload.
+          try {
+            const database = await db();
+            await writeMeta(database, { lastScanAt: scanAt, quotaExceeded: true });
+          } catch { /* best effort */ }
+        }
+      } else {
+        // Tip-only or status capture failed — just bump the meta clock.
+        try {
+          const database = await db();
+          await writeMeta(database, { lastScanAt: scanAt, lastSuccessAt: scanAt });
+        } catch { /* best effort */ }
       }
+
       if (update.free) {
         try { update.free(); } catch { /* best effort */ }
       }
     } else {
-      // No changes since last scan — still bump the timestamp so the UI can
-      // show "synced N seconds ago" accurately. Uses `patchSync` so the read
-      // and write happen in a single IDB transaction; a separate readSync +
-      // writeSync pair would race with a sibling tab that wrote a newer
-      // updateBlob in between, and we'd overwrite it with the stale value.
+      // No Update returned (LWK signals "no change since last scan") —
+      // bump the meta clock so the UI shows "synced N seconds ago" without
+      // touching the chain.
       try {
         const database = await db();
-        await patchSync(database, { lastScanAt: scanAt });
+        await writeMeta(database, { lastScanAt: scanAt });
       } catch { /* best effort */ }
     }
     lastScanAt = scanAt;
@@ -797,6 +919,20 @@ export function createWalletModule({
 
   function getLastScanAt() {
     return lastScanAt;
+  }
+
+  // True when the wallet's view-only Wollet has never received an applied
+  // update — meaning the next sync will be a (slow) cold-start scan. The UI
+  // uses this to choose between the short "Sincronizando…" copy and the
+  // longer "Primeira sincronização (pode levar alguns minutos)" copy that
+  // sets user expectation correctly.
+  async function isFreshScan() {
+    try {
+      const w = await ensureViewWollet();
+      return typeof w?.neverScanned === "function" ? w.neverScanned() : true;
+    } catch {
+      return true;
+    }
   }
 
   async function getReceiveAddress({ index } = {}) {
@@ -1350,6 +1486,7 @@ export function createWalletModule({
     listTransactions,
     syncWallet,
     getLastScanAt,
+    isFreshScan,
     getDescriptor,
     prepareSend,
     confirmSend,
