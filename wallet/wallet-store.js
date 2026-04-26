@@ -98,18 +98,32 @@ export async function openDb(indexedDbImpl) {
     const req = idb.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = event => {
       const db = req.result;
+      const tx = event.target?.transaction ?? null;
       // v0 → v1: initial create.
       if (event.oldVersion < 1) {
         db.createObjectStore(CREDENTIALS_STORE, { keyPath: "id" });
       }
       // v1 → v2: migrate from single-blob `sync` store to chained
-      // `wallet-updates-v1` + `wallet-meta`. The old blob is unsalvageable
-      // (a single isolated delta with no chain history), so we drop the
-      // store entirely. Existing users will pay one fresh full-scan on next
-      // app open — same UX as a brand-new install. credentials store is
-      // untouched; the seed survives.
+      // `wallet-updates-v1` + `wallet-meta`. The old delta blob is
+      // unsalvageable, but the legacy `lastScanAt` field is just a
+      // timestamp — we preserve it so the UI's "synced N seconds ago"
+      // copy stays correct across the migration. Existing users still
+      // pay one fresh full-scan on next app open (chain starts empty).
       if (event.oldVersion < 2) {
-        if (db.objectStoreNames.contains("sync")) {
+        let preservedLastScanAt = null;
+        if (db.objectStoreNames.contains("sync") && tx) {
+          try {
+            const oldStore = tx.objectStore("sync");
+            const getReq = oldStore.get(MAIN_KEY);
+            // onupgradeneeded transaction is synchronous-by-default; this
+            // request resolves before the upgrade tx commits.
+            getReq.onsuccess = () => {
+              const row = getReq.result;
+              if (row && typeof row.lastScanAt === "number") {
+                preservedLastScanAt = row.lastScanAt;
+              }
+            };
+          } catch { /* best effort — legacy schema variations */ }
           db.deleteObjectStore("sync");
         }
         if (!db.objectStoreNames.contains(UPDATES_STORE)) {
@@ -117,6 +131,12 @@ export async function openDb(indexedDbImpl) {
         }
         if (!db.objectStoreNames.contains(META_STORE)) {
           db.createObjectStore(META_STORE, { keyPath: "id" });
+        }
+        if (preservedLastScanAt !== null && tx) {
+          try {
+            const metaStore = tx.objectStore(META_STORE);
+            metaStore.put({ id: MAIN_KEY, lastScanAt: preservedLastScanAt });
+          } catch { /* best effort */ }
         }
       }
     };
@@ -217,7 +237,7 @@ export async function putUpdate(db, walletStatus, blob) {
       "putUpdate: blob must be a non-empty typed array"
     );
   }
-  const record = { id: walletStatus, updateBlob: blob, savedAt: Date.now() };
+  const record = { id: walletStatus, updateBlob: new Uint8Array(blob), savedAt: Date.now() };
   return withStore(db, UPDATES_STORE, "readwrite", async store => {
     await promisifyRequest(store.put(record));
     return record;

@@ -163,9 +163,14 @@ function clearWalletExistsFlag() {
 // must avoid that exact string code if they want their error treated as
 // a rate-limit by this function.
 function isRateLimitError(err) {
+  // The SYNC_TIMEOUT discriminator is checked ONLY on the leaf (top-level)
+  // error so a hypothetical future wrapper that pins code:"SYNC_TIMEOUT"
+  // on a synthesized outer error cannot mask a genuine 429 buried in its
+  // cause chain. Our own runSingleScan timeout sets the code at the leaf,
+  // so this still classifies our timeouts correctly as not-rate-limit.
+  if (err?.code === "SYNC_TIMEOUT") return false;
   let cur = err;
   for (let i = 0; i < 4 && cur; i++) {
-    if (cur.code === "SYNC_TIMEOUT") return false;
     const msg = String(cur.message ?? cur ?? "").toLowerCase();
     if (msg.includes("429") || msg.includes("too many requests") || msg.includes("rate limit")) {
       return true;
@@ -185,7 +190,9 @@ export function createWalletModule({
   esploraUrl,
   esploraProviders,
   esploraClientFactory,
-  syncTimeoutMs
+  syncTimeoutMs,
+  coldStartTimeoutMs,
+  coldStartIndex
 } = {}) {
   const lwkLoaderFn = lwkLoader ?? loadLwk;
   const getNow = clock ?? now;
@@ -593,14 +600,24 @@ export function createWalletModule({
     // Rehydrate from the persisted Update chain. Each Update is keyed by
     // the Wollet's status() hash BEFORE its apply was performed; replay
     // walks the chain by recomputing status after every apply and looking
-    // up the next link until the chain is exhausted. Failure mid-chain
-    // (status mismatch from a corrupt or orphaned link) stops the loop
-    // gracefully — a future full_scan recovers the missing state without
-    // needing to delete anything (a future scan might fill the gap).
+    // up the next link until the chain is exhausted. If the chain breaks
+    // mid-replay we throw the partial state away and rebuild an empty
+    // Wollet so the next sync runs a true cold-start fullScanToIndex(200)
+    // — otherwise neverScanned()=false would route us through the warm
+    // fullScan path that triggered the original gap-limit bug.
     if (!appliedCachedUpdate) {
       try {
-        const loadedAt = await loadPersisted(wollet);
-        if (loadedAt > 0) lastScanAt = loadedAt;
+        const result = await loadPersisted(wollet);
+        if (result?.lastScanAt > 0) lastScanAt = result.lastScanAt;
+        if (result?.complete === false) {
+          try { wollet.free?.(); } catch { /* best effort */ }
+          wollet = await restoreWollet(descriptorStr);
+          try {
+            const database = await db();
+            const storeMod = await import("./wallet-store.js");
+            await storeMod.clearAllUpdates(database);
+          } catch { /* best effort */ }
+        }
       } catch {
         // swallow — cached chain is best-effort.
       }
@@ -618,10 +635,16 @@ export function createWalletModule({
   async function loadPersisted(wolletLocal) {
     const database = await db();
     const meta = await readMeta(database);
-    let prevStatus = null;
+    // Track visited keys so a degenerate chain (status cycle of any length,
+    // self-referential link, or LWK quirk where status is invariant under a
+    // delta) cannot loop forever. Stricter than a single-step prevStatus
+    // guard, which only catches cycles of length 1.
+    const visited = new Set();
+    let complete = true;
     while (true) {
       const status = wolletLocal.status().toString();
-      if (status === prevStatus) break; // guard: prevent infinite loop
+      if (visited.has(status)) break;
+      visited.add(status);
       const record = await getUpdate(database, status);
       if (!record?.updateBlob) break;
       const l = await lwk();
@@ -630,16 +653,22 @@ export function createWalletModule({
       try {
         wolletLocal.applyUpdate(update);
       } catch {
-        // Status mismatch — chain broken. Stop and let the next full_scan
-        // recover. Don't delete the orphaned entry; a future intermediate
-        // scan might bridge the gap.
+        // Status mismatch — chain broken. Don't leave the Wollet in a
+        // half-applied state where neverScanned()=false would cause the
+        // next sync to use the warm fullScan path (which would re-trigger
+        // the gap-limit-fura bug this PR was written to fix). Signal
+        // incompleteness so the caller can rebuild a clean cold-start
+        // Wollet.
         if (update.free) try { update.free(); } catch { /* best effort */ }
+        complete = false;
         break;
       }
       if (update.free) try { update.free(); } catch { /* best effort */ }
-      prevStatus = status;
     }
-    return typeof meta?.lastScanAt === "number" ? meta.lastScanAt : 0;
+    return {
+      lastScanAt: typeof meta?.lastScanAt === "number" ? meta.lastScanAt : 0,
+      complete
+    };
   }
 
   // Resolve the provider list. Priority:
@@ -674,7 +703,21 @@ export function createWalletModule({
     if (typeof esploraClientFactory === "function") {
       return esploraClientFactory(l, net, provider);
     }
-    const concurrency = provider?.name === "depix-proxy" ? 4 : 1;
+    // Concurrency comes off the provider record's `concurrency` field when
+    // the operator opts in, so renaming or adding new bursty-tolerant
+    // providers no longer requires touching this function. Falls back to
+    // the legacy name-based keying for the existing depix-proxy default
+    // record (which doesn't carry an explicit concurrency field today);
+    // any other unconfigured provider stays at concurrency=1 to avoid
+    // burst-tripping public per-IP limits.
+    let concurrency;
+    if (typeof provider?.concurrency === "number") {
+      concurrency = provider.concurrency;
+    } else if (provider?.name === "depix-proxy") {
+      concurrency = 4;
+    } else {
+      concurrency = 1;
+    }
     return new l.EsploraClient(net, provider.url, false, concurrency, false);
   }
 
@@ -700,20 +743,22 @@ export function createWalletModule({
   // Overridable via `syncTimeoutMs` so tests can assert the timeout path
   // deterministically without 60s real-time waits.
   const SYNC_TIMEOUT_MS = typeof syncTimeoutMs === "number" ? syncTimeoutMs : 60_000;
-  const COLD_START_TIMEOUT_MS = typeof syncTimeoutMs === "number" ? syncTimeoutMs : 300_000;
+  const COLD_START_TIMEOUT_MS = typeof coldStartTimeoutMs === "number"
+    ? coldStartTimeoutMs
+    : (typeof syncTimeoutMs === "number" ? syncTimeoutMs : 300_000);
 
   // Force scan up to AT LEAST this index on each derivation chain on cold
   // start, regardless of LWK's gap-limit (default 20). 200 covers the
   // typical maximum address-index for an active SideSwap user without
   // wasting requests on never-used indices, and gap-limit=20 still applies
-  // *after* index 200 if the wallet kept growing. If a user reports
-  // "balance still incomplete after upgrade", bumping this constant is the
-  // single-line fix; observe the empirical 138/250 reproducibility on the
-  // bug-reporter's wallet for the rationale on choosing 200 specifically
-  // (the wallet has discontinuities >20 in the index space, but the
-  // contiguous block of "missing" txs sat between indices ~95 and ~190 in
-  // chronological order).
-  const COLD_START_INDEX = 200;
+  // *after* index 200 if the wallet kept growing. Overridable via
+  // `coldStartIndex` so we can ship a remote-tunable build that bumps the
+  // ceiling without a redeploy if a heavier wallet shows up; observe the
+  // empirical 138/250 reproducibility on the bug-reporter's wallet for the
+  // rationale on choosing 200 specifically (the wallet has discontinuities
+  // >20 in the index space, but the contiguous block of "missing" txs sat
+  // between indices ~95 and ~190 in chronological order).
+  const COLD_START_INDEX = typeof coldStartIndex === "number" ? coldStartIndex : 200;
 
   // Run a scan against one client, enforced by the appropriate timeout.
   // On cold start (Wollet has never received an update applied to it),
@@ -735,7 +780,7 @@ export function createWalletModule({
         scanPromise,
         new Promise((_, reject) => {
           timer = setTimeout(() => {
-            const err = new Error(`fullScan timed out after ${timeoutMs}ms`);
+            const err = new Error(`${isCold ? "fullScanToIndex" : "fullScan"} timed out after ${timeoutMs}ms`);
             err.code = "SYNC_TIMEOUT";
             reject(err);
           }, timeoutMs);
@@ -867,8 +912,12 @@ export function createWalletModule({
       // tip-only Updates because they bloat the chain without adding
       // restorable state — the tip is recoverable from the next non-tip
       // scan. We mirror that to keep the IDB chain bounded.
-      let onlyTip = false;
-      try { onlyTip = typeof update.onlyTip === "function" ? update.onlyTip() : false; } catch { /* defensive */ }
+      // Default to TRUE on read failure (fail-closed): better to skip
+      // persistence for one Update than to bloat the chain with onlyTip
+      // entries we said we'd skip if a future LWK quirk makes onlyTip()
+      // throw on edge cases.
+      let onlyTip = true;
+      try { onlyTip = typeof update.onlyTip === "function" ? update.onlyTip() : false; } catch { /* defensive — keep onlyTip=true */ }
 
       w.applyUpdate(update);
 
@@ -884,13 +933,22 @@ export function createWalletModule({
           const database = await db();
           await putUpdate(database, statusBefore, bytes);
           await writeMeta(database, { lastScanAt: scanAt, lastSuccessAt: scanAt });
-        } catch {
-          // QuotaExceeded / private mode / serialize crash — flag for
-          // diagnostics but don't propagate. The scan still applied to
-          // the in-memory Wollet; the UI keeps working until reload.
+        } catch (persistErr) {
+          // Persistence failed — could be QuotaExceeded, IDB abort, serialize
+          // crash, or putUpdate validation rejection. Record a neutral
+          // failure timestamp + the specific error name so dashboards can
+          // distinguish quota issues from other failures without splitting
+          // the catch. The scan still applied to the in-memory Wollet; the
+          // UI keeps working until reload.
           try {
             const database = await db();
-            await writeMeta(database, { lastScanAt: scanAt, quotaExceeded: true });
+            const errName = persistErr?.name ?? null;
+            await writeMeta(database, {
+              lastScanAt: scanAt,
+              lastPersistFailedAt: scanAt,
+              lastPersistErrorName: errName,
+              quotaExceeded: errName === "QuotaExceededError"
+            });
           } catch { /* best effort */ }
         }
       } else {
@@ -906,11 +964,12 @@ export function createWalletModule({
       }
     } else {
       // No Update returned (LWK signals "no change since last scan") —
-      // bump the meta clock so the UI shows "synced N seconds ago" without
-      // touching the chain.
+      // bump the meta clock and remember a successful scan completed so the
+      // next sync uses the cheap warm fullScan path even on an empty wallet
+      // (which would otherwise re-pay the COLD_START_INDEX cost forever).
       try {
         const database = await db();
-        await writeMeta(database, { lastScanAt: scanAt });
+        await writeMeta(database, { lastScanAt: scanAt, lastSuccessAt: scanAt });
       } catch { /* best effort */ }
     }
     lastScanAt = scanAt;

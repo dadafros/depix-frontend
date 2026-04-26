@@ -240,25 +240,30 @@ describe("wallet.syncWallet", () => {
   // ----------------------------------------------------------------------
   describe("chained-Update persistence", () => {
     it("each non-onlyTip scan appends a new entry, never overwrites", async () => {
-      const { wallet } = makeModule();
+      const idbFactory = new IDBFactory();
+      const fakeLwk = makeFakeLwkWithSync();
+      const wallet = createWalletModule({
+        indexedDbImpl: idbFactory,
+        cryptoImpl: webcrypto,
+        lwkLoader: async () => fakeLwk,
+        esploraUrl: "https://fake-esplora/api"
+      });
       await wallet.createWallet({ pin: STRONG_PIN });
       wallet.lock();
 
-      // Three syncs against a fake that always returns a fresh Update.
+      // Three syncs against a fake whose status() advances after each apply,
+      // so each Update is keyed by a distinct status hash and the chain is
+      // append-only (never overwrites a single key).
       await wallet.syncWallet();
       await wallet.syncWallet();
       await wallet.syncWallet();
 
-      // Inspect the IDB directly via the same factory the wallet used.
-      const { countUpdates } = await import("../wallet/wallet-store.js");
-      const dbReq = wallet._db?.();
-      // Fall back: re-open via the factory each test makes — the wallet
-      // closure is private, so use the public getBalances path which
-      // forces ensureViewWollet → opens the DB. After that, count via
-      // countUpdates on a fresh open from the SAME factory.
-      // (We can't reach into the wallet closure; proving the chain via
-      // count is sufficient.)
-      void dbReq; void countUpdates;
+      // Open the SAME IDB the wallet wrote to and assert the chain has 3
+      // distinct entries — proves persistScan never collapses to one key.
+      const { openDb, countUpdates } = await import("../wallet/wallet-store.js");
+      const db = await openDb(idbFactory);
+      expect(await countUpdates(db)).toBe(3);
+      db.close();
     }, 60_000);
 
     it("skips persistence when Update.onlyTip() is true", async () => {
@@ -336,13 +341,21 @@ describe("wallet.syncWallet", () => {
       const bal1 = await session1.getBalances();
       expect(bal1.applied).toBe(true);
 
-      // Session 2: brand-new module, same DB. No new sync — getBalances
-      // should still report the persisted state via loadPersisted.
+      // Session 2: brand-new module, same DB. Inject a factory that throws
+      // on any scan call so the only way getBalances can report applied:true
+      // is via loadPersisted's chain replay (no fresh scan possible).
+      const throwingFactory = (_l, _net, provider) => {
+        const c = new fakeLwk.EsploraClient(_net, provider?.url ?? "");
+        c.fullScan = async () => { throw new Error("session2 must not scan"); };
+        c.fullScanToIndex = async () => { throw new Error("session2 must not scan"); };
+        return c;
+      };
       const session2 = createWalletModule({
         indexedDbImpl: idbFactory,
         cryptoImpl: webcrypto,
         lwkLoader: async () => fakeLwk,
-        esploraUrl: "https://fake-esplora/api"
+        esploraUrl: "https://fake-esplora/api",
+        esploraClientFactory: throwingFactory
       });
       const bal2 = await session2.getBalances();
       expect(bal2.applied).toBe(true);
