@@ -85,30 +85,35 @@ function buildDescriptorFromMnemonic(lwk, mnemonicStr, network) {
   return { signer, mnemonic, descriptor };
 }
 
-// Liquid Esplora endpoints, in fallback order. The wallet's primary upstream
-// is our own depix-backend reverse proxy at /api/esplora; Blockstream is the
-// last-resort fallback for the case where our backend is down. Liquid.network
-// has been removed because it never functioned as a browser fallback — it
-// returns no Access-Control-Allow-Origin headers, so direct-from-browser
-// requests were always blocked by CORS, even though the wallet listed it as
-// a fallback. The proxy reaches liquid.network server-side (no CORS) when
-// it needs to, so the redundancy is preserved through the proxy itself.
+// Liquid Esplora endpoint. The wallet's only upstream is our own
+// depix-backend reverse proxy at /api/esplora. The proxy itself fans out
+// server-side to Blockstream → liquid.network, so a single client-visible
+// endpoint already gets two-tier upstream redundancy.
 //
-// Why proxy now after the original "direct-from-client" comment argued
-// against it: three problems made the previous design untenable for users
-// with active wallets (~250+ txs):
+// Why no client-side fallback to Blockstream direct: when we listed it as
+// a second provider, any time the proxy slowed under load or returned a
+// transient 5xx, LWK fell through to Blockstream and the user's IP got
+// rate-limited (429 cascade visible in the bug-reporter's network tab —
+// 850+ direct blockstream.info requests in one cold-scan attempt, while
+// the proxy was still healthy). Cleaner to error out and surface the
+// retry CTA than to burn the user's per-IP quota on a public endpoint
+// that wasn't designed for our request volume. If the proxy is down, no
+// amount of client fallback rescues us — most wallet operations need it.
+//
+// Why proxy at all (the original code went direct-from-client): three
+// problems made direct untenable for users with active wallets (~250+ txs):
 //
 //   1. LWK 0.16 retries 429s without backoff — observed ~3000 requests in
 //      30 minutes for one sync attempt, hammering the same URL 8x with
 //      429 responses. Burns the per-IP quota and false-positive trips our
-//      60s timeout, locking the user out via exponential backoff.
+//      timeout, locking the user out via exponential backoff.
 //   2. Block headers and confirmed raw txs are immutable but the wallet
 //      had no shared cache — every browser refetched them from scratch.
 //      The proxy fronts them with Vercel-CDN-Cache-Control s-maxage=1y,
 //      so warm requests are served from edge without invoking the
 //      function or hitting upstream at all.
-//   3. liquid.network was theater. Either we drop it (now done) or we
-//      access it through a server-side intermediary (also now done).
+//   3. liquid.network was CORS-blocked in browsers. Either we drop it or
+//      access it through a server-side intermediary (now done).
 //
 // The "cross-user cache hit to amortize" concern in the old comment was
 // only true for scripthash queries (per-address, user-unique); block
@@ -119,8 +124,7 @@ function buildDescriptorFromMnemonic(lwk, mnemonicStr, network) {
 // Can be overridden with `esploraUrl` (single URL, legacy) or
 // `esploraProviders` (array of {name, url}) for tests and alt networks.
 const DEFAULT_PROVIDERS_MAINNET = Object.freeze([
-  Object.freeze({ name: "depix-proxy", url: "https://depix-backend.vercel.app/api/esplora" }),
-  Object.freeze({ name: "Blockstream", url: "https://blockstream.info/liquid/api" })
+  Object.freeze({ name: "depix-proxy", url: "https://depix-backend.vercel.app/api/esplora" })
 ]);
 
 // Cheap mirror of `hasWallet()` into localStorage. IDB remains the source of
@@ -731,56 +735,54 @@ export function createWalletModule({
   //     to absorb temporary upstream slowness without classifying it as a
   //     rate limit.
   //
-  //   - COLD_START_TIMEOUT_MS (300s = 5 min): first scan needs to walk up
-  //     to COLD_START_INDEX addresses on each chain (external + internal),
-  //     download every confirmed tx in the user's history, and fetch one
-  //     block header per unique block. For a heavy wallet (~250 txs across
-  //     ~200 unique blocks) this is hundreds of HTTP round-trips. Through
-  //     the proxy (concurrency=4 + edge cache for headers) it generally
-  //     finishes in 30-90s on broadband, but on congested 3G/4G it can
-  //     legitimately take 2-3 minutes. 5 minutes is the comfort margin.
+  //   - COLD_START_TIMEOUT_MS (1800s = 30 min): first scan walks up to
+  //     COLD_START_INDEX addresses on EACH chain (external + internal),
+  //     plus a fullScan extension for gap-limit. For a heavy SideSwap-grade
+  //     wallet (~250 txs distributed sparsely across 1000+ derivation
+  //     indices), one cold scan can produce 1500-2000 HTTP round-trips and
+  //     legitimately take 10-15 minutes through the proxy on first warm-up
+  //     (when the edge cache is empty). The earlier 5-minute cap timed-out
+  //     mid-scan and stranded users on partial state. 30 minutes is the
+  //     comfort margin so the cold path runs once, completes, and the
+  //     persisted chain pays back forever.
   //
-  // Overridable via `syncTimeoutMs` so tests can assert the timeout path
-  // deterministically without 60s real-time waits.
+  // Overridable via `syncTimeoutMs` / `coldStartTimeoutMs` so tests can
+  // assert the timeout path deterministically without real-time waits.
   const SYNC_TIMEOUT_MS = typeof syncTimeoutMs === "number" ? syncTimeoutMs : 60_000;
   const COLD_START_TIMEOUT_MS = typeof coldStartTimeoutMs === "number"
     ? coldStartTimeoutMs
-    : (typeof syncTimeoutMs === "number" ? syncTimeoutMs : 300_000);
+    : (typeof syncTimeoutMs === "number" ? syncTimeoutMs : 1_800_000);
 
   // Force scan up to AT LEAST this index on each derivation chain on cold
-  // start, regardless of LWK's gap-limit (default 20). 200 covers the
-  // typical maximum address-index for an active SideSwap user without
-  // wasting requests on never-used indices, and gap-limit=20 still applies
-  // *after* index 200 if the wallet kept growing. Overridable via
-  // `coldStartIndex` so we can ship a remote-tunable build that bumps the
-  // ceiling without a redeploy if a heavier wallet shows up; observe the
-  // empirical 138/250 reproducibility on the bug-reporter's wallet for the
-  // rationale on choosing 200 specifically (the wallet has discontinuities
-  // >20 in the index space, but the contiguous block of "missing" txs sat
-  // between indices ~95 and ~190 in chronological order).
-  const COLD_START_INDEX = typeof coldStartIndex === "number" ? coldStartIndex : 200;
-
-  // Run a scan against one client, enforced by the appropriate timeout.
-  // On cold start (Wollet has never received an update applied to it),
-  // call fullScanToIndex(w, COLD_START_INDEX) to ensure coverage past any
-  // >20-address gap in derivation. On warm syncs, call fullScan(w) and
-  // let LWK incremental from the persisted cursor.
+  // start, regardless of LWK's gap-limit (default 20). 1000 covers even
+  // active wallets with sparse, non-contiguous derivation usage (e.g.
+  // SideSwap users whose swap UI burns through addresses fast). After
+  // fullScanToIndex(1000) we run a regular fullScan(w) so gap-limit=20
+  // catches any tail past index 1000. The cost is ~2000 scripthash queries
+  // (1000 × 2 chains) on cold start, but most empty-address responses are
+  // small JSON ([]) and the proxy edge-caches them; the second run of the
+  // same cold-start (different device, same wallet) hits cache for nearly
+  // all of it.
   //
-  // The synthetic timeout error carries `code: "SYNC_TIMEOUT"` so
-  // isRateLimitError() doesn't false-fire on the message text.
-  async function runSingleScan(client, w) {
-    const isCold = w.neverScanned();
-    const timeoutMs = isCold ? COLD_START_TIMEOUT_MS : SYNC_TIMEOUT_MS;
-    const scanPromise = isCold
-      ? client.fullScanToIndex(w, COLD_START_INDEX)
-      : client.fullScan(w);
+  // Why not lower (e.g. 500): the bug-reporter's wallet returned 113 txs
+  // with COLD_START_INDEX=200 — strictly less than the 138 a plain
+  // fullScan was finding before, indicating txs lived in a sparse band
+  // somewhere past index 200. 1000 is generous enough that "we missed
+  // some" stops being the most likely cause of any future support
+  // ticket; if a wallet ever exceeds it, bump again — single constant.
+  const COLD_START_INDEX = typeof coldStartIndex === "number" ? coldStartIndex : 1000;
+
+  // Race a scan promise against a wall-clock timer. The synthetic timeout
+  // error carries `code: "SYNC_TIMEOUT"` so isRateLimitError() doesn't
+  // false-fire on the message text.
+  async function runScanWithTimeout(scanFn, timeoutMs, kind) {
     let timer;
     try {
       return await Promise.race([
-        scanPromise,
+        scanFn(),
         new Promise((_, reject) => {
           timer = setTimeout(() => {
-            const err = new Error(`${isCold ? "fullScanToIndex" : "fullScan"} timed out after ${timeoutMs}ms`);
+            const err = new Error(`${kind} timed out after ${timeoutMs}ms`);
             err.code = "SYNC_TIMEOUT";
             reject(err);
           }, timeoutMs);
@@ -789,6 +791,49 @@ export function createWalletModule({
     } finally {
       if (timer) clearTimeout(timer);
     }
+  }
+
+  // Drive a full scan attempt against one client and persist the
+  // resulting Update(s).
+  //
+  // Cold start (Wollet.neverScanned() === true): TWO scans, each
+  // independently persisted. The first is fullScanToIndex(w, N), which
+  // walks every derivation index 0..N regardless of LWK's gap-limit (so
+  // a wallet with sparse usage and >20-address unused gaps before N is
+  // discovered fully). The second is plain fullScan(w), which extends
+  // past N with the standard gap_limit=20 — catching any tail txs that
+  // live above N. Without the second scan, a tx at derivation index
+  // N+5 would be missed (fullScanToIndex doesn't apply gap-limit logic
+  // past its target index). Persisting BOTH means the chain captures
+  // pre-N coverage even if step 2 fails midway.
+  //
+  // Warm sync: just fullScan(w) from the persisted cursor.
+  //
+  // Failure semantics: if step 1 succeeds and persists, step 2 failing
+  // is acceptable — neverScanned() will return false on the next
+  // attempt because step 1 was applied, so we'll resume in the warm
+  // path. Any failure throws so the provider-fallback loop can advance.
+  async function runProviderAttempt(client, w) {
+    if (w.neverScanned()) {
+      const u1 = await runScanWithTimeout(
+        () => client.fullScanToIndex(w, COLD_START_INDEX),
+        COLD_START_TIMEOUT_MS,
+        "fullScanToIndex"
+      );
+      await persistScan(w, u1);
+      const u2 = await runScanWithTimeout(
+        () => client.fullScan(w),
+        SYNC_TIMEOUT_MS,
+        "fullScan"
+      );
+      return await persistScan(w, u2);
+    }
+    const u = await runScanWithTimeout(
+      () => client.fullScan(w),
+      SYNC_TIMEOUT_MS,
+      "fullScan"
+    );
+    return await persistScan(w, u);
   }
 
   // Drives a fresh Esplora scan and persists the resulting Update blob so
@@ -820,12 +865,12 @@ export function createWalletModule({
 
     // Degenerate case: no provider list (non-mainnet without override). Use
     // LWK's network-default client and preserve the old single-attempt
-    // semantics — still guarded by the 30s timeout.
+    // semantics — still guarded by the per-step timeout inside
+    // runProviderAttempt.
     if (providers.length === 0) {
       const client = await net.defaultEsploraClient();
       try {
-        const update = await runSingleScan(client, w);
-        return await persistScan(w, update);
+        return await runProviderAttempt(client, w);
       } catch (err) {
         if (isRateLimitError(err)) {
           throw new WalletError(ERROR_CODES.ESPLORA_RATE_LIMITED, "Esplora rate-limited the sync (HTTP 429)", err);
@@ -861,10 +906,10 @@ export function createWalletModule({
         continue;
       }
       try {
-        const update = await runSingleScan(client, w);
+        const result = await runProviderAttempt(client, w);
         lastGoodProviderIndex = idx;
         syncsSinceLastRediscovery = forceRediscovery ? 0 : syncsSinceLastRediscovery + 1;
-        return await persistScan(w, update);
+        return result;
       } catch (err) {
         if (isRateLimitError(err)) anyRateLimited = true;
         errors.push({ provider, err });

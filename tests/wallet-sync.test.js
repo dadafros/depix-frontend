@@ -93,6 +93,8 @@ function makeFakeLwkWithSync({
     async fullScan() {
       EsploraClient.scanCalls = (EsploraClient.scanCalls ?? 0) + 1;
       EsploraClient.lastMethod = "fullScan";
+      EsploraClient.methodSequence = (EsploraClient.methodSequence ?? []);
+      EsploraClient.methodSequence.push("fullScan");
       if (fullScanHold) await fullScanHold;
       if (fullScanError) throw fullScanError;
       if (throwOnScan) throw new Error("esplora boom");
@@ -102,6 +104,8 @@ function makeFakeLwkWithSync({
       EsploraClient.scanCalls = (EsploraClient.scanCalls ?? 0) + 1;
       EsploraClient.lastMethod = "fullScanToIndex";
       EsploraClient.lastIndex = index;
+      EsploraClient.methodSequence = (EsploraClient.methodSequence ?? []);
+      EsploraClient.methodSequence.push("fullScanToIndex");
       if (fullScanHold) await fullScanHold;
       if (fullScanError) throw fullScanError;
       if (throwOnScan) throw new Error("esplora boom");
@@ -198,36 +202,58 @@ describe("wallet.syncWallet", () => {
   }, 60_000);
 
   // ----------------------------------------------------------------------
-  // Cold start vs. warm: the Wollet's neverScanned() boolean drives which
-  // EsploraClient method we call. Cold uses fullScanToIndex(w, 200) to
-  // bridge any >20-address gap in the user's derivation chain (the bug
-  // that produced the 138-out-of-250 reproducible mis-sync). Warm stays
-  // on plain fullScan(w) for incremental cheap updates.
+  // Cold start vs. warm: the Wollet's neverScanned() boolean drives the
+  // sequence. Cold runs fullScanToIndex(w, COLD_START_INDEX) FIRST to walk
+  // every derivation 0..N regardless of LWK's gap_limit (bridging any
+  // >20-address unused gaps before N — the bug that produced the
+  // 138-out-of-250 reproducible mis-sync), THEN runs plain fullScan(w) to
+  // extend past N with the standard gap_limit=20 (catching any tail txs
+  // beyond N). Warm syncs run fullScan(w) only, incremental from the
+  // persisted cursor.
   // ----------------------------------------------------------------------
   describe("cold start vs warm sync", () => {
-    it("calls fullScanToIndex(200) on the very first sync (cold)", async () => {
+    it("runs fullScanToIndex THEN fullScan on the very first sync (cold)", async () => {
       const { fakeLwk, wallet } = makeModule();
       await wallet.createWallet({ pin: STRONG_PIN });
       wallet.lock();
       fakeLwk.EsploraClient.lastMethod = null;
       fakeLwk.EsploraClient.lastIndex = null;
+      fakeLwk.EsploraClient.methodSequence = [];
 
       await wallet.syncWallet();
 
-      expect(fakeLwk.EsploraClient.lastMethod).toBe("fullScanToIndex");
-      expect(fakeLwk.EsploraClient.lastIndex).toBe(200);
+      // Both methods must be invoked, in this order.
+      expect(fakeLwk.EsploraClient.methodSequence).toEqual(["fullScanToIndex", "fullScan"]);
+      // fullScanToIndex was called with the default cold-start index (1000).
+      expect(fakeLwk.EsploraClient.lastIndex).toBe(1000);
     }, 60_000);
 
-    it("switches to fullScan() on subsequent syncs (warm)", async () => {
+    it("respects coldStartIndex override", async () => {
+      const fakeLwk = makeFakeLwkWithSync();
+      const wallet = createWalletModule({
+        indexedDbImpl: new IDBFactory(),
+        cryptoImpl: webcrypto,
+        lwkLoader: async () => fakeLwk,
+        esploraUrl: "https://fake-esplora/api",
+        coldStartIndex: 50
+      });
+      await wallet.createWallet({ pin: STRONG_PIN });
+      wallet.lock();
+
+      await wallet.syncWallet();
+      expect(fakeLwk.EsploraClient.lastIndex).toBe(50);
+    }, 60_000);
+
+    it("switches to fullScan-only on subsequent syncs (warm)", async () => {
       const { fakeLwk, wallet } = makeModule();
       await wallet.createWallet({ pin: STRONG_PIN });
       wallet.lock();
 
-      await wallet.syncWallet(); // cold — fullScanToIndex
-      fakeLwk.EsploraClient.lastMethod = null;
+      await wallet.syncWallet(); // cold — fullScanToIndex + fullScan
+      fakeLwk.EsploraClient.methodSequence = [];
 
-      await wallet.syncWallet(); // warm — fullScan
-      expect(fakeLwk.EsploraClient.lastMethod).toBe("fullScan");
+      await wallet.syncWallet(); // warm — fullScan only, no fullScanToIndex
+      expect(fakeLwk.EsploraClient.methodSequence).toEqual(["fullScan"]);
     }, 60_000);
   });
 
@@ -253,16 +279,21 @@ describe("wallet.syncWallet", () => {
 
       // Three syncs against a fake whose status() advances after each apply,
       // so each Update is keyed by a distinct status hash and the chain is
-      // append-only (never overwrites a single key).
+      // append-only (never overwrites a single key). Cold start persists
+      // twice (fullScanToIndex result + fullScan result), so:
+      //   sync 1 (cold) → 2 entries
+      //   sync 2 (warm) → 1 entry
+      //   sync 3 (warm) → 1 entry
+      //   total → 4 entries
       await wallet.syncWallet();
       await wallet.syncWallet();
       await wallet.syncWallet();
 
-      // Open the SAME IDB the wallet wrote to and assert the chain has 3
+      // Open the SAME IDB the wallet wrote to and assert the chain has 4
       // distinct entries — proves persistScan never collapses to one key.
       const { openDb, countUpdates } = await import("../wallet/wallet-store.js");
       const db = await openDb(idbFactory);
-      expect(await countUpdates(db)).toBe(3);
+      expect(await countUpdates(db)).toBe(4);
       db.close();
     }, 60_000);
 
@@ -384,7 +415,7 @@ describe("wallet.syncWallet", () => {
   });
 
   describe("dedup (syncInFlight)", () => {
-    it("three concurrent syncWallet calls share one in-flight fullScan", async () => {
+    it("three concurrent syncWallet calls share one in-flight cold scan", async () => {
       let release;
       const hold = new Promise(r => { release = r; });
       const { fakeLwk, wallet } = makeModule({ fullScanHold: hold });
@@ -400,13 +431,16 @@ describe("wallet.syncWallet", () => {
       expect(p1).toBe(p2);
       expect(p2).toBe(p3);
 
-      // Release the single held fullScan and let everyone resolve.
+      // Release the held scan; both cold-start steps (fullScanToIndex
+      // followed by fullScan) drain through the same released hold.
       release();
       const [r1, r2, r3] = await Promise.all([p1, p2, p3]);
       expect(r1).toEqual(r2);
       expect(r2).toEqual(r3);
-      expect(fakeLwk.EsploraClient.scanCalls).toBe(1);
-      // One EsploraClient instance too — no duplicate clients allocated.
+      // Cold start runs TWO scan methods: fullScanToIndex, then fullScan.
+      expect(fakeLwk.EsploraClient.scanCalls).toBe(2);
+      // One EsploraClient instance still — no duplicate clients allocated
+      // for the second step (the same client serves both cold-start scans).
       expect(fakeLwk.EsploraClient.calls).toBe(1);
     }, 60_000);
 
@@ -416,9 +450,9 @@ describe("wallet.syncWallet", () => {
       wallet.lock();
       fakeLwk.EsploraClient.scanCalls = 0;
 
-      await wallet.syncWallet();
-      await wallet.syncWallet();
-      expect(fakeLwk.EsploraClient.scanCalls).toBe(2);
+      await wallet.syncWallet(); // cold: 2 scan calls (fullScanToIndex + fullScan)
+      await wallet.syncWallet(); // warm: 1 scan call (fullScan only)
+      expect(fakeLwk.EsploraClient.scanCalls).toBe(3);
     }, 60_000);
   });
 
@@ -673,24 +707,28 @@ describe("wallet.syncWallet", () => {
       await wallet.createWallet({ pin: STRONG_PIN });
       wallet.lock();
 
-      // Sync 1: A 429s (call #1), fallback to B succeeds. lastGood=B, counter=1.
+      // Sync 1: cold start. A's fullScanToIndex 429s (call #1), fallback to
+      // B. B serves both cold-start steps (fullScanToIndex + fullScan), so
+      // it logs 2 calls. lastGood=B, counter=1.
       await wallet.syncWallet();
       expect(provACallCount).toBe(1);
-      expect(provBCallCount).toBe(1);
+      expect(provBCallCount).toBe(2);
 
-      // Syncs 2-10: sticky on B. A is never touched. counter reaches 10.
+      // Syncs 2-10: warm, sticky on B. A is never touched. Each warm sync
+      // calls fullScan once on B, so counter advances by 1 per sync.
       for (let i = 0; i < 9; i++) await wallet.syncWallet();
       expect(provACallCount).toBe(1);
-      expect(provBCallCount).toBe(10);
+      expect(provBCallCount).toBe(11);
 
       // Sync 11: counter >= 10, forceRediscovery resets startIndex to 0. A
-      // now succeeds (its recovered-state second call). lastGood goes back to
-      // A, counter resets.
+      // is warm now (sync 1 left wollet applied), so a single fullScan call
+      // on A succeeds (its recovered-state second call). lastGood goes back
+      // to A, counter resets.
       await wallet.syncWallet();
       expect(provACallCount).toBe(2);
       // B should NOT have been hit on sync 11 — A succeeded so we returned
       // without falling through.
-      expect(provBCallCount).toBe(10);
+      expect(provBCallCount).toBe(11);
     }, 60_000);
   });
 
